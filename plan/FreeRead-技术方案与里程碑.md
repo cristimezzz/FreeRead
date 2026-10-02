@@ -409,7 +409,7 @@ CREATE VIRTUAL TABLE doc_fts USING fts5(title, abstract, body, content='', token
 
 | 里程碑 | 目标 | 主要交付物 | 验收标准（Gate） | 人周 | 依赖 |
 |---|---|---|---|---|---|
-| **M0** 骨架 | 工程可跑、可发版 | monorepo、CI（typecheck/test/e2e/license）、Electron 空壳可打包、ADR 落档、`fixtures/` 首批 10 篇 | `pnpm build` 产出三平台安装包；CI 全绿；License Gate 能拦住一个故意引入的 AGPL 依赖 | 1.5 | — |
+| **M0** 骨架 | 工程可跑、可发版 | monorepo、CI（typecheck/test/e2e/license）、Electron 空壳可打包、ADR 落档、`fixtures/` 首批 10 篇 | `pnpm build` 编译通过、`pnpm build:dist` 在三平台原生 runner 产出安装包；CI 全绿；License Gate 能拦住一个故意引入的 SSPL 依赖（AGPL 允许，ADR-13） | 1.5 | — |
 | **M1** 阅读内核 | 能读、能管、能记 | 文献库（导入/去重/标签/FTS5 检索）、PDF.js 原文视图、标注与笔记、进度恢复 | ① 1000 页 PDF 首屏 ≤ 3 s；② 滚动 ≥ 55 fps；③ **杀进程重开，阅读位置精确恢复到上次句子（20/20 次）** | 3.5 | M0 |
 | **M2** 锚点与解析 | 得到可信的 `DocAnchorModel` | Python sidecar（Docling 主 / 规则降级）、锚点构建器、坐标归一化、黄金集 50 篇与评测脚本 | ① 黄金集版面块 F1 ≥ 0.90；② 句子↔行 IoU ≥ 0.98；③ 无 Python 环境时自动降级且不崩（规则路径 F1 ≥ 0.75） | 4.0 | M1 |
 | **M3** 重排阅读 | 双模式可切换、可纠错 | `render-reflow`、重排视图、低置信描边与纠错 UI、patch 存取与重渲染 | ① 50 篇黄金集重排后**无内容丢失**（块覆盖率 100%）与无重叠溢出；② 切换模式前后定位误差 ≤ 1 段；③ 纠错 patch 可保存、可重放 | 3.0 | M2 |
@@ -625,3 +625,7 @@ pnpm --filter desktop add pdfjs-dist zustand
 ---
 
 *本方案可直接作为项目启动文档（Project Charter）使用；§9 为可立即执行的开工清单。当前状态：**方案待内部评审，尚未生成代码骨架**（按你的选择）。*
+
+
+### M0 规范校正记录（2026-10-03）
+依 ADR-13 修正 M0 许可负例及编译/打包命令，保留三平台安装包与 CI 验收。
