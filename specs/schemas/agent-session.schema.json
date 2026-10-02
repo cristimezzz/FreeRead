@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/agent-session.schema.json",
+  "title": "AgentSessionEvent",
+  "description": "Agent 会话事件流单行（sessions/<sessionId>.jsonl，append-only）。权威定义见 specs/14-agent.md §8。",
+  "oneOf": [
+    { "$ref": "#/$defs/MessageEvent" },
+    { "$ref": "#/$defs/ToolCallEvent" },
+    { "$ref": "#/$defs/ToolResultEvent" },
+    { "$ref": "#/$defs/PermissionEvent" },
+    { "$ref": "#/$defs/RunEvent" },
+    { "$ref": "#/$defs/ErrorEvent" }
+  ],
+  "$defs": {
+    "Base": {
+      "type": "object",
+      "required": ["type", "seq", "at"],
+      "properties": {
+        "type": { "type": "string" },
+        "seq": { "type": "integer", "minimum": 1, "description": "会话内单调递增序号（从 1 开始），用于增量拉取" },
+        "at": { "type": "integer", "minimum": 0, "description": "UTC 毫秒" }
+      }
+    },
+    "MessageEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "role", "text"],
+      "properties": {
+        "type": { "const": "message" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "role": { "enum": ["user", "assistant"] },
+        "text": { "type": "string", "maxLength": 100000 },
+        "tokens": { "type": "object", "additionalProperties": false, "properties": {
+          "in": { "type": "integer", "minimum": 0 }, "out": { "type": "integer", "minimum": 0 } } }
+      }
+    },
+    "ToolCallEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "callId", "tool", "argsHash", "argsSummary"],
+      "properties": {
+        "type": { "const": "tool_call" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "callId": { "type": "string", "pattern": "^call_[A-Za-z0-9]{8,32}$" },
+        "tool": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$" },
+        "argsHash": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "参数的 sha256；不落原文（AG-8）" },
+        "argsSummary": { "type": "string", "maxLength": 400, "description": "可读摘要，不含敏感内容" }
+      }
+    },
+    "ToolResultEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "callId", "ok", "summary", "durationMs"],
+      "properties": {
+        "type": { "const": "tool_result" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "callId": { "type": "string", "pattern": "^call_[A-Za-z0-9]{8,32}$" },
+        "ok": { "type": "boolean" },
+        "summary": { "type": "string", "maxLength": 400 },
+        "errorCode": { "type": "string", "pattern": "^FR-[A-Z]{2,8}-[0-9]{3}$" },
+        "durationMs": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "PermissionEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "callId", "tool", "decision"],
+      "properties": {
+        "type": { "const": "permission" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "callId": { "type": "string", "pattern": "^call_[A-Za-z0-9]{8,32}$" },
+        "tool": { "type": "string" },
+        "decision": { "enum": ["always", "once", "ask", "deny"], "description": "deny 含用户拒绝与 120s 超时兜底" },
+        "byUser": { "type": "boolean", "description": "false 表示超时自动判定" }
+      }
+    },
+    "RunEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "state", "steps", "toolCalls"],
+      "properties": {
+        "type": { "const": "run" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "runId": { "type": "string" },
+        "state": { "enum": ["started", "finished", "canceled", "failed"] },
+        "steps": { "type": "integer", "minimum": 0 },
+        "toolCalls": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string", "maxLength": 300 },
+        "citations": {
+          "type": "array",
+          "description": "finish 工具的引用列表（AG-10）",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["callId"],
+            "properties": {
+              "callId": { "type": "string" },
+              "docId": { "type": "string" },
+              "note": { "type": "string", "maxLength": 300 }
+            }
+          }
+        }
+      }
+    },
+    "ErrorEvent": {
+      "allOf": [{ "$ref": "#/$defs/Base" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "seq", "at", "code", "message"],
+      "properties": {
+        "type": { "const": "error" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "at": { "type": "integer", "minimum": 0 },
+        "code": { "type": "string", "pattern": "^FR-[A-Z]{2,8}-[0-9]{3}$" },
+        "message": { "type": "string", "maxLength": 500 }
+      }
+    }
+  }
+}

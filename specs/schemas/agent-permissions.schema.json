@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/agent-permissions.schema.json",
+  "title": "AgentPermissions",
+  "description": "项目级 Agent 工具权限表（projects/<projectId>/permissions.json）。权威定义见 specs/14-agent.md §5。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectId", "rules"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "projectId": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$", "description": "ULID" },
+    "rules": {
+      "type": "array",
+      "description": "工具级权限规则；未列出的工具使用其 defaultRule（见 14 §4.1）",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tool", "rule", "updatedAt"],
+        "properties": {
+          "tool": { "type": "string", "pattern": "^[a-z][a-z0-9_]{1,40}$", "description": "工具名，如 workspace_write" },
+          "rule": { "enum": ["always", "once", "ask", "deny"] },
+          "updatedAt": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  }
+}

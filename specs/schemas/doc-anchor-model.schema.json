@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/doc-anchor-model.schema.json",
+  "title": "DocAnchorModel",
+  "description": "FreeRead 锚点模型（blocks.json）。权威定义，见 specs/03-anchor-model.md。修改必须 bump schemaVersion。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "docId",
+    "engine",
+    "pageSize",
+    "blocks",
+    "paragraphs",
+    "sentences",
+    "outline",
+    "figures",
+    "references",
+    "stats"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "docId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "PDF 字节的 sha256（hex 小写）"
+    },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "enum": ["docling", "marker", "grobid", "rule"] },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "meta": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "可选的质量与形态标记（用于 UI 降级提示）",
+      "properties": {
+        "quality": { "enum": ["native", "ocr", "mixed"] },
+        "writingMode": { "enum": ["horizontal-tb", "vertical-rl"] },
+        "pageCount": { "type": "integer", "minimum": 1 },
+        "parserRulesRevision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "pageSize": {
+      "type": "object",
+      "description": "键为 1-based 页号的字符串；值为该页视觉方向尺寸（pt）",
+      "propertyNames": { "pattern": "^[1-9][0-9]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["w", "h"],
+        "properties": {
+          "w": { "type": "number", "exclusiveMinimum": 0 },
+          "h": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      }
+    },
+    "blocks": { "type": "array", "items": { "$ref": "#/$defs/Block" } },
+    "paragraphs": { "type": "array", "items": { "$ref": "#/$defs/Paragraph" } },
+    "sentences": { "type": "array", "items": { "$ref": "#/$defs/Sentence" } },
+    "outline": { "type": "array", "items": { "$ref": "#/$defs/OutlineItem" } },
+    "figures": { "type": "array", "items": { "$ref": "#/$defs/FigureRef" } },
+    "references": { "type": "array", "items": { "$ref": "#/$defs/ReferenceRef" } },
+    "stats": { "$ref": "#/$defs/Stats" }
+  },
+  "$defs": {
+    "PageNo": { "type": "integer", "minimum": 1 },
+    "Rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "w", "h"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "w": { "type": "number", "minimum": 0 },
+        "h": { "type": "number", "minimum": 0 }
+      }
+    },
+    "BlockType": {
+      "enum": [
+        "title",
+        "author",
+        "abstract",
+        "heading",
+        "text",
+        "figure",
+        "figure_caption",
+        "table",
+        "table_caption",
+        "formula",
+        "inline_formula",
+        "reference",
+        "aside",
+        "abandon"
+      ]
+    },
+    "LineRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lineId", "page", "begin", "len"],
+      "properties": {
+        "lineId": { "type": "integer", "minimum": 0 },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "begin": { "type": "integer", "minimum": 0 },
+        "len": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "page", "rect", "type", "score", "order"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^b_[1-9][0-9]*_[1-9][0-9]*$" },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "rect": { "$ref": "#/$defs/Rect" },
+        "type": { "$ref": "#/$defs/BlockType" },
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "order": { "type": "integer", "minimum": 0 },
+        "text": { "type": "string" },
+        "lines": { "type": "array", "items": { "$ref": "#/$defs/LineRef" } }
+      }
+    },
+    "Sentence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "blockId", "page", "text", "lines", "kind"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^s_b_[1-9][0-9]*_[1-9][0-9]*_[1-9][0-9]*$" },
+        "blockId": { "type": "string", "pattern": "^b_[1-9][0-9]*_[1-9][0-9]*$" },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "text": { "type": "string", "minLength": 1 },
+        "lines": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/LineRef" } },
+        "kind": { "enum": ["text", "formula", "caption", "title", "reference"] }
+      }
+    },
+    "Paragraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "blockIds", "sentenceIds"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^pa_[1-9][0-9]*_[1-9][0-9]*$" },
+        "blockIds": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "sentenceIds": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "OutlineItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "page", "blockId", "level"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^h_[0-9a-f]{16}$" },
+        "title": { "type": "string", "minLength": 1 },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "blockId": { "type": "string" },
+        "level": { "type": "integer", "minimum": -1, "maximum": 6 }
+      }
+    },
+    "FigureRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tag", "page", "blockId"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^fig_[1-9][0-9]*_[1-9][0-9]*$" },
+        "tag": { "type": "string", "minLength": 1 },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "blockId": { "type": "string" },
+        "caption": { "type": "string" }
+      }
+    },
+    "ReferenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "tag", "page", "text"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^ref_[1-9][0-9]*$" },
+        "tag": { "type": "string", "minLength": 1 },
+        "page": { "$ref": "#/$defs/PageNo" },
+        "text": { "type": "string" },
+        "doi": { "type": "string", "pattern": "^10\\.[0-9]{4,9}/\\S+$" }
+      }
+    },
+    "Stats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["blockCount", "sentenceCount", "lowConfidenceBlocks", "durationMs"],
+      "properties": {
+        "blockCount": { "type": "integer", "minimum": 0 },
+        "sentenceCount": { "type": "integer", "minimum": 0 },
+        "lowConfidenceBlocks": { "type": "integer", "minimum": 0 },
+        "durationMs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

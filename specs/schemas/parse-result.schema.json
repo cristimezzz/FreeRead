@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/parse-result.schema.json",
+  "title": "ParseResult",
+  "description": "FreeRead 解析任务视图（POST /v1/parse 的 200/202 响应体、GET /v1/jobs/{jobId} 的 200 响应体）。权威定义见 specs/04-parser-sidecar.md §3.2–3.3；result 字段为锚点模型，定义见 doc-anchor-model.schema.json。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["jobId", "state", "progress", "engine", "cacheKey", "createdAt"],
+  "properties": {
+    "jobId": {
+      "type": "string",
+      "pattern": "^job_[A-Za-z0-9]{8,40}$",
+      "description": "任务标识（形如 job_01J8Z…，服务端生成，会话内唯一）。未知 jobId 返回 HTTP 404 + FR-PARSE-012"
+    },
+    "state": {
+      "enum": ["queued", "running", "done", "failed", "canceled"],
+      "description": "ParseJob 状态机当前态（specs/04-parser-sidecar.md §4.1）。done/failed/canceled 为终态，不可再迁移"
+    },
+    "progress": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "解析进度 0..1，保留 3 位小数。粒度：每页（≤50 页）或每批 50 页（>50 页）；终态恒为 1（done）或 0（其余）"
+    },
+    "stage": {
+      "enum": ["loading_model", "layout", "ocr", "references", "finalize"],
+      "description": "当前阶段，仅用于 UI 文案细分（i18n），不参与进度计算；queued 态缺省"
+    },
+    "engine": {
+      "enum": ["docling", "marker", "grobid", "rule"],
+      "description": "本任务实际使用的（或计划使用的）正文引擎；发生回退时此处为最终成功引擎，历史见 fallbackChain"
+    },
+    "fallbackChain": {
+      "type": "array",
+      "items": { "enum": ["docling", "marker", "grobid", "rule"] },
+      "description": "已尝试的引擎顺序（含失败者），如 [\"docling\",\"marker\"]；无回退时省略"
+    },
+    "cacheKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "幂等键，与请求体一致。主进程据此判断是否需要重新提交与是否可复用 blocks.json"
+    },
+    "reused": {
+      "type": "boolean",
+      "default": false,
+      "description": "true 表示命中缓存或复用既有在跑任务（同 cacheKey 幂等），本次未触发新的模型推理"
+    },
+    "createdAt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "任务创建时间，UTC 毫秒整数（specs/00-conventions.md §2 规则 5）"
+    },
+    "startedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "queued → running 的迁移时间，UTC 毫秒整数；未开始则省略"
+    },
+    "finishedAt": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "进入终态的时间，UTC 毫秒整数；非终态省略"
+    },
+    "error": {
+      "$ref": "#/$defs/ParseError",
+      "description": "失败详情。state=failed 时必填，其余状态禁止出现（违反视为 FR-PARSE-013 协议错误）"
+    },
+    "result": {
+      "$ref": "https://freeread.dev/schemas/doc-anchor-model.schema.json",
+      "description": "锚点模型（= library/<citekey>/blocks.json 的内容）。state=done 时必填，其余状态禁止出现。定义不在本文件重复，见 doc-anchor-model.schema.json"
+    }
+  },
+  "$defs": {
+    "ParseError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "description": "错误响应体（specs/04-parser-sidecar.md §9.1）。message 为英文开发者信息，禁止直接展示给用户；UI 必须用 code 映射 i18n 文案",
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^FR-(PARSE|LIB|ANCHOR)-[0-9]{3}$",
+          "description": "规范错误码。FR-PARSE-001..012 的含义与用户文案以 specs/11-error-handling.md §3.2 为权威（禁止改义）；机构级语义（加密/过大/格式不支持/文件缺失）直接复用 FR-LIB-002/003/004/005；FR-PARSE-013..017 是本协议层新增（token、请求体过大、路径越权、协议错误、内部错误），必须补登记进 11-error-handling.md 后方可合并"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300,
+          "description": "面向开发者的英文描述（≤300 字符，与 ipc-channels.json 的 ErrorObject 一致），含关键数值（如页数、上限），不得含 token 或绝对路径中的用户名段"
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "是否可安全重试（true 时主进程最多自动重试 1 次，或按引擎回退链降级后重试）"
+        },
+        "details": {
+          "type": "object",
+          "description": "结构化上下文（键名 snake_case，如 page_count、max_pages、reason、fallbackChain），禁止放入 PDF 全文或块文本",
+          "propertyNames": { "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,63}$" },
+          "additionalProperties": {
+            "type": ["string", "number", "integer", "boolean", "null"]
+          }
+        }
+      }
+    }
+  }
+}

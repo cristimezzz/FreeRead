@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/meta.schema.json",
+  "title": "Meta",
+  "description": "FreeRead 文献元数据（library/<citekey>/meta.json）的权威契约。人类可读、可 Git diff；是 document 索引表的唯一真源。禁止写入本地绝对路径。见 specs/05-storage.md §2.2。修改字段语义必须 bump schemaVersion（specs/README.md F9）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "citekey",
+    "docId",
+    "title",
+    "authors",
+    "tags",
+    "collections",
+    "addedAt",
+    "updatedAt",
+    "source"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "元数据格式版本；字段语义变更时必须 bump 并提供迁移（specs/05-storage.md §8）。"
+    },
+    "citekey": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,39}$",
+      "description": "引用键，等于所在目录名；小写 [a-z0-9-]、最长 40、不得含路径分隔符或保留名。生成规则见 specs/05-storage.md §3。"
+    },
+    "docId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "文档指纹：paper.pdf 字节的 sha256（64 位小写 hex）。全系统文档主键，必须与磁盘文件字节一致。"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "论文标题（Unicode NFC 规范化后的原文标题，不做翻译）。"
+    },
+    "authors": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 256,
+      "description": "作者有序列表，顺序与论文署名一致；空列表非法（缺失作者时应写 [{family:'anonymous'}]）。",
+      "items": { "$ref": "#/$defs/Author" }
+    },
+    "year": {
+      "type": "integer",
+      "minimum": 1000,
+      "maximum": 2999,
+      "description": "出版年份（4 位整数）；未知时省略该字段，不要写 null 或 0。"
+    },
+    "venue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "发表venue/期刊或会议名称，如 'NeurIPS'、'IEEE Trans. Inf. Theory'。"
+    },
+    "doi": {
+      "type": "string",
+      "pattern": "^10\\.[0-9]{4,9}/\\S+$",
+      "description": "DOI（不含 https://doi.org/ 前缀），如 '10.1109/TIT.2020.1234567'。"
+    },
+    "arxivId": {
+      "type": "string",
+      "pattern": "^(arXiv:)?([0-9]{4}\\.[0-9]{4,5}|[a-z-]+(\\.[A-Z]{2})?/[0-9]{7})(v[0-9]+)?$",
+      "description": "arXiv 标识符，允许带或不带 'arXiv:' 前缀与版本后缀，如 '2401.01234v2'。"
+    },
+    "abstract": {
+      "type": "string",
+      "maxLength": 65536,
+      "description": "摘要纯文本（Unicode NFC、无 Markdown/HTML）；缺失时省略，不要写空字符串。"
+    },
+    "tags": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "description": "用户标签（扁平、无层级、≤ 64 字符/个）；对应 document_tag 表。",
+      "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+    },
+    "collections": {
+      "type": "array",
+      "maxItems": 128,
+      "uniqueItems": true,
+      "description": "所属集合/文件夹（扁平名，用 '/' 表达层级，如 'NLP/Anchors'）；对应 document_collection 表。",
+      "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+    },
+    "addedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "导入本地的时刻，ISO 8601 UTC（如 '2026-10-03T00:31:12.480Z'）。人类可读文件中用 ISO 字符串，索引中存 UTC 毫秒整数。"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "meta.json 最后一次实质性修改的时刻，ISO 8601 UTC；必须 ≥ addedAt。"
+    },
+    "pageCount": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "PDF 页数（由解析器或 PDF.js 得出）；未解析时省略。"
+    },
+    "language": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?(-[A-Z]{2}|-[0-9]{3})?$",
+      "description": "正文主语言（BCP 47），如 'en'、'zh-CN'；用于分词与翻译默认值。"
+    },
+    "source": {
+      "$ref": "#/$defs/Source",
+      "description": "文献来源描述。kind='local-file' 时禁止写 url（不得泄露本地路径）；联网来源必须记录 url 与 fetchedAt。"
+    },
+    "quality": {
+      "enum": ["native", "ocr", "mixed"],
+      "description": "文本层质量标记：native=数字版 PDF；ocr=扫描件经 OCR；mixed=部分页 OCR 或哈希不一致（specs/03-anchor-model.md §9）。"
+    }
+  },
+  "$defs": {
+    "Author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "given"],
+      "description": "单条作者记录。",
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "姓/家族名，如 'Vaswani'；也是 citekey 首段的来源。"
+        },
+        "given": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "名/缩写，如 'Ashish' 或 'A.'；确实未知时写空字符串 ''。"
+        },
+        "affiliation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "机构名（可选），如 'Google Brain'。"
+        }
+      }
+    },
+    "Source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "description": "文献获取来源；用于合规审计与来源可追溯，见 specs/09-fetch-compliance.md。",
+      "properties": {
+        "kind": {
+          "enum": ["local-file", "arxiv", "pmc", "unpaywall", "zotero", "url"],
+          "description": "来源类型；local-file=用户本地文件（此时禁止 url 字段）。"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "maxLength": 2048,
+          "description": "远程获取 URL（仅 OA 来源，必须 http/https）。禁止写入 file:// 或本地绝对路径（specs/05-storage.md §11 PR2）。"
+        },
+        "fetchedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "从 url 获取文件的时刻，ISO 8601 UTC；kind='local-file' 时省略。"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "local-file" } }, "required": ["kind"] },
+          "then": { "not": { "required": ["url"] } },
+          "else": { "required": ["url", "fetchedAt"] }
+        }
+      ]
+    }
+  }
+}

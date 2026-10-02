@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/parse-request.schema.json",
+  "title": "ParseRequest",
+  "description": "FreeRead 解析 sidecar 请求体（POST /v1/parse）。权威定义见 specs/04-parser-sidecar.md §3.2；校验失败必须返回 HTTP 400 + 错误码 FR-PARSE-013。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["docId", "pdfPath", "options", "cacheKey"],
+  "properties": {
+    "docId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "PDF 字节的 sha256（hex 小写，64 字符），全系统文档主键（specs/README.md §3）"
+    },
+    "pdfPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "PDF 绝对路径。必须位于 --library-root（或用户显式授权的目录）内、为常规文件、后缀 .pdf；否则返回 403 + FR-PARSE-015（禁止 .. 与 UNC 路径穿越）"
+    },
+    "citekey": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "description": "知识库引用键（可选，仅用于日志与诊断）。sidecar 不写知识库目录，最终落盘 library/<citekey>/blocks.json 由主进程执行"
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "langs"],
+      "description": "解析选项。未知字段一律拒绝（additionalProperties:false），保证协议演进可检测。options.ocr 在 IPC 层是 boolean（ipc-channels.json 的 ParserStartRequest.ocr），由主进程映射：true → 'auto'，false → 'never'",
+      "properties": {
+        "engine": {
+          "enum": ["docling", "marker", "grobid", "rule"],
+          "description": "请求的正文引擎。docling 为默认；marker 为表格/公式兜底；grobid 仅元数据与参考文献；rule 由主进程纯 JS 实现，发往 sidecar 必须返回 400 + FR-PARSE-017。失败回退链见 specs/04-parser-sidecar.md §5.6"
+        },
+        "ocr": {
+          "enum": ["auto", "always", "never"],
+          "default": "auto",
+          "description": "OCR 策略。auto=每页文本层字符数 < 20 时触发（默认）；always=全部页走 OCR；never=禁用 OCR，扫描页记 parse.ocr.skipped"
+        },
+        "langs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "enum": ["en", "zh", "ja", "ko"] },
+          "description": "文档语言（BCP-47 主语言子标签，与 ipc-channels.json 的 LangTag 兼容）。OCR 语言包与语言相关模型按此加载；首个元素为主语言；不支持的语种返回 HTTP 422 + FR-PARSE-008"
+        },
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "允许解析的最大页数。上限沿用 MAX_PAGE_COUNT=500（specs/11-error-handling.md §3.2）；超出返回 HTTP 413 + FR-PARSE-009，由主进程改为按 50 页/批分批续跑，不放大 OCR_MAX_PAGE=320 上限"
+        },
+        "force": {
+          "type": "boolean",
+          "default": false,
+          "description": "true 时忽略 cacheKey 的已缓存结果与断点续传批次，清空 cache/parser/<cacheKey>/ 后全量重跑"
+        }
+      }
+    },
+    "cacheKey": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "幂等键，由主进程按 specs/03-anchor-model.md §8 计算：sha256(docId + engine.name + engine.version + schemaVersion + PARSER_RULES_REVISION)。sidecar 只校验格式，不自行计算；同 cacheKey 重复请求返回同一 jobId 与同一结果"
+    }
+  }
+}

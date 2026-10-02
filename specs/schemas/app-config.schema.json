@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freeread.dev/schemas/app-config.schema.json",
+  "title": "AppConfig",
+  "description": "FreeRead 应用配置（%APPDATA%/FreeRead/config.json，Linux 为 ~/.config/FreeRead/config.json）的权威契约。**本文件禁止出现任何密钥/令牌/密码字段**：additionalProperties:false 会在加载时拒绝未知字段，密钥一律存 OS Keychain（服务名 dev.freeread.app，见 specs/05-storage.md §11 PR5）。本地绝对路径只允许出现在本文件的 libraryPath / cachePath。修改字段语义必须 bump schemaVersion（specs/README.md F9）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "locale",
+    "theme",
+    "libraryPath",
+    "cachePath"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "配置格式版本；字段语义变更时必须 bump 并提供迁移（specs/05-storage.md §8）。"
+    },
+    "locale": {
+      "enum": ["zh-CN", "en"],
+      "description": "界面语言；用户可见文案一律走 i18n key（specs/00-conventions.md §1）。"
+    },
+    "theme": {
+      "enum": ["light", "dark", "system"],
+      "description": "主题；system 表示跟随操作系统。"
+    },
+    "libraryPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "知识库根目录绝对路径（默认 ~/FreeRead/library）。全系统唯一允许保存本地绝对路径的配置项之一。"
+    },
+    "cachePath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "缓存根目录绝对路径（页面位图/译文/OCR），可随时清理；容量上限见 BUDGETS.CACHE_MAX_MB。"
+    },
+    "reader": {
+      "$ref": "#/$defs/Reader",
+      "description": "阅读器排版与显示设置（缺省时使用应用内置默认值，不写入文件）。"
+    },
+    "translation": {
+      "$ref": "#/$defs/Translation",
+      "description": "翻译 Provider 与术语表设置；API key 不在本对象内，存 OS Keychain。"
+    },
+    "parser": {
+      "$ref": "#/$defs/Parser",
+      "description": "版面解析设置（引擎选择、OCR、模型下载授权）。"
+    },
+    "privacy": {
+      "$ref": "#/$defs/Privacy",
+      "description": "隐私开关；默认最保守（telemetry 恒为 false）。"
+    },
+    "sync": {
+      "$ref": "#/$defs/Sync",
+      "description": "同步设置（ADR-09：V1 由用户自选同步盘或 WebDAV，应用只做文件级冲突检测）。"
+    }
+  },
+  "$defs": {
+    "Reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "重排视图的排版参数；全部为显示层参数，不写入 blocks.json（模型中不存缩放，specs/03-anchor-model.md §3）。",
+      "properties": {
+        "fontFamily": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "正文字体族（CSS font-family 值，仅允许本地已安装字体或随包字体）。"
+        },
+        "fontSize": {
+          "type": "number",
+          "minimum": 10,
+          "maximum": 32,
+          "description": "正文字号（px，对应 CSS 变量 --fr-font-size）。"
+        },
+        "lineHeight": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3,
+          "description": "行高倍数（无单位，对应 --fr-line-height）。"
+        },
+        "maxWidth": {
+          "type": "integer",
+          "minimum": 320,
+          "maximum": 2400,
+          "description": "正文最大宽度（px），用于控制单行字符数（可读性）。"
+        },
+        "showTranslationUnderline": {
+          "type": "boolean",
+          "description": "对照模式下是否给译文加下划线以区分原文（无障碍与可读性）。"
+        },
+        "translationDisplay": {
+          "enum": ["dual", "target-only", "source-only"],
+          "description": "对照翻译显示模式：dual=原文与译文并排/上下；target-only=仅译文；source-only=仅原文（关闭翻译显示但保留缓存）。"
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "三栏阅读器布局偏好（specs/07-ui-spec.md §3.2/§3.4）。拖拽结束、面板切换、模式切换时节流 500ms 写盘；读取失败回落默认值（不得抛错阻塞渲染）。",
+          "properties": {
+            "leftWidth": {
+              "type": "integer",
+              "minimum": 200,
+              "maximum": 420,
+              "description": "左栏（大纲/缩略图/标签）宽度 px，默认 260。"
+            },
+            "rightWidth": {
+              "type": "integer",
+              "minimum": 280,
+              "maximum": 560,
+              "description": "右栏（笔记/翻译/AI）宽度 px，默认 360。"
+            },
+            "leftCollapsed": {
+              "type": "boolean",
+              "description": "左栏是否收起（≤1024px 断点会自动收起）。"
+            },
+            "rightCollapsed": {
+              "type": "boolean",
+              "description": "右栏是否收起（≤1280px 断点会自动收起）。"
+            }
+          }
+        }
+      }
+    },
+    "Translation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider", "targetLang"],
+      "description": "翻译 Provider 配置（specs/08-translation.md）。**任何 apiKey / token / secret 字段一律不得出现**。",
+      "properties": {
+        "provider": {
+          "enum": ["ollama", "openai-compatible", "none"],
+          "description": "翻译后端：ollama=本地（默认推荐，零上传）；openai-compatible=用户自带 baseUrl + Key；none=仅词典式划词降级。"
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "模型名，如 'qwen2.5:7b'（ollama）或 'deepseek-chat'（openai-compatible）；provider='none' 时省略。"
+        },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "maxLength": 2048,
+          "description": "OpenAI 兼容服务的基址（仅 http/https，默认 http://127.0.0.1:11434 用于 ollama）；出站仍必须经 NetGuard 白名单（specs/09-fetch-compliance.md）。"
+        },
+        "targetLang": {
+          "type": "string",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "description": "目标语言（BCP 47），决定 translation/<lang>.jsonl 的文件名，如 'zh-CN'。"
+        },
+        "glossary": {
+          "type": "array",
+          "maxItems": 2048,
+          "description": "术语表（GlossaryTerm[]）：翻译时必须命中，未命中即视为不合规输出；可全局共享也可按 docId 限定。",
+          "items": { "$ref": "#/$defs/GlossaryTerm" }
+        }
+      }
+    },
+    "GlossaryTerm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "target"],
+      "description": "单条术语（specs/README.md §3 的 GlossaryTerm）。",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "源语言术语原文（Unicode NFC）。"
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "目标语言固定译法。"
+        },
+        "caseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "description": "匹配是否区分大小写（默认 false；中文等无大小写语言忽略此字段）。"
+        }
+      }
+    },
+    "Parser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "ocr"],
+      "description": "解析设置（specs/04-parser-sidecar.md）。",
+      "properties": {
+        "engine": {
+          "enum": ["docling", "marker", "rule", "auto"],
+          "description": "版面解析引擎：docling 默认；marker 用于表格/公式密集兜底；rule 为无 sidecar 时的纯 JS 降级；auto 由应用按可用性与文档特征选择（同一文档只用一个引擎）。"
+        },
+        "ocr": {
+          "type": "boolean",
+          "description": "是否对无文本层（< 20 字符/页）的扫描件启用 OCR（PaddleOCR 优先，Tesseract 兜底）。"
+        },
+        "consentToDownloadModels": {
+          "type": "boolean",
+          "description": "是否同意按需下载解析/OCR 模型权重（含体积与 SHA256 校验提示）；false 时只使用本地已有模型或 rule 降级。"
+        }
+      }
+    },
+    "Privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["telemetry"],
+      "description": "隐私开关；除 telemetry 外均为用户可选项。",
+      "properties": {
+        "telemetry": {
+          "const": false,
+          "description": "遥测开关：**恒为 false**（本项目不收集任何使用数据，schema 层直接禁止开启）。"
+        },
+        "crashReports": {
+          "type": "boolean",
+          "default": false,
+          "description": "崩溃上报（默认关闭；启用时仅上传脱敏堆栈，不含文档内容与路径，ADR-12）。"
+        }
+      }
+    },
+    "Sync": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "description": "同步设置（ADR-09）。**密码/应用密码/token 不得写入 config.json**，必须存 OS Keychain（账号名 provider:<name>）。",
+      "properties": {
+        "provider": {
+          "enum": ["none", "webdav", "folder"],
+          "description": "同步方式：none=不同步；webdav=用户自建 WebDAV；folder=用户自选同步盘目录（Syncthing/OneDrive 等）。"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "maxLength": 2048,
+          "description": "WebDAV 服务地址（仅 provider='webdav' 时有效）。"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "WebDAV 用户名（非敏感字段）；对应密码存 OS Keychain，键为 'sync:webdav:<username>'。"
+        }
+      }
+    }
+  }
+}

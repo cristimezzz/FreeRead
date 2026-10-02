@@ -1,0 +1,30 @@
+# 统一以 LF 存储与检出，避免跨平台 CRLF 污染与无意义 diff
+* text=auto eol=lf
+
+# 二进制文件（禁止行尾转换）
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.icns binary
+*.pdf  binary
+*.zip  binary
+*.gz   binary
+*.wasm binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.traineddata binary
+*.onnx binary
+*.safetensors binary
+*.dll  binary
+*.dylib binary
+*.so   binary
+*.exe  binary
+*.node binary
+
+# 契约文件由 scripts 生成，折叠 diff 噪音（GitHub 语言统计）
+specs/schemas/*.json linguist-generated=true

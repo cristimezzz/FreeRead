@@ -1,0 +1,55 @@
+# ---- Node / 前端 ----
+node_modules/
+.pnpm-store/
+.turbo/
+*.tsbuildinfo
+dist/
+out/
+build/
+release/
+coverage/
+playwright-report/
+test-results/
+
+# ---- Electron 打包产物 ----
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.snap
+
+# ---- Python sidecar ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+services/parser/build/
+services/parser/dist/
+
+# ---- 模型与缓存（按需下载，不入库）----
+models/
+*.traineddata
+*.onnx
+*.safetensors
+
+# ---- 本地数据与密钥 ----
+.env
+.env.*
+*.local
+config.local.json
+library/
+projects/
+
+# ---- 规范集生成的中间产物 ----
+specs/_combined.md
+specs/docx-checks.json
+
+# ---- 编辑器 / 系统 ----
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
