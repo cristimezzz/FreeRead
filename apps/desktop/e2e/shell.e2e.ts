@@ -8,6 +8,7 @@ test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () =>
   const environment = { ...process.env, ELECTRON_RENDERER_URL: '' };
   delete environment['ELECTRON_RUN_AS_NODE'];
   const app = await electron.launch({
+    chromiumSandbox: true,
     args: [resolve('apps/desktop'), `--user-data-dir=${userData}`],
     env: environment,
   });
@@ -28,6 +29,7 @@ test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () =>
     expect(privilege.bridge).toBe('object');
     expect(privilege.genericInvoke).toBe(false);
     expect(privilege.methods).toContain('getCapabilities');
+    expect(await app.evaluate(({ app }) => app.commandLine.hasSwitch('no-sandbox'))).toBe(false);
     expect(await app.evaluate(({ BrowserWindow }) => {
       const preferences = BrowserWindow.getAllWindows()[0]?.webContents.getLastWebPreferences();
       return { sandbox: preferences?.sandbox, nodeIntegration: preferences?.nodeIntegration,
