@@ -1,7 +1,11 @@
 name: M0 verify and native packages
 on:
   push:
+    branches: [main]
   pull_request:
+concurrency:
+  group: m0-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
