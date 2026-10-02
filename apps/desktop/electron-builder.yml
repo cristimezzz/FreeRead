@@ -36,6 +36,7 @@ mac:
   identity: null
 linux:
   executableName: freeread
+  packageName: freeread
   target:
     - target: deb
       arch: [x64]
