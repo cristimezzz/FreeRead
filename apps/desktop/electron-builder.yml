@@ -36,7 +36,6 @@ mac:
   identity: null
 linux:
   executableName: freeread
-  packageName: freeread
   target:
     - target: deb
       arch: [x64]
@@ -44,4 +43,6 @@ linux:
       arch: [x64]
   maintainer: FreeRead contributors
   category: Education
+deb:
+  packageName: freeread
 publish: null
