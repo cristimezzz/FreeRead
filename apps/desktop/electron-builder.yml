@@ -45,4 +45,5 @@ linux:
   category: Education
 deb:
   packageName: freeread
+  artifactName: FreeRead-${version}-${arch}.${ext}
 publish: null
