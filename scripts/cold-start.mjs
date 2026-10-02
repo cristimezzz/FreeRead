@@ -3,6 +3,8 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { setTimeout, clearTimeout } from 'node:timers';
+import { BUDGETS } from '../packages/core/dist/budgets.js';
 
 const require = createRequire(import.meta.url);
 const userData = await mkdtemp(resolve(tmpdir(), 'freeread-cold-'));
@@ -24,8 +26,8 @@ try {
     child.once('exit', accept);
   });
   if (code !== 0 || elapsed === undefined) throw new Error(`Cold launch failed: code=${code}`);
-  console.log(`Cold launch: ${elapsed} ms (budget 2500 ms, no debugger)`);
-  if (elapsed > 2500) throw new Error('Cold launch exceeds BUDGETS.COLD_START_MS');
+  console.log(`Cold launch: ${elapsed} ms (budget ${BUDGETS.COLD_START_MS} ms, no debugger)`);
+  if (elapsed > BUDGETS.COLD_START_MS) throw new Error('Cold launch exceeds BUDGETS.COLD_START_MS');
 } finally {
   clearTimeout(timeout);
   await rm(userData, { recursive: true, force: true });
