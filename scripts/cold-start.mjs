@@ -14,8 +14,10 @@ const start = Date.now();
 const child = spawn(require('electron'), [resolve('apps/desktop'), `--user-data-dir=${userData}`, '--fr-benchmark'], { env });
 let output = '';
 let elapsed;
+let mainElapsed;
 child.stdout.on('data', (chunk) => {
   output += chunk.toString();
+  if (mainElapsed === undefined && output.includes('"event":"app.main"')) mainElapsed = Date.now() - start;
   if (elapsed === undefined && output.includes('"event":"app.ready"')) elapsed = Date.now() - start;
 });
 child.stderr.on('data', (chunk) => process.stderr.write(chunk));
@@ -27,6 +29,7 @@ try {
   });
   if (code !== 0 || elapsed === undefined) throw new Error(`Cold launch failed: code=${code}`);
   console.log(`Cold launch: ${elapsed} ms (budget ${BUDGETS.COLD_START_MS} ms, no debugger)`);
+  console.log(`Native bootstrap: ${mainElapsed} ms; main-to-first-frame: ${elapsed - mainElapsed} ms`);
   if (elapsed > BUDGETS.COLD_START_MS) throw new Error('Cold launch exceeds BUDGETS.COLD_START_MS');
 } finally {
   clearTimeout(timeout);

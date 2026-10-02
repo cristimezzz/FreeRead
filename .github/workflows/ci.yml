@@ -19,6 +19,12 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Configure Chromium sandbox helper
+        if: runner.os == 'Linux'
+        run: |
+          helper="$(dirname "$(node -p 'require("electron")')")/chrome-sandbox"
+          sudo chown root:root "$helper"
+          sudo chmod 4755 "$helper"
       - run: pnpm verify
       - run: pnpm build
       - run: pnpm size
