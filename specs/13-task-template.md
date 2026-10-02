@@ -158,6 +158,7 @@
 - **T-007**：ADR 落档与首批样本；写权限 `docs/**`、`fixtures/**`、`services/parser/**`、`plugins/**` 及 README/许可产物；依赖 T-001。输出 ADR-01–12 的正式文档及 10 篇授权 PDF、来源/许可/sha256/页数清单；M2 再补人工锚点标注。
 - **规范修订写权限**：`specs/README.md`、`specs/00-conventions.md`、本文件、方案 §5 及其变更记录；依据 ADR-13 修复冲突，禁止改 schema 或降低阈值。
 - **交付证据**：`docs/m0-delivery.md` 按 §3 报告格式记录逐文件行数、实际命令结果、负例门禁、平台验证缺口。
+- **启动测量**：M0 冷启动预算仍为 2500 ms；使用不带调试器的 Electron 子进程，从 spawn 前至 ready-to-show 首帧（并且随后关闭）的完整墙钟耗时。Playwright 调试器连接只用于功能 E2E，不能把其连接等待计作应用启动；原生 CI 必须运行独立冷启动门禁（ADR-13）。
 
 
 | 信号 | 结论 |
