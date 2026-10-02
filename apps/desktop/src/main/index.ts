@@ -2,8 +2,6 @@ import { app, BrowserWindow, session } from 'electron';
 import { join } from 'node:path';
 import { toAppError } from '@freeread/core';
 
-// M0 renders a static shell; enable GPU compositing when the PDF renderer arrives.
-app.disableHardwareAcceleration();
 if (process.argv.includes('--fr-benchmark')) process.stdout.write(JSON.stringify({ event: 'app.main' }) + '\n');
 
 async function createWindow(): Promise<void> {
