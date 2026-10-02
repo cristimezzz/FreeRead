@@ -8,3 +8,4 @@
 - 依赖下载与授权样本采集属于开发工具，使用构建工具原生网络；应用运行时仍必须经 NetGuard，M0 应用不出网。
 - 依赖：按 ADR-01/02/12 引入 Electron、React、Vite、TypeScript、pnpm/Turbo、ESLint/boundaries、dependency-cruiser、Vitest/coverage、Playwright、Prettier、electron-builder、json-schema-to-typescript、zod、AJV。`license-checker-rsc` 在 npm 返回 404，改用 pnpm 原生 `licenses list --json`，省去重复依赖；其输出仍经黑名单/允许表严格校验。仅加载 M0 必需依赖，解析/数据库/LLM/更新依赖在所属里程碑引入。
 - 影响：三平台产物的验收必须有实际 CI 或本机证据；仅提交工作流不能声称 CI 全绿。源码无远端时，以随包的对应源码归档提供源码，不虚构下载 URL。
+- 许可核验：electron-builder 的传递依赖 `truncate-utf8-bytes` 为 WTFPL，其 [SPDX 正文](https://spdx.org/licenses/WTFPL.html) 无使用/再分发限制，补充允许该标识；禁止许可表保持不变。

@@ -77,6 +77,7 @@ pnpm build:sidecar  # 构建 Python sidecar（PyInstaller，仅 release 通道�
 
 **License Gate 黑名单**（CI 强制，命中即失败）：`SSPL-1.0`、`BUSL-1.1`、`Elastic-2.0`、`GPL-2.0-only`、`UNLICENSED`、任何专有许可、**CC-BY-NC 类模型权重**（如 Nougat 权重）。
 **允许**：AGPL-3.0、GPL-3.0、LGPL、MIT、Apache-2.0、BSD、ISC、MPL-2.0、CC0、Unlicense、OFL（字体）。
+M0 的 electron-builder 传递依赖 `truncate-utf8-bytes` 使用 WTFPL，依据 [SPDX 正文](https://spdx.org/licenses/WTFPL.html) 的无限制使用条款允许该 SPDX 标识；黑名单与未知许可拒绝规则不变（ADR-13）。
 
 **AGPL 三条义务的落地检查**（`scripts/check-agpl-obligations.sh`）：
 
@@ -151,3 +152,4 @@ jobs:
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | v1.0 | 2026-10-03 | 首版冻结（AGPL-3.0 义务落地） |
+| v1.1 | 2026-10-03 | 核验并允许打包器传递依赖 WTFPL；保留全部禁止许可门禁（ADR-13） |
