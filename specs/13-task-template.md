@@ -154,7 +154,7 @@
 ### M0 本次认领（2026-10-03）
 
 - **T-001**：骨架与质量门禁；扩展写权限为根配置、`.github/`、`scripts/`、`apps/` 与各 `packages/` 的配置/README/唯一出口及生成产物；依赖无。验收沿用 §4；编译/打包命令按 12 §2 分离，三平台打包由原生 CI runner 执行。
-- **T-006**：Electron 离线空壳；写权限 `apps/desktop/**`、`packages/core/src/{index.ts,budgets.ts}`；依赖 T-001 的配置。输出安全窗口、生成 preload 白名单、双语空壳和 Playwright 主路径；用户可见文案不得宣称已有导入或 Agent 功能。
+- **T-006**：Electron 离线空壳；写权限 `apps/desktop/**`、`packages/core/src/{index.ts,budgets.ts,error.ts,error.test.ts,budgets.test.ts}`；依赖 T-001 的配置。输出安全窗口、生成 preload 白名单、双语空壳和 Playwright 主路径；失败按 11 §1 的 AppError 转换；用户可见文案不得宣称已有导入或 Agent 功能。
 - **T-007**：ADR 落档与首批样本；写权限 `docs/**`、`fixtures/**`、`services/parser/**`、`plugins/**` 及 README/许可产物；依赖 T-001。输出 ADR-01–12 的正式文档及 10 篇授权 PDF、来源/许可/sha256/页数清单；M2 再补人工锚点标注。
 - **规范修订写权限**：`specs/README.md`、`specs/00-conventions.md`、本文件、方案 §5 及其变更记录；依据 ADR-13 修复冲突，禁止改 schema 或降低阈值。
 - **交付证据**：`docs/m0-delivery.md` 按 §3 报告格式记录逐文件行数、实际命令结果、负例门禁、平台验证缺口。
