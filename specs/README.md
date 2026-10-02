@@ -6,6 +6,7 @@
 - 版本：`spec-v1.0`（2026-10-03）
 - 上游文档：[技术方案与里程碑](../plan/FreeRead-技术方案与里程碑.md) ｜ [Scholaread 调研报告](../report/Scholaread-调研报告.md)
 - 主仓许可：**AGPL-3.0**（见方案 §12.1；引入依赖前必须过 License Gate）
+- M1 实施范围（2026-10-03）：T-008/T-009/T-003，meta schemaVersion=2（v1 迁移）；见 ADR-14 与 13 §5。
 - 实施记录（2026-10-03）：M0 工程骨架、离线空壳、三平台原生 CI 与首批样本已落地；实际证据及固定硬件基准缺口见 [M0 交付报告](../docs/m0-delivery.md)。任务认领与规范修订见 `13-task-template.md` §5、ADR-13，schema 未变更。
 
 ---

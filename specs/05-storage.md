@@ -238,7 +238,7 @@ export function makeCitekey(meta: Pick<Meta, 'authors' | 'year' | 'title'>, take
 
 ## 7. SQLite 完整 DDL（`schema.sql`）
 
-位置 `%APPDATA%/FreeRead/index.sqlite`（Linux `~/.config/FreeRead/index.sqlite`）。驱动 `better-sqlite3`（MIT）。以下脚本**可直接执行**，且必须与 `packages/core/src/storage/schema.sql` 逐字节一致（`pnpm gen:check` 校验）。
+位置 `%APPDATA%/FreeRead/index.sqlite`（Linux `~/.config/FreeRead/index.sqlite`）。驱动为运行时内置 `node:sqlite`（ADR-14）。以下脚本**可直接执行**，且必须与 `packages/core/src/storage/schema.sql` 逐字节一致（`pnpm gen:check` 校验）。
 
 ```sql
 -- schema.sql — FreeRead SQLite 索引（可重建；真源见 specs/05-storage.md §1）
@@ -365,7 +365,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
 | 表 | 唯一来源 | 重建动作 |
 |---|---|---|
 | `schema_migrations` | 应用代码（非文件真源） | 执行 `migrations/` 后写入；不参与重建 |
-| `document` | `meta.json` + 目录名 + `blocks.json` | 扫描 `library/*/`：`citekey = dirname`、`doc_id = meta.docId`、`title/authors/year/venue/doi/arxivId/pageCount/language/quality/source` 取 `meta`；`parser_engine/parser_version` 取 `blocks.json#engine`；`rules_revision` 取 `blocks.json#meta.parserRulesRevision`；`read_state/read_progress/last_*` 为**索引专属**（重建保留旧值，见 §11 PR5） |
+| `document` | `meta.json` + 目录名 + `blocks.json` | 扫描 `library/*/`：`citekey = dirname`、`doc_id = meta.docId`、`title/authors/year/venue/doi/arxivId/pageCount/language/quality/source` 取 `meta`；`parser_engine/parser_version` 取 `blocks.json#engine`；`rules_revision` 取 `blocks.json#meta.parserRulesRevision`；`read_state/read_progress/last_*` 从 `meta.reading` 推导（ADR-14） |
 | `document_tag` / `document_collection` | `meta.tags[]` / `meta.collections[]` | 逐条展开插入 |
 | `citekey_alias` | `<libraryPath>/.aliases.jsonl`（重命名时追加 `{old,new,docId,changedAt}`） | 逐行插入 |
 | `annotation` | `annotations.jsonl` | 流式读取 → 按 `id` 归并取最后一条 → `json` 存行原文、`deleted` 取墓碑 |
@@ -519,7 +519,7 @@ export function withCitekeyLock<T>(citekey: string, fn: () => Promise<T>): Promi
 | PR2 | `meta.source.url` 只保存**远程** URL（OA 来源，见 `09-fetch-compliance.md`）；本地导入时 `source.kind='local-file'` 且**省略** `url`（不写 `file://` 路径） |
 | PR3 | 导出/分享（Markdown / JSON / 标注 CSV）必须过 `sanitizeExport()`：剥离 `source.url` 的本地段、剔除 `deviceId`，可选把 `docId` 替换为 `sha256(docId).slice(0,8)`；默认导出即已匿名化。日志脱敏遵循 `00-conventions.md` §5（白名单制）：不记笔记/译文全文、密钥与路径中的用户名段，只记长度与 hash |
 | PR4 | 密钥/令牌（OpenAI 兼容 API key、WebDAV 密码）**必须**存 OS Keychain（Windows Credential Manager / macOS Keychain / libsecret），服务名 `dev.freeread.app`、账号 `provider:<name>`；`config.json` 只允许 `baseUrl`、`username`、`model` 等非敏感字段（`schemas/app-config.schema.json` 以 `additionalProperties:false` 强制） |
-| PR5 | 迁移 = 拷贝：`library/` 整体复制后指向新 `libraryPath` 并 `doctor --rebuild` 即可用。**无隐藏状态**；唯一例外是 `document.read_state/read_progress/last_*`（阅读进度）属索引专属，V1 明确接受其丢失（重读成本 ≤ 1 次翻页）。云同步由用户自选，应用只做文件级冲突检测（`mtime + sha256`）与提示，不上传任何数据（ADR-09） |
+| PR5 | 迁移 = 拷贝：`library/` 整体复制后指向新 `libraryPath` 并 `doctor --rebuild` 即可用。**无隐藏状态**；`document.read_state/read_progress/last_*` 从 `meta.reading` 重建，进度不可丢失（ADR-14）。云同步由用户自选，应用只做文件级冲突检测（`mtime + sha256`）与提示，不上传任何数据（ADR-09） |
 
 ---
 
@@ -553,3 +553,5 @@ export const STORAGE_LIMITS = {
 |---|---|---|---|
 | v1.0 | 2026-10-03 | 首版冻结：真源原则与原子写协议（临时文件 + rename + fsync → 索引）、知识库布局与逐文件规格、citekey 生成/冲突/重命名原子步骤、`annotations.jsonl`（追加 + 墓碑 + 三示例）、译文缓存 `sourceHash` 失效规则、纠错补丁可重放规范、SQLite 完整 DDL 与表←文件重建映射、FTS5 中文分词取舍（`unicode61` + 应用层分词）、迁移/备份/回滚策略、`doctor` 五子命令与退出码、单实例锁/写互斥/悬挂文件清理、隐私与整体拷贝迁移；错误码与 `11-error-handling.md` 对齐（新增 `FR-STORE-012..022`，复用 `-004/-005/-006`） | 1（`meta` / `annotation` / `app-config` / `blocks` 均为 1） |
 | v1.0-r2 | 2026-10-03 | **跨规范冲突裁决（Lead）**：`translation_cache` 主键由 `(doc_id, lang, unit_id)` 改为 **`(doc_id, lang, cache_key)`**，并新增 `provider_id`/`model_id`/`glossary_hash`/`cache_key`/`last_used_at`/`hits`/`bytes` 列。原因：`08-translation.md` §6.1 要求缓存键包含 provider + model + 术语表指纹，原主键会导致「切换 Provider / 修改术语表后无法共存」。同步修正 §1 规范化转储的排序键与 §7.2 重建映射。 | 1（不变；仅索引表结构变化，属可重建索引） |
+
+| v1.2-M1 | 2026-10-03 | ADR-14：meta schema v2 持久化 reading，v1 校验迁移；M1 最小 PDF.js 锚点与 node:sqlite。preload 增加本地 PDF 选择对话框（只返回授权路径）；仅原文阅读，M2 再验收重排。 |

@@ -173,6 +173,14 @@
 
 ---
 
+### M1 本次认领（2026-10-03）
+
+- **T-008 文献库与索引**：写权限 `apps/desktop/src/main/{infra,services}/**`、`packages/core/src/{storage,search}/**`；依赖 T-001。导入/sha256 去重、标签、中文 FTS5、启动从文件重建；导入验证 PDF、尺寸、路径及 schema。
+- **T-009 原文阅读与标注**：写权限 `apps/desktop/src/{renderer,preload,main}/**`、`apps/desktop/e2e/**`、`packages/core/src/anchor/m1*`；依赖 T-008。PDF.js 可视页渲染、文本选择、句子定位、标注 JSONL 追加/墓碑、Markdown 笔记；最小锚点范围见 ADR-14。
+- **T-003 进度恢复**：本次扩展写权限 `packages/core/src/progress/**`、main 服务与 E2E；同步原子写 meta.reading，失败追加 OpLogEntry，启动补偿，E4/E14 及强杀 20/20。
+- **共同授权**：相关包出口/README/依赖、根锁文件/测试配置、`scripts/gen.mjs`、CI、`docs/**`、AGENTS 状态和 README；规范修订为本文件、README、02/05/06/07、meta schema（v2 + v1 迁移）。不修改 03 或 anchor schema，不降低门禁。
+- **交付**：`docs/m1-delivery.md` 按 §3 报告实际命令和未验证项；M2–M7 不在此次范围。
+
 ## 变更记录
 
 | 版本 | 日期 | 变更 |
@@ -180,3 +188,4 @@
 | v1.0 | 2026-10-03 | 首版冻结 |
 | v1.1 | 2026-10-03 | V1 纳入 Agent：新增示例任务卡 T-004（Agent 运行时）与 T-005（权限门禁与沙箱），并给出可量化的验收标准 |
 | v1.2 | 2026-10-03 | 认领 M0 T-001/T-006/T-007；明确跨目录授权、编译/打包及样本分阶段范围（ADR-13） |
+| v1.3 | 2026-10-03 | 认领 M1 T-008/T-009/T-003；ADR-14 与 meta v2 迁移 |
