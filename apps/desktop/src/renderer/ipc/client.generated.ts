@@ -13,6 +13,7 @@ export interface EventPayloads {
 }
 export type FrEvent<T extends FrEventName> = { type: T; payload: EventPayloads[T]; ts: number; seq: number };
 export interface FrBridge {
+  readonly local: { pickPdf(): Promise<string[]>; cancelImport(): Promise<void> };
   readonly library: {
     list(req: IpcPayloads['LibraryListRequest']): Promise<ApiResult<IpcPayloads['LibraryListResponse']>>;
     get(req: IpcPayloads['LibraryGetRequest']): Promise<ApiResult<IpcPayloads['LibraryGetResponse']>>;

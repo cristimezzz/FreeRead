@@ -1,6 +1,19 @@
-import { app, BrowserWindow, session } from 'electron';
+import { app, BrowserWindow, session, protocol } from 'electron';
 import { join } from 'node:path';
 import { toAppError } from '@freeread/core';
+import { IndexStore } from './infra/index-store';
+import { LibraryService } from './services/library-service';
+import { NoteService } from './services/note-service';
+import { ReaderService } from './services/reader-service';
+import { registerHandlers } from './ipc/handlers';
+import { servePdf } from './infra/pdf-protocol';
+import { loadConfig } from './infra/config';
+import { ensureDirectory, installationId } from './infra/files';
+
+protocol.registerSchemesAsPrivileged([{ scheme: 'fr-file', privileges: { standard: true, secure: true,
+  supportFetchAPI: true, stream: true, corsEnabled: true } }]);
+const dataSwitch = process.argv.find((arg) => arg.startsWith('--user-data-dir='));
+if (dataSwitch) app.setPath('userData', dataSwitch.slice('--user-data-dir='.length));
 
 if (process.argv.includes('--fr-benchmark')) process.stdout.write(JSON.stringify({ event: 'app.main' }) + '\n');
 
@@ -14,6 +27,7 @@ async function createWindow(): Promise<void> {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+  window.webContents.on('render-process-gone', () => { window.webContents.reload(); });
   window.once('ready-to-show', () => {
     window.show();
     if (process.argv.includes('--fr-benchmark')) {
@@ -34,6 +48,17 @@ async function createWindow(): Promise<void> {
 }
 
 app.whenReady().then(async () => {
+  const dataDir = app.getPath('userData');
+  ensureDirectory(dataDir);
+  const config = loadConfig(dataDir, !!dataSwitch);
+  const index = new IndexStore(join(dataDir, 'index.sqlite'));
+  const library = new LibraryService(config.libraryPath, index);
+  library.init();
+  const notes = new NoteService(library, installationId(dataDir));
+  await notes.init();
+  registerHandlers(library, notes, new ReaderService(library));
+  servePdf(library);
+  app.on('will-quit', () => index.db.close());
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] },

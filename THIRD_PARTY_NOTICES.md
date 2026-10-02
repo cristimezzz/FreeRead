@@ -777,6 +777,28 @@ Copyright (c) 2016 Endless Mobile, Inc.
 The above copyright notice and this permission notice shall be included in all
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 
+## @napi-rs/canvas-win32-x64-msvc@1.0.10
+
+License: MIT
+
+
+
+Source: https://registry.npmjs.org/@napi-rs/canvas-win32-x64-msvc/-/canvas-win32-x64-msvc-1.0.10.tgz
+
+
+
+## @napi-rs/canvas@1.0.10
+
+License: MIT
+
+
+
+Source: https://registry.npmjs.org/@napi-rs/canvas/-/canvas-1.0.10.tgz
+
+Copyright (c) 2020 lynweklm@gmail.com
+The above copyright notice and this permission notice shall be included in all
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+
 ## @noble/hashes@1.8.0
 
 License: MIT
@@ -5436,6 +5458,25 @@ NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
 Copyright (c) 2023-present Fabio Spampinato
 The above copyright notice and this permission notice shall be included in
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+
+## pdfjs-dist@6.3.289
+
+License: Apache-2.0
+
+
+
+Source: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.3.289.tgz
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+      copyright notice that is included in or attached to the work
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      the copyright owner. For the purposes of this definition, "submitted"
+      designated in writing by the copyright owner as "Not a Contribution."
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      copyright license to reproduce, prepare Derivative Works of,
+          that You distribute, all copyright, patent, trademark, and
+      You may add Your own copyright statement to Your modifications and
 
 ## pe-library@0.4.1
 

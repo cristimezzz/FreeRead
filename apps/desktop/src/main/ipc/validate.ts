@@ -6,6 +6,12 @@ import { CONTRACT_SCHEMAS } from './contract-data.generated';
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
 for (const schema of CONTRACT_SCHEMAS) ajv.addSchema(schema);
+export function createFileValidator<T>(file: string) {
+  const validate = ajv.getSchema(`https://freeread.dev/schemas/${file}`);
+  return z.unknown().superRefine((value, context) => {
+    if (!validate?.(value)) context.addIssue({ code: 'custom', message: 'FR-STORE-013' });
+  }).transform((value) => value as T);
+}
 const manifest = CONTRACT_SCHEMAS.find((schema) => schema['$id'] === 'https://freeread.dev/schemas/ipc-channels.json');
 if (!manifest) throw new Error('Missing generated IPC manifest');
 const definitions: unknown = manifest['$defs'];

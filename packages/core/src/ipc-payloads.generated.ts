@@ -1010,7 +1010,7 @@ export interface Meta {
   /**
    * 元数据格式版本；字段语义变更时必须 bump 并提供迁移（specs/05-storage.md §8）。
    */
-  schemaVersion: 1;
+  schemaVersion: 2;
   /**
    * 引用键，等于所在目录名；小写 [a-z0-9-]、最长 40、不得含路径分隔符或保留名。生成规则见 specs/05-storage.md §3。
    */
@@ -1079,6 +1079,16 @@ export interface Meta {
    */
   language?: string;
   source: Source;
+  reading?: {
+    sentenceId: string;
+    blockId: string;
+    page: number;
+    scrollRatio: number;
+    mode: 'original' | 'reflow';
+    translationMode: 'off' | 'bilingual' | 'only';
+    updatedAt: number;
+    clientEventId: string;
+  };
   /**
    * 文本层质量标记：native=数字版 PDF；ocr=扫描件经 OCR；mixed=部分页 OCR 或哈希不一致（specs/03-anchor-model.md §9）。
    */

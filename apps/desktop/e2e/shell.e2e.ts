@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
-test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () => {
+test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async () => {
   const userData = await mkdtemp(resolve(tmpdir(), 'freeread-e2e-'));
   const environment = { ...process.env, ELECTRON_RENDERER_URL: '' };
   delete environment['ELECTRON_RUN_AS_NODE'];
@@ -14,9 +14,9 @@ test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () =>
   });
   try {
     const page = await app.firstWindow();
-    await expect(page.getByRole('heading', { name: '工程骨架已就绪' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '文献库', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'English' }).click();
-    await expect(page.getByRole('heading', { name: 'Project skeleton is ready' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
     expect(await page.locator('html').getAttribute('lang')).toBe('en');
     const privilege = await page.evaluate(() => ({
       require: typeof Reflect.get(window, 'require'),
@@ -35,7 +35,7 @@ test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () =>
       return { sandbox: preferences?.sandbox, nodeIntegration: preferences?.nodeIntegration,
         contextIsolation: preferences?.contextIsolation };
     })).toEqual({ sandbox: true, nodeIntegration: false, contextIsolation: true });
-    await page.screenshot({ path: 'test-results/m0-shell.png', fullPage: true });
+    await page.screenshot({ path: 'test-results/m1-library.png', fullPage: true });
   } finally {
     await app.close();
     await rm(userData, { recursive: true, force: true });
