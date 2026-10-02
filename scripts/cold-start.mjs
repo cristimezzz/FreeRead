@@ -11,7 +11,12 @@ const userData = await mkdtemp(resolve(tmpdir(), 'freeread-cold-'));
 const env = { ...process.env, ELECTRON_RENDERER_URL: '' };
 delete env['ELECTRON_RUN_AS_NODE'];
 const start = Date.now();
-const child = spawn(require('electron'), [resolve('apps/desktop'), `--user-data-dir=${userData}`, '--fr-benchmark'], { env });
+const packaged = process.argv.includes('--packaged');
+const executable = packaged ? resolve('artifacts', process.platform === 'win32' ? 'win-unpacked/FreeRead.exe'
+  : process.platform === 'darwin' ? `${process.arch === 'arm64' ? 'mac-arm64' : 'mac'}/FreeRead.app/Contents/MacOS/FreeRead`
+  : 'linux-unpacked/freeread') : require('electron');
+const args = [...(packaged ? [] : [resolve('apps/desktop')]), `--user-data-dir=${userData}`, '--fr-benchmark'];
+const child = spawn(executable, args, { env });
 let output = '';
 let elapsed;
 let mainElapsed;

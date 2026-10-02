@@ -55,9 +55,9 @@ jobs:
             artifacts/*.json
             artifacts/source.tar.gz
           if-no-files-found: error
-      - run: pnpm test:cold-start
+      - run: pnpm test:cold-start --packaged
         if: runner.os != 'Linux'
-      - run: xvfb-run --auto-servernum pnpm test:cold-start
+      - run: xvfb-run --auto-servernum pnpm test:cold-start --packaged
         if: runner.os == 'Linux'
       - uses: actions/upload-artifact@v4
         if: always()
