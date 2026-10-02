@@ -55,6 +55,11 @@ jobs:
             artifacts/*.json
             artifacts/source.tar.gz
           if-no-files-found: error
+      - name: Configure unpacked Chromium sandbox helper
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root artifacts/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 artifacts/linux-unpacked/chrome-sandbox
       - run: pnpm test:cold-start --packaged
         if: runner.os != 'Linux'
       - run: xvfb-run --auto-servernum pnpm test:cold-start --packaged
