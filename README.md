@@ -13,6 +13,7 @@ pnpm gen
 pnpm verify
 pnpm dev
 pnpm test:e2e
+pnpm test:cold-start
 pnpm build:dist
 ```
 
@@ -28,4 +29,4 @@ renderer 无 Node 特权，空壳运行时出网被 CSP 与 Electron session 拦
 核验。所有安装包随附许可、第三方清单、构建清单和对应源码 `source.tar.gz`。
 首批授权论文见 [fixtures/golden](fixtures/golden/README.md)。
 
-[M0 交付报告](docs/m0-delivery.md) 记录实际验收与尚未验证的平台。
+[M0 交付报告](docs/m0-delivery.md) 记录实际验收、安装包证据及固定硬件基准缺口。
