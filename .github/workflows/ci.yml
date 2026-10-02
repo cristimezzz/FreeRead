@@ -28,10 +28,6 @@ jobs:
       - run: pnpm verify
       - run: pnpm build
       - run: pnpm size
-      - run: pnpm test:cold-start
-        if: runner.os != 'Linux'
-      - run: xvfb-run --auto-servernum pnpm test:cold-start
-        if: runner.os == 'Linux'
       - run: pnpm test:e2e
         if: runner.os != 'Linux'
       - run: xvfb-run --auto-servernum pnpm test:e2e
@@ -53,6 +49,10 @@ jobs:
             artifacts/*.json
             artifacts/source.tar.gz
           if-no-files-found: error
+      - run: pnpm test:cold-start
+        if: runner.os != 'Linux'
+      - run: xvfb-run --auto-servernum pnpm test:cold-start
+        if: runner.os == 'Linux'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
