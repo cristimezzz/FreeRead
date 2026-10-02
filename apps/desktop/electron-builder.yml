@@ -1,0 +1,45 @@
+appId: dev.freeread.desktop
+productName: FreeRead
+directories:
+  output: ../../artifacts
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: ../../SOURCE_OFFER.md
+    to: SOURCE_OFFER.md
+  - from: ../../MODIFICATIONS.md
+    to: MODIFICATIONS.md
+  - from: ../../artifacts/source.tar.gz
+    to: source.tar.gz
+  - from: ../../artifacts/build-manifest.json
+    to: build-manifest.json
+asar: true
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  signAndEditExecutable: false
+mac:
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+  identity: null
+linux:
+  target:
+    - target: deb
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  maintainer: FreeRead contributors
+  category: Education
+publish: null

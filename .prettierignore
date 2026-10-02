@@ -1,0 +1,8 @@
+pnpm-lock.yaml
+**/*.generated.ts
+fixtures/golden/**/paper.pdf
+THIRD_PARTY_NOTICES.md
+coverage
+dist
+out
+artifacts

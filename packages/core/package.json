@@ -1,0 +1,19 @@
+{
+  "name": "@freeread/core",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  }
+}

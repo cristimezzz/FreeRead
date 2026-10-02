@@ -1,0 +1,31 @@
+name: License and source gates
+on:
+  pull_request:
+  push:
+  schedule:
+    - cron: '0 2 * * 1'
+permissions:
+  contents: read
+jobs:
+  license:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm license
+      - run: pnpm forbid
+      - run: pnpm fixtures:check
+      - run: node --test scripts/license-policy.test.mjs
+      - run: pnpm license:source-offer
+      - uses: actions/upload-artifact@v4
+        with:
+          name: source-and-notices
+          path: |
+            artifacts/source.tar.gz
+            THIRD_PARTY_NOTICES.md
+            SOURCE_OFFER.md

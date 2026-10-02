@@ -1,0 +1,53 @@
+name: M0 verify and native packages
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - run: pnpm build
+      - run: pnpm size
+      - run: pnpm test:e2e
+        if: runner.os != 'Linux'
+      - run: xvfb-run --auto-servernum pnpm test:e2e
+        if: runner.os == 'Linux'
+      - run: pnpm license:source-offer
+      - run: pnpm build:dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          BUILD_ID: ${{ github.run_number }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: m0-${{ matrix.os }}
+          path: |
+            artifacts/*.exe
+            artifacts/*.zip
+            artifacts/*.dmg
+            artifacts/*.deb
+            artifacts/*.AppImage
+            artifacts/*.json
+            artifacts/source.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-evidence-${{ matrix.os }}
+          path: |
+            test-results/
+            coverage/
+          if-no-files-found: ignore
