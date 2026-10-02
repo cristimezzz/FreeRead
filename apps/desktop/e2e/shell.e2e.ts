@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os';
 
 test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () => {
   const userData = await mkdtemp(resolve(tmpdir(), 'freeread-e2e-'));
-  const startedAt = Date.now();
   const environment = { ...process.env, ELECTRON_RENDERER_URL: '' };
   delete environment['ELECTRON_RUN_AS_NODE'];
   const app = await electron.launch({
@@ -15,7 +14,6 @@ test('M0 offline shell: bilingual, sandboxed, no ambient privilege', async () =>
   try {
     const page = await app.firstWindow();
     await expect(page.getByRole('heading', { name: '工程骨架已就绪' })).toBeVisible();
-    expect(Date.now() - startedAt).toBeLessThanOrEqual(2500);
     await page.getByRole('button', { name: 'English' }).click();
     await expect(page.getByRole('heading', { name: 'Project skeleton is ready' })).toBeVisible();
     expect(await page.locator('html').getAttribute('lang')).toBe('en');

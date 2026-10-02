@@ -12,7 +12,13 @@ async function createWindow(): Promise<void> {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
-  window.once('ready-to-show', () => window.show());
+  window.once('ready-to-show', () => {
+    window.show();
+    if (process.argv.includes('--fr-benchmark')) {
+      process.stdout.write(JSON.stringify({ event: 'app.ready' }) + '\n');
+      app.quit();
+    }
+  });
   try {
     if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
       await window.loadURL(process.env['ELECTRON_RENDERER_URL']);

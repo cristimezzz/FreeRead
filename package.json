@@ -15,6 +15,7 @@
     "boundaries": "depcruise apps packages --config .dependency-cruiser.cjs",
     "test": "vitest run --coverage && node --test scripts/*.test.mjs",
     "test:e2e": "pnpm build && playwright test",
+    "test:cold-start": "node scripts/cold-start.mjs",
     "build": "turbo run build && pnpm --filter @freeread/desktop bundle",
     "build:dist": "pnpm build && pnpm license && pnpm license:source-offer && node scripts/build-manifest.mjs && pnpm --filter @freeread/desktop dist",
     "license": "node scripts/license.mjs",

@@ -22,6 +22,10 @@ jobs:
       - run: pnpm verify
       - run: pnpm build
       - run: pnpm size
+      - run: pnpm test:cold-start
+        if: runner.os != 'Linux'
+      - run: xvfb-run --auto-servernum pnpm test:cold-start
+        if: runner.os == 'Linux'
       - run: pnpm test:e2e
         if: runner.os != 'Linux'
       - run: xvfb-run --auto-servernum pnpm test:e2e
