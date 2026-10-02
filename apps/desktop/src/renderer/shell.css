@@ -1,0 +1,9 @@
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+body { margin: 0; }
+.fr-shell { max-width: 760px; margin: 12vh auto; padding: 24px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+h1 { font-size: 40px; margin: 0; letter-spacing: -1px; }
+.fr-subtitle { color: light-dark(#525252, #bdbdbd); font-size: 18px; }
+section { border-top: 1px solid light-dark(#ccc, #555); margin-top: 48px; padding-top: 24px; }
+button { padding: 10px 16px; font: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid #397dcc; outline-offset: 4px; }

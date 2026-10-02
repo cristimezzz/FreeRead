@@ -53,3 +53,6 @@ specs/docx-checks.json
 .DS_Store
 Thumbs.db
 *.log
+
+artifacts/
+.cache/

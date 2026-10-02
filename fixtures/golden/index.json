@@ -1,0 +1,181 @@
+[
+  {
+    "id": "jmlr-19-301",
+    "file": "jmlr-19-301/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/19-301/19-301.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "c9c42e8cf0f0d0e7b555bc3e7cbdfeae3704ded82eb54e8040a11d016161468a",
+    "pages": 91,
+    "title": "On Truthing Issues in Supervised Classification",
+    "authors": [
+      "Jonathan K. Su"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-21-0264",
+    "file": "jmlr-21-0264/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/21-0264/21-0264.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "554dc731fdc38d134aef26796b58af1b79b7f0759a9702cc4b1a68ce6557ed70",
+    "pages": 86,
+    "title": "Lower Complexity Bounds of Finite-Sum Optimization Problems: The Results and Construction",
+    "authors": [
+      "Yuze Han",
+      "Guangzeng Xie",
+      "Zhihua Zhang"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-21-1137",
+    "file": "jmlr-21-1137/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/21-1137/21-1137.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "d4fdeb94255d81d7679f44e0f9dcca0c833a2f433f23ba79987e96d3f769fc0b",
+    "pages": 67,
+    "title": "Power of knockoff: The impact of ranking algorithm, augmented design, and symmetric statistic",
+    "authors": [
+      "Zheng Tracy Ke",
+      "Jun S. Liu",
+      "Yucong Ma"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-21-1205",
+    "file": "jmlr-21-1205/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/21-1205/21-1205.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "83a0e18415aa7041e3311f8d810390d2e0b151c6f610365f4cd5468d27a87ea6",
+    "pages": 48,
+    "title": "Fast Policy Extragradient Methods for Competitive Games with Entropy Regularization",
+    "authors": [
+      "Shicong Cen",
+      "Yuting Wei",
+      "Yuejie Chi"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-0402",
+    "file": "jmlr-22-0402/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-0402/22-0402.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "97ab08358008e8fff1bfd1a5b8bad0e7ecc589994a4a3e546cbc51a5681ea123",
+    "pages": 43,
+    "title": "Seeded Graph Matching for the Correlated Gaussian Wigner Model via the Projected Power Method",
+    "authors": [
+      "Ernesto Araya",
+      "Guillaume Braun",
+      "Hemant Tyagi"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-0687",
+    "file": "jmlr-22-0687/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-0687/22-0687.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "fa580c2dfb1989dd357932e4a1718c199ea0bdfc6c8cb574df003efe7d55c840",
+    "pages": 76,
+    "title": "Model-Free Representation Learning and Exploration in Low-Rank MDPs",
+    "authors": [
+      "Aditya Modi",
+      "Jinglin Chen",
+      "Akshay Krishnamurthy",
+      "Nan Jiang",
+      "Alekh Agarwal"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-0801",
+    "file": "jmlr-22-0801/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-0801/22-0801.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "3ff9d9dc07e08c22e981e16aaffbae0f2e6e7fe0ba4f614b9c9220a16708de63",
+    "pages": 27,
+    "title": "Decorrelated Variable Importance",
+    "authors": [
+      "Isabella Verdinelli",
+      "Larry Wasserman"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-1120",
+    "file": "jmlr-22-1120/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-1120/22-1120.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "30d239578e6c782943fcc7517ef726e320824d0cc9e9b83d1f928e45792af314",
+    "pages": 46,
+    "title": "On Efficient and Scalable Computation of the Nonparametric Maximum Likelihood Estimator in Mixture Models",
+    "authors": [
+      "Yangjing Zhang",
+      "Ying Cui",
+      "Bodhisattva Sen",
+      "Kim-Chuan Toh"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-1251",
+    "file": "jmlr-22-1251/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-1251/22-1251.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "c146aeade1aa542a43d38771df872e51f35d8b6820bbfc382db12e9fc6039500",
+    "pages": 55,
+    "title": "Exploration, Exploitation, and Engagement in Multi-Armed Bandits with Abandonment",
+    "authors": [
+      "Zixian Yang",
+      "Xin Liu",
+      "Lei Ying"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  },
+  {
+    "id": "jmlr-22-1317",
+    "file": "jmlr-22-1317/paper.pdf",
+    "category": "formula-heavy",
+    "source": "https://jmlr.org/papers/volume25/22-1317/22-1317.pdf",
+    "license": "CC-BY-4.0",
+    "licenseEvidence": "paper.pdf page 1: https://creativecommons.org/licenses/by/4.0/",
+    "sha256": "c75c6f2dc24280ef54c904e4586c020e24ed175da30e0f43cd574a1432a14b18",
+    "pages": 40,
+    "title": "Modeling Random Networks with Heterogeneous Reciprocity",
+    "authors": [
+      "Daniel Cirkovic",
+      "Tiandong Wang"
+    ],
+    "annotationStatus": "pending-M2",
+    "downloadedAt": "2026-10-03"
+  }
+]

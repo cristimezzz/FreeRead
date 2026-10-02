@@ -58,6 +58,7 @@ i18n 文件位置：`apps/desktop/src/renderer/i18n/{zh-CN,en}.json`；key 命�
 
 - 目录结构以 [方案 §3.2](../plan/FreeRead-技术方案与里程碑.md) 为准，不得擅自新增顶层目录。
 - 单文件行数 ≤ **400**（超出则拆分）；单函数 ≤ **60** 行；圈复杂度 ≤ **12**（ESLint 强制）。
+- 机器生成的 `*.generated.ts` 豁免上述人工维护限制；生成器不豁免（ADR-13）。
 - 每个 `packages/*` 必须有：`package.json`（含 `license: AGPL-3.0`）、`README.md`（用途+边界+导出面）、`src/index.ts`（唯一出口）。
 - 禁止跨包相对路径导入（如 `../../other-package/src/x`）；必须走包名 + `exports` 字段。
 
@@ -183,3 +184,4 @@ export const BUDGETS = {
 | 版本 | 日期 | 变更 |
 |---|---|---|
 | v1.0 | 2026-10-03 | 首版冻结 |
+| v1.1 | 2026-10-03 | 明确机器生成代码的维护限制豁免（ADR-13） |

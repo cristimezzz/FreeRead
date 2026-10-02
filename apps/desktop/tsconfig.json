@@ -1,0 +1,20 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "lib": [
+      "ES2022",
+      "DOM"
+    ]
+  },
+  "include": [
+    "src/**/*.ts", "src/**/*.tsx", "src/**/*.json"
+  ],
+  "references": [
+    {
+      "path": "../../packages/core"
+    }
+  ],
+  "exclude": ["src/**/*.test.ts"]
+}

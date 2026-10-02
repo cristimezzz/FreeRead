@@ -1,0 +1,11 @@
+export { BUDGETS } from './budgets';
+export { AppError, toAppError } from './error';
+export type { AppErrorWire, AppErrorOptions } from './error';
+export { CHANNEL_NAMES, EVENT_NAMES } from './ipc-channels.generated';
+export type { FrChannelName, FrEventName } from './ipc-channels.generated';
+export type { IpcPayloads } from './ipc-payloads.generated';
+export type { DocAnchorModel } from './anchor.generated';
+export type { Annotation } from './annotation.generated';
+export type { DocMeta } from './meta.generated';
+export type { AgentSessionEvent } from './agent/session.generated';
+export type { AgentPermissions } from './agent/permissions.generated';
