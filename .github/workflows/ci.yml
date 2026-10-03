@@ -60,6 +60,16 @@ jobs:
         run: |
           sudo chown root:root artifacts/linux-unpacked/chrome-sandbox
           sudo chmod 4755 artifacts/linux-unpacked/chrome-sandbox
+      - name: Packaged M1 E2E
+        if: runner.os != 'Linux'
+        run: pnpm exec playwright test
+        env:
+          FR_PACKAGED: '1'
+      - name: Packaged M1 E2E (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm exec playwright test
+        env:
+          FR_PACKAGED: '1'
       - run: pnpm test:cold-start --packaged
         if: runner.os != 'Linux'
       - run: xvfb-run --auto-servernum pnpm test:cold-start --packaged

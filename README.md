@@ -32,3 +32,6 @@ renderer 无 Node 特权，空壳运行时出网被 CSP 与 Electron session 拦
 首批授权论文见 [fixtures/golden](fixtures/golden/README.md)。
 
 [M0 交付报告](docs/m0-delivery.md) 记录实际验收、安装包证据及固定硬件基准缺口。
+
+[M1 交付报告](docs/m1-delivery.md) 记录文献库、原文阅读、笔记、进度恢复与三平台原生证据。
+本机固定性能验收的运行环境与启动故障见 [本机验收记录](docs/m1-local-acceptance.md)。

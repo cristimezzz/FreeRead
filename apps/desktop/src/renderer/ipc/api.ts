@@ -9,7 +9,7 @@ export async function unwrap<T>(request: Promise<ApiResult<T>>): Promise<T> {
 export function errorKey(cause: unknown): string {
   const key = typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'i18nKey') : undefined;
   if (typeof key === 'string') return key;
-  const error = uiError('FR-UI-001'); console.error(error, cause);
+  const error = uiError('FR-UI-001'); console.error(error);
   return error.i18nKey;
 }
 export function uiError(code: AppErrorWire['code']): AppErrorWire {

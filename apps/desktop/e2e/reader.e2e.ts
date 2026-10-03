@@ -1,26 +1,17 @@
-import { test, expect, _electron as electron } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
-import { resolve, join } from 'node:path';
+import { join } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { tmpdir, cpus, totalmem, release } from 'node:os';
 import { writePdf } from './pdf-fixture';
+import { launchElectron } from './electron-app';
 
 async function launch(userData: string) {
-  const env = { ...process.env, ELECTRON_RENDERER_URL: '' }; delete env['ELECTRON_RUN_AS_NODE'];
-  const app = await electron.launch({ chromiumSandbox: true, args: [resolve('apps/desktop'), `--user-data-dir=${userData}`], env });
-  app.process().stderr?.on('data', (bytes: Buffer) => console.error(bytes.toString()));
+  const app = await launchElectron(userData);
   const page = await app.firstWindow();
   page.on('pageerror', (error) => console.error(error));
   page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });
-  page.on('framenavigated', (frame) => console.log('Navigation:', frame.url()));
-  await page.exposeFunction('reportReaderFailure', (message: string) => console.error('Reader state:', message));
-  await page.evaluate(() => {
-    new MutationObserver(() => {
-      const alert = document.querySelector('[role="alert"]');
-      if (alert) void Reflect.get(window, 'reportReaderFailure')(alert.textContent ?? '');
-    }).observe(document.body, { childList: true, subtree: true });
-  });
   return app;
 }
 async function importPdf(app: ElectronApplication, page: Page, path: string) {
@@ -47,7 +38,12 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
       await expect(page.locator('.fr-status')).toHaveAttribute('data-focused-sentence', 's_b_1_1_2');
       await page.getByRole('button', { name: '返回文献库' }).click();
     }
-    await page.locator('.fr-document-open').click(); await page.getByRole('button', { name: '笔记', exact: true }).click();
+    await page.locator('.fr-document-open').click();
+    const reloaded = page.waitForEvent('load');
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer());
+    await reloaded;
+    await expect(page.locator('.fr-status')).toHaveAttribute('data-focused-sentence', 's_b_1_1_2');
+    await page.getByRole('button', { name: '笔记', exact: true }).click();
     await page.getByRole('button', { name: '高亮', exact: true }).click();
     await page.getByLabel('当前句子的笔记').fill('Offline insight'); await page.getByRole('button', { name: '保存笔记' }).click();
     await expect(page.getByText('Offline insight')).toBeVisible();
@@ -97,7 +93,10 @@ test('M1 performance: 1000-page first paint ≤ 3 seconds, ten-second scrolling 
           if (performance.now() - start < 10_000) requestAnimationFrame(frame); else resolve(frames * 1000 / (performance.now() - start)); };
         requestAnimationFrame(frame); });
     });
-    const measurement = JSON.stringify({ firstPaintMs, fps, pages: 1000, platform: process.platform });
+    const measurement = JSON.stringify({ firstPaintMs, fps, pages: 1000, platform: process.platform,
+      packaged: process.env['FR_PACKAGED'] === '1', arch: process.arch, os: release(),
+      cpu: cpus()[0]?.model, logicalCpus: cpus().length, memoryBytes: totalmem(),
+      versions: await app.evaluate(() => process.versions) });
     const evidence = test.info().outputPath('performance.json'); writeFileSync(evidence, measurement);
     await test.info().attach('performance', { path: evidence, contentType: 'application/json' });
     expect(firstPaintMs).toBeLessThanOrEqual(3000); expect(fps).toBeGreaterThanOrEqual(55);

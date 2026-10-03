@@ -1,18 +1,12 @@
-import { test, expect, _electron as electron } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { launchElectron } from './electron-app';
 import { resolve } from 'node:path';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async () => {
   const userData = await mkdtemp(resolve(tmpdir(), 'freeread-e2e-'));
-  const environment = { ...process.env, ELECTRON_RENDERER_URL: '' };
-  delete environment['ELECTRON_RUN_AS_NODE'];
-  const app = await electron.launch({
-    chromiumSandbox: true,
-    args: [resolve('apps/desktop'), `--user-data-dir=${userData}`],
-    env: environment,
-  });
-  app.process().stderr?.on('data', (bytes: Buffer) => console.error(bytes.toString()));
+  const app = await launchElectron(userData);
   try {
     const page = await app.firstWindow();
     await expect(page.getByRole('heading', { name: '文献库', exact: true })).toBeVisible();
@@ -39,6 +33,6 @@ test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async 
     await page.screenshot({ path: 'test-results/m1-library.png', fullPage: true });
   } finally {
     await app.close();
-    await rm(userData, { recursive: true, force: true });
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
