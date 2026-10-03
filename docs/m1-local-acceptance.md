@@ -1,6 +1,6 @@
 # M1 固定机器验收记录
 
-用户于 2026-10-03 指定本机作为固定验收机器。启动阻塞已定位并解除：保持仓库低完整性标签，在普通系统临时目录运行字节一致的打包版。原生功能和千页性能通过，冷启动首次测量超预算仍保留为未解决的稳定性风险。
+用户于 2026-10-03 指定本机作为固定验收机器，并授权一次性自托管 CI。启动阻塞已定位并解除：保持仓库低完整性标签，在普通系统临时目录运行打包版。正式自托管原生功能和千页性能通过，首次冷启动 3367 ms 超预算，整体验收失败。
 
 | 项目 | 环境 |
 |---|---|
@@ -9,13 +9,15 @@
 | 内存 | 16829116416 bytes |
 | GPU | Intel Iris Xe / NVIDIA RTX 3050 Ti Laptop；另有 GameViewer Virtual Display Adapter |
 | 运行时 | Electron 39.8.10，Chromium 142.0.7444.265，Node 22.22.1 |
-| 工程工具 | Node 24.18.1，pnpm 11.21.0 |
-| 打包版 | M1 Windows x64；构建清单为 `bb65f9a` + dirty，包含阅读模块按需加载与错误边界 |
+| 工程工具 | 本地 Node 24.18.1 / pnpm 11.21.0；正式 runner Node 24.21.0 / pnpm 11.21.0 |
+| 打包版 | M1 Windows x64；正式自托管检出 `20294f9aafb8d21b79cf0a781e8c2f3b00a2cf01`，包含阅读模块按需加载与错误边界 |
 | 可执行文件 SHA256 | `1EA5B49F7C32A5ECEE739CB145D368955857F8A4682451F681E9AE1C9B7F0F74` |
 | app.asar SHA256 | `7EE9CC7BD2884D6D60C89A021C1711DE8B007BBE3F8AD8B078FF84F0D49BFE7B` |
 
 ## 本机原生结果
 
+- 正式自托管 [CI run 37124669516](https://github.com/cristimezzz/FreeRead/actions/runs/37124669516)：verify/build/size、Windows x64 打包、完整 E2E 4/4 通过；千页首屏 939.81 ms、连续滚动 10 秒 120.16 fps、canvas ≤ 5。首屏包含阅读模块首次加载；[测量 JSON](assets/m1-fixed-ci-performance.json) 与 [构建清单](assets/m1-fixed-ci-build-manifest.json) 从该轮工件保存。清单 `dirty: true` 对应 verify 重写 `THIRD_PARTY_NOTICES.md` 的行尾，现场 Git diff 内容为空；运行时代码未修改，exe 与 app.asar 哈希与此前候选包相同。
+- 同轮先执行独立首次冷启动，再运行 E2E：3367 ms（app.main 之前 1609 ms，之后 1758 ms），超过 2500 ms；最终预算步骤失败，整轮 CI 为 failure。冷启动步骤为保留后续证据启用了 `continue-on-error`，其 API `conclusion: success` 不能当作预算通过。两次 GPU 状态错误保留在原始工件，尚不能单独确定根因。
 - 打包版完整 E2E：4/4，通过导入/去重、标签/FTS、标注和笔记重启、renderer 崩溃重载、20/20 进程树强杀恢复，以及沙箱/零 Node 特权断言。
 - E4 加强验证：将原来仅往返文献库的五次恢复，改为真正关闭并重启整个应用；单独实跑 1/1 通过，之后也包含在优化版完整 4/4 E2E 中通过。
 - 按需加载版 1000 页首屏 922.19 ms（包含首次加载阅读模块）、连续滚动 10 秒 120.15 fps、canvas ≤ 5，均通过。机器参数和运行时版本见 [原始测量 JSON](assets/m1-local-performance.json)；该样本是合成文本 PDF。旧候选版 402.93 ms / 120.14 fps 的 [JSON](assets/m1-candidate-performance.json) 保留，不能与新代码混用。
@@ -41,13 +43,17 @@
 | 最终版复测 4 | 988 ms | 302 ms | 686 ms | 通过 |
 | 最终版复测 5 | 1063 ms | 320 ms | 743 ms | 通过 |
 
-软件渲染诊断对照（额外 `--disable-gpu`）首次 2749 ms，仍失败；正式应用和验收脚本未加入该开关。`native bootstrap` 是脚本的阶段名，实际包括原生初始化与主模块加载/顶层求值，因为 `app.main` 在静态 imports 后输出。首次路径的额外 I/O / 系统扫描原因仍未证实。建议延长首次冷启动的定位与优化时间，保持 2500 ms 预算。规范要求的自托管性能 runner 仍未配置；三平台 hosted CI 仅作为平台冒烟，完整性能验收保持部分完成。
+软件渲染诊断对照（额外 `--disable-gpu`）首次 2749 ms，仍失败；正式应用和验收脚本未加入该开关。`native bootstrap` 是脚本的阶段名，实际包括原生初始化与主模块加载/顶层求值，因为 `app.main` 在静态 imports 后输出。首次路径的额外 I/O / 系统扫描原因仍未证实。继续定位首次冷启动时保持 2500 ms 预算，现有复测不能替代失败的正式首次测量；完整性能验收保持部分完成。
 
 上述内联 + 延迟编译数据来自候选提交 `4f98cbb`，不能作为后续修复版本的正式验收结果。[该提交的 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37122082721) 在三平台开发版重启时失败。本机使用普通临时目录的 Electron 运行时也复现该失败；恢复持久化文件验证器的提前编译后，对照完整开发版测试 4/4 通过。IPC 验证器仍按首次请求编译并缓存，未删除校验或增加重试。更深层的加载失败原因尚未证实；主窗口局部引用假设未能修复，相关实验改动已撤回。
 
 修复 `bb65f9a` 的 [三平台 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37123369010) 全部通过；本机打包版完整 4/4 也通过，首次冷启动为 2695 ms，仍失败。后续将阅读模块按需加载，入口脚本由 744.38 kB 降至 237.65 kB，阅读模块 507.32 kB 在打开文献时加载；全体前端 gzip 仍约 611 KiB。E1 断言空库未加载阅读模块，并模拟模块请求失败，确认 `FR-UI-001` 提示及返回文献库可用。该版首次为 2674 ms（1646 + 1028），直接在普通目录构建再首次运行为 2733 ms（1779 + 954），两者仍失败，不归因于二次复制。
 
-限定类别的 Chromium 启动 trace 显示 GPU 初始化约 955.62 ms，renderer 同步等待 GPU channel 约 782.85 ms；嵌套 EGL 初始化约 551 ms，加载 GLES/EGL 库约 230/96 ms。数字来自诊断，包含 trace 开销、嵌套及重叠，不能相加或替代无调试器验收。[脱敏摘要](assets/m1-local-startup-profile.json) 与 [Chromium trace 参数定义](https://chromium.googlesource.com/chromium/src/+/a0e9c1e80c1bd2ab242a969fd460af4a07cae15e/components/tracing/common/tracing_switches.cc) 可复核；首次路径的更早耗时尚未定位。用户已授权一次性本机自托管 runner，固定机器 CI 正在准备，不安装常驻服务。
+限定类别的 Chromium 启动 trace 显示 GPU 初始化约 955.62 ms，renderer 同步等待 GPU channel 约 782.85 ms；嵌套 EGL 初始化约 551 ms，加载 GLES/EGL 库约 230/96 ms。数字来自诊断，包含 trace 开销、嵌套及重叠，不能相加或替代无调试器验收。[脱敏摘要](assets/m1-local-startup-profile.json) 与 [Chromium trace 参数定义](https://chromium.googlesource.com/chromium/src/+/a0e9c1e80c1bd2ab242a969fd460af4a07cae15e/components/tracing/common/tracing_switches.cc) 可复核；首次路径的更早耗时尚未定位。
+
+进一步用同一 exe 的新临时副本做最小空窗口对照：只在诊断副本中以最小本地 HTML / BrowserWindow 替换 app.asar，不加载 preload、React、PDF.js 或数据库，保留 sandbox/contextIsolation、禁止 Node 与 HTTP/HTTPS。父进程 Stopwatch 从启动前至收到 ready-to-show 日志为 2854 ms，主模块日志为 1636 ms，退出码 0；无调试器、trace 或 GPU 开关，exe 哈希与正式包一致。该单次对照也超过预算，说明去掉阅读代码后本机原生启动路径仍可超时；不能据此确定通用下限或具体系统/驱动根因，也不能替代正式 3367 ms 失败样本。源脚本及记录保存在忽略的诊断目录，诊断副本已清理。
+
+正式 runner 使用专属标签与 `--ephemeral`，不安装服务，只执行这一次任务。结束后自动删除本地注册凭据并注销，GitHub API 确认注册数量为 0；PR 的 `run-m1-local-once` 标记已移除。原始 CI 工件及日志已保存到忽略目录，临时 runner 工作目录已清理。以后若重复正式验收，需重新注册固定机器，不能以当前 hosted 冒烟结果替代。
 
 ## 启动故障根因与处理
 

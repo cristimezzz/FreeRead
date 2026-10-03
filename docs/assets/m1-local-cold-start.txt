@@ -90,3 +90,11 @@ Same lazy reader code, package built directly in a regular directory, first laun
 Cold launch: 2733 ms (budget 2500 ms, no debugger)
 Native bootstrap: 1779 ms; main-to-first-frame: 954 ms
 Result: failed; no prior process was started from this package path.
+
+Formal one-time self-hosted CI, run 37124669516, head 20294f9aafb8d21b79cf0a781e8c2f3b00a2cf01:
+First launch from the freshly built runner checkout, before native E2E; no debugger:
+GPU state invalid after WaitForGetOffsetInRange. (reported twice)
+Cold launch: 3367 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1609 ms; main-to-first-frame: 1758 ms
+Result: failed with exit code 1; packaged E2E 4/4 passed afterward; final budget gate failed.
+Source: m1-fixed-machine-evidence/artifacts/m1-fixed-cold-start.txt; username-bearing stack paths omitted.

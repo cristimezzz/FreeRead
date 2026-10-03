@@ -1,0 +1,11 @@
+{
+  "git_sha": "20294f9aafb8d21b79cf0a781e8c2f3b00a2cf01",
+  "dirty": true,
+  "lock_sha256": "7f56aa21b946ab418d045543344f4698f1ea667da67988d5c273f7ddb9d1764a",
+  "node": "v24.21.0",
+  "platform": "win32",
+  "arch": "x64",
+  "source_date_epoch": "1791032363",
+  "build_id": "local",
+  "python": null
+}
