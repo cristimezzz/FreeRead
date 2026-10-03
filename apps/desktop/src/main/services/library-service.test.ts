@@ -10,6 +10,7 @@ import { atomicWrite, fail, ioError, contained } from '../infra/files';
 import { LibraryService } from './library-service';
 import { NoteService } from './note-service';
 import { ReaderService } from './reader-service';
+import { IPC_SCHEMAS } from '../ipc/schemas.generated';
 
 let dir: string, index: IndexStore, library: LibraryService, notes: NoteService, reader: ReaderService, source: string;
 const inputBytes = Buffer.from('%PDF-1.7\nSynthetic test bytes\n');
@@ -44,6 +45,18 @@ test('T-008 import dedup, PDF immutable, Chinese title/abstract/body FTS and tag
   expect(library.list({ tags: ['中文'], offset: 0, limit: 10 }).items[0]?.tags).toEqual(['NLP', '中文']);
   library.update(docId, { title: 'Changed title' });
   expect(library.list({ query: 'Changed', offset: 0, limit: 10 }).total).toBe(1);
+});
+test('M1 service responses pass the actual IPC schemas', async () => {
+  const imported = await importPaper();
+  IPC_SCHEMAS['fr:library:import'].response.parse(imported);
+  IPC_SCHEMAS['fr:library:list'].response.parse(library.list({ offset: 0, limit: 50 }));
+  const opened = reader.open({ docId });
+  IPC_SCHEMAS['fr:doc:open'].response.parse(opened);
+  IPC_SCHEMAS['fr:doc:getAnchorModel'].response.parse(reader.model({ docId, sessionId: opened.sessionId }));
+  IPC_SCHEMAS['fr:notes:list'].response.parse(notes.list({ docId, offset: 0, limit: 500 }));
+  IPC_SCHEMAS['fr:notes:updateProgress'].response.parse(notes.saveProgress(progress(opened.sessionId)));
+  IPC_SCHEMAS['fr:notes:upsert'].response.parse(notes.upsert(docId, annotation()));
+  IPC_SCHEMAS['fr:doc:close'].response.parse(reader.close({ sessionId: opened.sessionId }));
 });
 test('T-003 exact sentence/offset survives reindex and deleted SQLite index', async () => {
   await importPaper(); const opened = reader.open({ docId });

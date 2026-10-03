@@ -9,9 +9,16 @@ async function launch(userData: string) {
   const env = { ...process.env, ELECTRON_RENDERER_URL: '' }; delete env['ELECTRON_RUN_AS_NODE'];
   const app = await electron.launch({ chromiumSandbox: true, args: [resolve('apps/desktop'), `--user-data-dir=${userData}`], env });
   app.process().stderr?.on('data', (bytes: Buffer) => console.error(bytes.toString()));
-  app.on('window', (page) => {
-    page.on('pageerror', (error) => console.error(error));
-    page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });
+  const page = await app.firstWindow();
+  page.on('pageerror', (error) => console.error(error));
+  page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });
+  page.on('framenavigated', (frame) => console.log('Navigation:', frame.url()));
+  await page.exposeFunction('reportReaderFailure', (message: string) => console.error('Reader state:', message));
+  await page.evaluate(() => {
+    new MutationObserver(() => {
+      const alert = document.querySelector('[role="alert"]');
+      if (alert) void Reflect.get(window, 'reportReaderFailure')(alert.textContent ?? '');
+    }).observe(document.body, { childList: true, subtree: true });
   });
   return app;
 }

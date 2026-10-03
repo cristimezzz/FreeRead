@@ -32,7 +32,10 @@ export function registerHandlers(library: LibraryService, notes: NoteService, re
       const data = await dispatch(ctx, channel.name, value);
       if (!schema.response.safeParse(data).success) throw fail('FR-IPC-002');
       return { ok: true, data };
-    } catch (cause) { return { ok: false, error: ioError(cause).toWire() }; }
+    } catch (cause) {
+      const error = ioError(cause).toWire(); console.error(channel.name, error);
+      return { ok: false, error };
+    }
   });
 }
 async function dispatch(ctx: Context, channel: FrChannelName, value: unknown): Promise<unknown> {
