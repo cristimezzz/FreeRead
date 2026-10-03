@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { TextLayer } from 'pdfjs-dist';
+import { TextLayer } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { DocAnchorModel, Annotation } from '@freeread/core';
 import type { Text } from '../i18n/text';
