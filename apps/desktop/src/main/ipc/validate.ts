@@ -7,8 +7,8 @@ const ajv = new Ajv2020({ strict: false, allErrors: true });
 addFormats(ajv);
 for (const schema of CONTRACT_SCHEMAS) ajv.addSchema(schema);
 export function createFileValidator<T>(file: string) {
-  const validate = ajv.getSchema(`https://freeread.dev/schemas/${file}`);
   return z.unknown().superRefine((value, context) => {
+    const validate = ajv.getSchema(`https://freeread.dev/schemas/${file}`);
     if (!validate?.(value)) context.addIssue({ code: 'custom', message: 'FR-STORE-013' });
   }).transform((value) => value as T);
 }
@@ -19,7 +19,7 @@ const definitions: unknown = manifest['$defs'];
 export function createValidator(name: string) {
   const schema: unknown = typeof definitions === 'object' && definitions !== null
     ? Reflect.get(definitions, name) : undefined;
-  const validate = ajv.compile({ $ref: `https://freeread.dev/schemas/ipc-channels.json#/$defs/${name}` });
+  let validate: ReturnType<typeof ajv.compile> | undefined;
   const properties: unknown = typeof schema === 'object' && schema !== null
     ? Reflect.get(schema, 'properties') : undefined;
   const base = typeof properties === 'object' && properties !== null
@@ -27,6 +27,7 @@ export function createValidator(name: string) {
     : z.unknown();
   // AJV enforces nested strictness, oneOf exclusivity and conditional schema constraints.
   return base.superRefine((value, context) => {
+    validate ??= ajv.compile({ $ref: `https://freeread.dev/schemas/ipc-channels.json#/$defs/${name}` });
     if (!validate(value)) context.addIssue({ code: 'custom', message: 'FR-IPC-002' });
   });
 }

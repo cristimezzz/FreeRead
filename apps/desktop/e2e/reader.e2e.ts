@@ -23,10 +23,10 @@ async function importPdf(app: ElectronApplication, page: Page, path: string) {
 test('E2/E4/E6/E11/E14/E15: dedup, tags/FTS, five exact restores, notes and renderer recovery', async () => {
   test.setTimeout(120_000);
   const dir = mkdtempSync(join(tmpdir(), 'fr-reader-e2e-')), source = join(dir, 'paper.pdf'); writePdf(source);
-  const app = await launch(join(dir, 'user'));
-  const appProcess = app.process();
+  let app = await launch(join(dir, 'user'));
+  let appProcess = app.process();
   try {
-    const page = await app.firstWindow(); await importPdf(app, page, source); await importPdf(app, page, source);
+    let page = await app.firstWindow(); await importPdf(app, page, source); await importPdf(app, page, source);
     await expect(page.getByText('该文献已在库中，已跳过重复导入')).toBeVisible();
     await page.getByLabel('搜索文献').fill('Attention'); await expect(page.locator('.fr-document-open')).toHaveCount(1);
     await page.getByLabel('搜索文献').fill(''); await page.locator('.fr-tag-edit input').fill('NLP'); await page.locator('.fr-tag-edit input').blur();
@@ -34,7 +34,8 @@ test('E2/E4/E6/E11/E14/E15: dedup, tags/FTS, five exact restores, notes and rend
       await page.locator('.fr-document-open').click();
       const sentence = page.locator('[data-sentence-id="s_b_1_1_2"]'); await sentence.focus();
       await expect(page.locator('.fr-status')).toHaveAttribute('data-saved', 'true');
-      await page.getByRole('button', { name: '返回文献库' }).click(); await page.locator('.fr-document-open').click();
+      await app.close(); app = await launch(join(dir, 'user')); appProcess = app.process();
+      page = await app.firstWindow(); await page.locator('.fr-document-open').click();
       await expect(page.locator('.fr-status')).toHaveAttribute('data-focused-sentence', 's_b_1_1_2');
       await page.getByRole('button', { name: '返回文献库' }).click();
     }

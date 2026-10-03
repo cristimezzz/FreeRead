@@ -1,0 +1,77 @@
+Initial post-copy launch: 3269 ms; bootstrap 2085 ms; main-to-first-frame 1184 ms; budget FAIL. Source: recorded cold-start tool output.
+Repeat 1 (fresh process/userData)
+(node:5160) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1498 ms (budget 2500 ms, no debugger)
+Native bootstrap: 597 ms; main-to-first-frame: 901 ms
+Exit code: 0
+Repeat 2 (fresh process/userData)
+(node:18560) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+[18560:1003/194421.360:ERROR:gpu\ipc\client\command_buffer_proxy_impl.cc:327] GPU state invalid after WaitForGetOffsetInRange.
+[18560:1003/194421.360:ERROR:gpu\ipc\client\command_buffer_proxy_impl.cc:327] GPU state invalid after WaitForGetOffsetInRange.
+Cold launch: 1371 ms (budget 2500 ms, no debugger)
+Native bootstrap: 688 ms; main-to-first-frame: 683 ms
+Exit code: 0
+Repeat 3 (fresh process/userData)
+(node:8384) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1329 ms (budget 2500 ms, no debugger)
+Native bootstrap: 690 ms; main-to-first-frame: 639 ms
+Exit code: 0
+Repeat 4 (fresh process/userData)
+(node:32004) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1290 ms (budget 2500 ms, no debugger)
+Native bootstrap: 670 ms; main-to-first-frame: 620 ms
+Exit code: 0
+Repeat 5 (fresh process/userData)
+(node:31460) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1291 ms (budget 2500 ms, no debugger)
+Native bootstrap: 657 ms; main-to-first-frame: 634 ms
+Exit code: 0
+Second fresh-directory baseline: 3308 ms; bootstrap 2246 ms; main-to-first-frame 1062 ms; budget FAIL. Source: m1-script-validation.log before dependency inlining.
+
+m1-bundled-main-validation.log
+Cold launch: 3014 ms (budget 2500 ms, no debugger)
+Native bootstrap: 2036 ms; main-to-first-frame: 978 ms
+
+m1-lazy-validation.log
+Cold launch: 2851 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1732 ms; main-to-first-frame: 1119 ms
+
+m1-no-gpu-probe.log
+Cold launch: 2749 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1793 ms; main-to-first-frame: 956 ms
+Final build repeats (fresh process/userData, existing installed path):
+Final repeat 1
+(node:5252) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1146 ms (budget 2500 ms, no debugger)
+Native bootstrap: 237 ms; main-to-first-frame: 909 ms
+Exit code: 0
+Final repeat 2
+(node:3632) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1055 ms (budget 2500 ms, no debugger)
+Native bootstrap: 301 ms; main-to-first-frame: 754 ms
+Exit code: 0
+Final repeat 3
+(node:26516) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1062 ms (budget 2500 ms, no debugger)
+Native bootstrap: 323 ms; main-to-first-frame: 739 ms
+Exit code: 0
+Final repeat 4
+(node:3232) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 988 ms (budget 2500 ms, no debugger)
+Native bootstrap: 302 ms; main-to-first-frame: 686 ms
+Exit code: 0
+Final repeat 5
+(node:25032) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `FreeRead --trace-warnings ...` to show where the warning was created)
+Cold launch: 1063 ms (budget 2500 ms, no debugger)
+Native bootstrap: 320 ms; main-to-first-frame: 743 ms
+Exit code: 0
