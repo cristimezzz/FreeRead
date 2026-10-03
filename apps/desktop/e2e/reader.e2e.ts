@@ -1,7 +1,8 @@
 import { test, expect, _electron as electron } from '@playwright/test';
 import type { ElectronApplication, Page } from '@playwright/test';
 import { resolve, join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { writePdf } from './pdf-fixture';
 
@@ -56,7 +57,7 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
     try { const p = await reopened.firstWindow(); await p.locator('.fr-document-open').click();
       await p.getByRole('button', { name: '笔记', exact: true }).click(); await expect(p.getByText('Offline insight')).toBeVisible();
     } finally { await reopened.close(); }
-  } finally { if (appProcess.exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { if (appProcess.exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });
 test('M1 gate: force-kill main process and restore exact last sentence 20/20', async () => {
   test.setTimeout(180_000);
@@ -69,13 +70,16 @@ test('M1 gate: force-kill main process and restore exact last sentence 20/20', a
       const id = `s_b_1_1_${i % 2 + 1}`;
       await page.locator(`[data-sentence-id="${id}"]`).focus();
       await expect(page.locator('.fr-status')).toHaveAttribute('data-saved', 'true');
-      app.process().kill('SIGKILL'); await new Promise<void>((r) => app.process().once('exit', () => r()));
+      const child = app.process(), exited = new Promise<void>((r) => child.once('exit', () => r()));
+      if (process.platform === 'win32' && child.pid) execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F']);
+      else child.kill('SIGKILL');
+      await exited;
       app = await launch(join(dir, 'user'));
       const reopened = await app.firstWindow(); await reopened.locator('.fr-document-open').click();
       await expect(reopened.locator('.fr-status')).toHaveAttribute('data-focused-sentence', id);
       await reopened.getByRole('button', { name: '返回文献库' }).click();
     }
-  } finally { if (app.process().exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { if (app.process().exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });
 test('M1 performance: 1000-page first paint ≤ 3 seconds, ten-second scrolling ≥ 55 fps', async () => {
   test.setTimeout(90_000);
@@ -93,8 +97,10 @@ test('M1 performance: 1000-page first paint ≤ 3 seconds, ten-second scrolling 
           if (performance.now() - start < 10_000) requestAnimationFrame(frame); else resolve(frames * 1000 / (performance.now() - start)); };
         requestAnimationFrame(frame); });
     });
-    await test.info().attach('performance', { body: JSON.stringify({ firstPaintMs, fps, pages: 1000, platform: process.platform }), contentType: 'application/json' });
+    const measurement = JSON.stringify({ firstPaintMs, fps, pages: 1000, platform: process.platform });
+    const evidence = test.info().outputPath('performance.json'); writeFileSync(evidence, measurement);
+    await test.info().attach('performance', { path: evidence, contentType: 'application/json' });
     expect(firstPaintMs).toBeLessThanOrEqual(3000); expect(fps).toBeGreaterThanOrEqual(55);
     expect(await page.locator('canvas').count()).toBeLessThanOrEqual(5);
-  } finally { await app.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });
