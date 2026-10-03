@@ -13,6 +13,8 @@
 
 实际运行 `pnpm exec playwright test apps/desktop/e2e/shell.e2e.ts` 与 `pnpm test:cold-start`，均在窗口出现前退出，code `2147483651`（`0x80000003`）。用户在普通 PowerShell 运行同一 E2E 也报告 `Process failed to launch`。项目内同版本运行时副本的 `--version` 对照同样失败；`ELECTRON_RUN_AS_NODE=1` 模式可运行。
 
+2026-10-03 再次构建当前 M1（`5e06c4f`）的 Windows x64 / ARM64 zip 与 unpacked 应用；x64 打包版独立冷启动仍以相同错误码退出，未输出 `app.main`。本次完整 `pnpm build:dist` 未取得成功退出记录，NSIS 安装包不能视为完成；三平台完整打包成功证据见 [CI run 37101443857](https://github.com/cristimezzz/FreeRead/actions/runs/37101443857)。开发版和当前打包版的失败均发生在应用入口之前。
+
 使用微软签名的 ProcDump 捕获纯 Electron `--version` 启动转储，再用系统 dbgeng 与 Electron 官方同版本 Breakpad 符号定位：
 
 ```text
@@ -26,6 +28,8 @@ wWinMain                          electron_main_win.cc:235
 对应 [Chromium 源码](https://chromium.googlesource.com/chromium/src/+/142.0.7444.265/sandbox/policy/sandbox.cc) 的失败条件为 `CreateAlternateDesktop(kAlternateWinstation)` 返回非成功。转储 EAX 为 12（`SBOX_ERROR_CANNOT_CREATE_WINSTATION`），线程保存的 Windows 错误码为 5（`ERROR_ACCESS_DENIED`）。这定位了失败条件，尚未确定触发它的系统设置。未关闭沙箱或修改系统窗口站权限。
 
 用户授权的运行目录 `S-1-15-2-2` 读/执行权限试验未修复启动；已精确撤回新增规则。诊断转储、工具与原始会话权限信息仅保存在忽略目录 `artifacts/diagnostics/`，不提交到 GitHub。
+
+同会话 PowerShell 单独调用窗口站 API 可以创建并立即关闭临时对象，因此尚不能归因为普遍的账户权限缺失。待用户补充普通 PowerShell 直接运行 `& C:\Projects\FreeRead\node_modules\electron\dist\electron.exe --version` 的结果，以确认纯运行时在工具会话之外的行为。
 
 待启动问题解决后，在此机器执行：
 
