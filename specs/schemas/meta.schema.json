@@ -19,7 +19,7 @@
   ],
   "properties": {
     "schemaVersion": {
-      "const": 1,
+      "const": 2,
       "description": "元数据格式版本；字段语义变更时必须 bump 并提供迁移（specs/05-storage.md §8）。"
     },
     "citekey": {
@@ -109,6 +109,20 @@
     "source": {
       "$ref": "#/$defs/Source",
       "description": "文献来源描述。kind='local-file' 时禁止写 url（不得泄露本地路径）；联网来源必须记录 url 与 fetchedAt。"
+    },
+    "reading": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sentenceId", "blockId", "page", "scrollRatio", "mode", "translationMode", "updatedAt", "clientEventId"],
+      "properties": {
+        "sentenceId": { "type": "string", "pattern": "^s_b_[1-9][0-9]*_[1-9][0-9]*_[1-9][0-9]*$" },
+        "blockId": { "type": "string", "pattern": "^b_[1-9][0-9]*_[1-9][0-9]*$" },
+        "page": { "type": "integer", "minimum": 1 },
+        "scrollRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+        "mode": { "enum": ["original", "reflow"] },
+        "translationMode": { "enum": ["off", "bilingual", "only"] },
+        "updatedAt": { "type": "integer", "minimum": 0 },
+        "clientEventId": { "type": "string", "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$" }
+      }
     },
     "quality": {
       "enum": ["native", "ocr", "mixed"],

@@ -1,4 +1,9 @@
 export { BUDGETS } from './budgets';
+export { buildReadingModel, readingInput } from './anchor/m1-model';
+export { resolveProgress, migrateMeta } from './progress/resolve';
+export { makeCitekey } from './storage/citekey';
+export { segmentForFts } from './search/segment';
+export { SCHEMA_SQL } from './storage/schema.generated';
 export { AppError, toAppError } from './error';
 export type { AppErrorWire, AppErrorOptions } from './error';
 export { CHANNEL_NAMES, EVENT_NAMES } from './ipc-channels.generated';

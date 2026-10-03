@@ -1,0 +1,79 @@
+# M1 固定机器验收记录
+
+用户于 2026-10-03 指定本机作为固定验收机器，并授权一次性自托管 CI。启动阻塞已定位并解除：保持仓库低完整性标签，在普通系统临时目录运行打包版。正式自托管原生功能和千页性能通过，首次冷启动 3367 ms 超预算，整体验收失败。
+
+| 项目 | 环境 |
+|---|---|
+| 系统 | Windows 11 专业工作站版，26H2 / 10.0.26300.9457，x64 |
+| CPU | Intel Core i5-12500H，12 核 / 16 线程 |
+| 内存 | 16829116416 bytes |
+| GPU | Intel Iris Xe / NVIDIA RTX 3050 Ti Laptop；另有 GameViewer Virtual Display Adapter |
+| 运行时 | Electron 39.8.10，Chromium 142.0.7444.265，Node 22.22.1 |
+| 工程工具 | 本地 Node 24.18.1 / pnpm 11.21.0；正式 runner Node 24.21.0 / pnpm 11.21.0 |
+| 打包版 | M1 Windows x64；正式自托管检出 `20294f9aafb8d21b79cf0a781e8c2f3b00a2cf01`，包含阅读模块按需加载与错误边界 |
+| 可执行文件 SHA256 | `1EA5B49F7C32A5ECEE739CB145D368955857F8A4682451F681E9AE1C9B7F0F74` |
+| app.asar SHA256 | `7EE9CC7BD2884D6D60C89A021C1711DE8B007BBE3F8AD8B078FF84F0D49BFE7B` |
+
+## 本机原生结果
+
+- 正式自托管 [CI run 37124669516](https://github.com/cristimezzz/FreeRead/actions/runs/37124669516)：verify/build/size、Windows x64 打包、完整 E2E 4/4 通过；千页首屏 939.81 ms、连续滚动 10 秒 120.16 fps、canvas ≤ 5。首屏包含阅读模块首次加载；[测量 JSON](assets/m1-fixed-ci-performance.json) 与 [构建清单](assets/m1-fixed-ci-build-manifest.json) 从该轮工件保存。清单 `dirty: true` 对应 verify 重写 `THIRD_PARTY_NOTICES.md` 的行尾，现场 Git diff 内容为空；运行时代码未修改，exe 与 app.asar 哈希与此前候选包相同。
+- 同轮先执行独立首次冷启动，再运行 E2E：3367 ms（app.main 之前 1609 ms，之后 1758 ms），超过 2500 ms；最终预算步骤失败，整轮 CI 为 failure。冷启动步骤为保留后续证据启用了 `continue-on-error`，其 API `conclusion: success` 不能当作预算通过。两次 GPU 状态错误保留在原始工件，尚不能单独确定根因。
+- 打包版完整 E2E：4/4，通过导入/去重、标签/FTS、标注和笔记重启、renderer 崩溃重载、20/20 进程树强杀恢复，以及沙箱/零 Node 特权断言。
+- E4 加强验证：将原来仅往返文献库的五次恢复，改为真正关闭并重启整个应用；单独实跑 1/1 通过，之后也包含在优化版完整 4/4 E2E 中通过。
+- 按需加载版 1000 页首屏 922.19 ms（包含首次加载阅读模块）、连续滚动 10 秒 120.15 fps、canvas ≤ 5，均通过。机器参数和运行时版本见 [原始测量 JSON](assets/m1-local-performance.json)；该样本是合成文本 PDF。旧候选版 402.93 ms / 120.14 fps 的 [JSON](assets/m1-candidate-performance.json) 保留，不能与新代码混用。
+- 独立冷启动：每次启动新进程、使用新用户目录，不连接调试器。全部结果见 [冷启动原始记录](assets/m1-local-cold-start.txt)。旧版两个全新目录的首次启动分别为 3269 / 3308 ms；内联 AJV/Zod 后为 3014 ms，再延迟编译未使用的验证器后为 2851 ms。优化版在已有安装路径中的五次复测为 988–1146 ms，均通过。首次启动超时仍保留，不据后续通过删除失败或定义采样豁免。
+
+| 旧版测量 | 完整启动 | native bootstrap | main 至首帧 | 2500 ms 门禁 |
+|---|---:|---:|---:|---|
+| 暂存后首次 | 3269 ms | 2085 ms | 1184 ms | 失败 |
+| 复测 1 | 1498 ms | 597 ms | 901 ms | 通过 |
+| 复测 2 | 1371 ms | 688 ms | 683 ms | 通过 |
+| 复测 3 | 1329 ms | 690 ms | 639 ms | 通过 |
+| 复测 4 | 1290 ms | 670 ms | 620 ms | 通过 |
+| 复测 5 | 1291 ms | 657 ms | 634 ms | 通过 |
+
+| 优化与复测 | 完整启动 | app.main 日志之前 | 日志至首帧 | 门禁 |
+|---|---:|---:|---:|---|
+| 旧版第二个全新目录 | 3308 ms | 2246 ms | 1062 ms | 失败 |
+| AJV/Zod 内联，全新目录首次 | 3014 ms | 2036 ms | 978 ms | 失败 |
+| 内联 + 延迟编译，全新目录首次 | 2851 ms | 1732 ms | 1119 ms | 失败 |
+| 最终版复测 1 | 1146 ms | 237 ms | 909 ms | 通过 |
+| 最终版复测 2 | 1055 ms | 301 ms | 754 ms | 通过 |
+| 最终版复测 3 | 1062 ms | 323 ms | 739 ms | 通过 |
+| 最终版复测 4 | 988 ms | 302 ms | 686 ms | 通过 |
+| 最终版复测 5 | 1063 ms | 320 ms | 743 ms | 通过 |
+
+软件渲染诊断对照（额外 `--disable-gpu`）首次 2749 ms，仍失败；正式应用和验收脚本未加入该开关。`native bootstrap` 是脚本的阶段名，实际包括原生初始化与主模块加载/顶层求值，因为 `app.main` 在静态 imports 后输出。首次路径的额外 I/O / 系统扫描原因仍未证实。继续定位首次冷启动时保持 2500 ms 预算，现有复测不能替代失败的正式首次测量；完整性能验收保持部分完成。
+
+上述内联 + 延迟编译数据来自候选提交 `4f98cbb`，不能作为后续修复版本的正式验收结果。[该提交的 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37122082721) 在三平台开发版重启时失败。本机使用普通临时目录的 Electron 运行时也复现该失败；恢复持久化文件验证器的提前编译后，对照完整开发版测试 4/4 通过。IPC 验证器仍按首次请求编译并缓存，未删除校验或增加重试。更深层的加载失败原因尚未证实；主窗口局部引用假设未能修复，相关实验改动已撤回。
+
+修复 `bb65f9a` 的 [三平台 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37123369010) 全部通过；本机打包版完整 4/4 也通过，首次冷启动为 2695 ms，仍失败。后续将阅读模块按需加载，入口脚本由 744.38 kB 降至 237.65 kB，阅读模块 507.32 kB 在打开文献时加载；全体前端 gzip 仍约 611 KiB。E1 断言空库未加载阅读模块，并模拟模块请求失败，确认 `FR-UI-001` 提示及返回文献库可用。该版首次为 2674 ms（1646 + 1028），直接在普通目录构建再首次运行为 2733 ms（1779 + 954），两者仍失败，不归因于二次复制。
+
+限定类别的 Chromium 启动 trace 显示 GPU 初始化约 955.62 ms，renderer 同步等待 GPU channel 约 782.85 ms；嵌套 EGL 初始化约 551 ms，加载 GLES/EGL 库约 230/96 ms。数字来自诊断，包含 trace 开销、嵌套及重叠，不能相加或替代无调试器验收。[脱敏摘要](assets/m1-local-startup-profile.json) 与 [Chromium trace 参数定义](https://chromium.googlesource.com/chromium/src/+/a0e9c1e80c1bd2ab242a969fd460af4a07cae15e/components/tracing/common/tracing_switches.cc) 可复核；首次路径的更早耗时尚未定位。
+
+进一步用同一 exe 的新临时副本做最小空窗口对照：只在诊断副本中以最小本地 HTML / BrowserWindow 替换 app.asar，不加载 preload、React、PDF.js 或数据库，保留 sandbox/contextIsolation、禁止 Node 与 HTTP/HTTPS。父进程 Stopwatch 从启动前至收到 ready-to-show 日志为 2854 ms，主模块日志为 1636 ms，退出码 0；无调试器、trace 或 GPU 开关，exe 哈希与正式包一致。该单次对照也超过预算，说明去掉阅读代码后本机原生启动路径仍可超时；不能据此确定通用下限或具体系统/驱动根因，也不能替代正式 3367 ms 失败样本。源脚本及记录保存在忽略的诊断目录，诊断副本已清理。
+
+正式 runner 使用专属标签与 `--ephemeral`，不安装服务，只执行这一次任务。结束后自动删除本地注册凭据并注销，GitHub API 确认注册数量为 0；PR 的 `run-m1-local-once` 标记已移除。原始 CI 工件及日志已保存到忽略目录，临时 runner 工作目录已清理。以后若重复正式验收，需重新注册固定机器，不能以当前 hosted 冒烟结果替代。
+
+## 启动故障根因与处理
+
+仓库根目录带 `Mandatory Label\Low Mandatory Level:(OI)(CI)(NW)`；`electron.exe`、`FreeRead.exe` 及在仓库内编译的独立 Windows API 探针均继承低标签。父 PowerShell 是中完整性 `S-1-16-8192`，这些子进程是低完整性 `S-1-16-4096`，并非 AppContainer，Job UI restrictions 为 0。独立探针不加载 Electron，也在 `CreateWindowStationW` 返回错误 5。用户从 Windows 开始菜单打开 PowerShell 运行探针同样失败，纯 Electron `--version` 无输出。
+
+微软 [Mandatory Integrity Control / Process Creation](https://learn.microsoft.com/en-us/windows/win32/secauthz/mandatory-integrity-control) 说明，进程完整性级别取用户与可执行文件级别的较低值；即使由普通或管理员账户启动，低标签程序仍以低完整性运行。
+
+将同一探针复制到普通系统临时目录后，新副本以中完整性运行；复制 DACL 和默认 DACL 两种窗口站创建都成功。相同处理用于当前打包版，核对可执行文件 SHA256 相同，原生验收随即可运行。未修改仓库完整性标签、系统窗口站权限、用户目录权限，也未关闭 Electron 沙箱。
+
+先前微软签名 ProcDump + 系统 dbgeng + Electron 官方符号定位到 `Sandbox::Initialize`（[Chromium 源码](https://chromium.googlesource.com/chromium/src/+/142.0.7444.265/sandbox/policy/sandbox.cc) §67）的 `CreateAlternateDesktop(kAlternateWinstation)` 失败：EAX 为 12（`SBOX_ERROR_CANNOT_CREATE_WINSTATION`）。本次实时断点进一步确认 `CreateWindowStationW` 两次请求 `0x80000008` 与 `0xA` 都返回 NULL、Windows 错误 5。用户授权的目录 `S-1-15-2-2` RX 权限试验无效且已撤回；它不能改变进程完整性级别。
+
+诊断转储、原始 ACL、工具与探针均留在忽略目录 `artifacts/diagnostics/`，不提交 GitHub。此前本机完整 `pnpm build:dist` 未取得成功退出记录，NSIS 安装包不能视为完成；完整打包证据见 [三平台 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37119627119)。
+
+## 复现
+
+在普通 PowerShell 中，已有 `artifacts/win-unpacked` Windows x64 包时执行：
+
+```powershell
+pnpm verify
+pwsh -File C:\Projects\FreeRead\docs\run-m1-native-acceptance.ps1
+```
+
+脚本把同一打包版暂存到系统临时目录、验证 exe 哈希，依次运行独立冷启动与完整 E2E；保持原始退出码门禁。暂存路径会输出，保留供检查，截图在该路径的 `test-results/`，测量和测试附件在仓库 `artifacts/m1-local-evidence/`。结束后还原工作目录与 `FR_PACKAGED`；不注册 runner 或修改权限。仓库内直接启动低标签 exe 仍会失败，正常安装目录或此暂存路径可运行。

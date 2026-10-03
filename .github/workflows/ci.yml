@@ -9,6 +9,56 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  fixed-machine:
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.number == 2 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'feat/m1-reading-core' &&
+      contains(github.event.pull_request.labels.*.name, 'run-m1-local-once')
+    runs-on: [self-hosted, Windows, X64, freeread-m1-20261003]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm verify
+      - run: pnpm build
+      - run: pnpm size
+      - run: pnpm license:source-offer
+      - run: node scripts/build-manifest.mjs
+      - run: pnpm --filter @freeread/desktop dist --win dir --x64
+      - name: First packaged cold start on fixed machine
+        id: cold
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          pnpm test:cold-start --packaged *> artifacts/m1-fixed-cold-start.txt
+          $coldExit = $LASTEXITCODE
+          Get-Content artifacts/m1-fixed-cold-start.txt
+          exit $coldExit
+      - name: Fixed machine native E2E
+        run: pnpm exec playwright test
+        env:
+          FR_PACKAGED: '1'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m1-fixed-machine-evidence
+          path: |
+            artifacts/m1-fixed-cold-start.txt
+            artifacts/build-manifest.json
+            test-results/
+          if-no-files-found: error
+      - name: Enforce cold start budget
+        if: always() && steps.cold.outcome != 'success'
+        shell: pwsh
+        run: throw 'M1 fixed-machine cold start did not pass its 2500 ms gate.'
   verify:
     strategy:
       fail-fast: false
@@ -60,6 +110,16 @@ jobs:
         run: |
           sudo chown root:root artifacts/linux-unpacked/chrome-sandbox
           sudo chmod 4755 artifacts/linux-unpacked/chrome-sandbox
+      - name: Packaged M1 E2E
+        if: runner.os != 'Linux'
+        run: pnpm exec playwright test
+        env:
+          FR_PACKAGED: '1'
+      - name: Packaged M1 E2E (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm exec playwright test
+        env:
+          FR_PACKAGED: '1'
       - run: pnpm test:cold-start --packaged
         if: runner.os != 'Linux'
       - run: xvfb-run --auto-servernum pnpm test:cold-start --packaged

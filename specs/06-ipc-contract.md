@@ -821,3 +821,5 @@ if (missing.length) throw new AppError('FR-IPC-001', { details: { missing: missi
 > 1. `11-error-handling.md` §3.3 已由并行的 `spec:` 提交把 AGT 域从「V2 预留」改为 **V1 正式域**（`FR-AGT-001..012`，`-008` 为 fatal + 永不重试的安全事件），`14-agent.md §12` 要求的 12 条码现已全部登记 —— 本文与 manifest 按该表引用，**未新增任何码**；`node specs/tools/check-specs.mjs` 的 C8 因此全绿。
 > 2. `14-agent.md` 已进入 `README.md` §2 的规范索引（C10 全绿）。
 > 3. **历史差异已收敛（2026-10-03 收尾）**：`08-translation.md` 要求的 `fr:translate:translateUnits` 补 `FR-TRANS-007/011/012/013/015/016/017`、`fr:translate:upsertGlossary` 补 `FR-TRANS-014`、`fr:translate:getCache` 补 `FR-TRANS-015` 已全部落地（本文表格 + manifest `errors[]` 同步）。注：`FR-TRANS-014`（术语表导入非法）语义上只属于 `upsertGlossary`，故未加入 `translateUnits`；`07-ui-spec.md` 的非规范通道写法已于同期统一。
+
+| v1.2-M1 | 2026-10-03 | ADR-14：meta schema v2 持久化 reading，v1 校验迁移；M1 最小 PDF.js 锚点与 node:sqlite。preload 增加本地 PDF 选择对话框（只返回授权路径）；仅原文阅读，M2 再验收重排。 |

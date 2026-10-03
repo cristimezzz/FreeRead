@@ -1,0 +1,24 @@
+{
+  "kind": "diagnostic, not acceptance timing",
+  "runtime": "Electron 39.8.10 / Chromium 142.0.7444.265",
+  "os": "Windows 10.0.26300.9457 x64",
+  "cpu": "Intel Core i5-12500H",
+  "events": [
+    { "name": "gpu::GpuInit::InitializeAndStartSandbox", "durationMs": 955.622 },
+    { "name": "RenderThreadImpl::EstablishGpuChannelSync", "durationMs": 782.851 },
+    { "name": "eglInitializeFn display", "durationMs": 550.997 },
+    { "name": "Load gles_library", "durationMs": 229.916 },
+    { "name": "Load egl_library", "durationMs": 95.969 }
+  ],
+  "note": "Nested and overlapping events must not be added together. Trace flags add overhead. No GPU or sandbox disabling. Raw trace remains in ignored artifacts/diagnostics.",
+  "emptyWindowControl": {
+    "kind": "separate diagnostic, not a FreeRead acceptance sample",
+    "executableSha256": "1EA5B49F7C32A5ECEE739CB145D368955857F8A4682451F681E9AE1C9B7F0F74",
+    "scenario": "First launch from a fresh regular temporary directory. Same Electron executable; replace app.asar only in the diagnostic copy with minimal local HTML and BrowserWindow code. No preload, React, PDF.js or database. Sandbox/context isolation enabled, Node integration disabled, HTTP/HTTPS blocked; no debugger, GPU flags or trace flags.",
+    "timing": "PowerShell parent Stopwatch before Process.Start to receipt of ready-to-show stdout event",
+    "mainMs": 1636,
+    "readyMs": 2854,
+    "exitCode": 0,
+    "limitation": "One diagnostic observation; does not establish a universal runtime floor or identify the system/driver cause. It does not replace the failed 3367 ms formal FreeRead measurement."
+  }
+}

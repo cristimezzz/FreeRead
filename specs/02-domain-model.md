@@ -192,3 +192,5 @@ idle ─► batching ─► requesting ─┬─► applied ─► idle
 | v1.0 | 2026-10-03 | 首版冻结 |
 | v1.1 | 2026-10-03 | V1 纳入 Agent：新增 §7（Project/AgentSession/Run/ToolCall/PermissionRule/Skill）、DM-8..DM-10、5 个领域事件与存储映射 |
 | v1.0 | 2026-10-03 | 首版冻结 |
+
+| v1.2-M1 | 2026-10-03 | ADR-14：meta schema v2 持久化 reading，v1 校验迁移；M1 最小 PDF.js 锚点与 node:sqlite。preload 增加本地 PDF 选择对话框（只返回授权路径）；仅原文阅读，M2 再验收重排。 |

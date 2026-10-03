@@ -1,11 +1,13 @@
 # FreeRead
 
+M1 阅读内核已实现：PDF 导入、标签与全文检索、原文阅读、标注与笔记、阅读位置持久化。实际验收结果与限制见 [M1 交付报告](docs/m1-delivery.md)。
+
 本地优先、AGPL-3.0 的论文精读工作台。M0 当前交付工程骨架与离线双语空壳；
 阅读、翻译、笔记、解析和研究 Agent 按 M1–M6 实现。
 
 不提供云端账号、计费额度或付费墙规避；V1 不包含浏览器自动化抓取。
 
-需要 Node 22.12+ 和 pnpm 11.21.0；Python 仅供后续 sidecar 与维护者采集样本使用。
+需要 Node 22.13+ 和 pnpm 11.21.0；Python 仅供后续 sidecar 与维护者采集样本使用。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -30,3 +32,6 @@ renderer 无 Node 特权，空壳运行时出网被 CSP 与 Electron session 拦
 首批授权论文见 [fixtures/golden](fixtures/golden/README.md)。
 
 [M0 交付报告](docs/m0-delivery.md) 记录实际验收、安装包证据及固定硬件基准缺口。
+
+[M1 交付报告](docs/m1-delivery.md) 记录文献库、原文阅读、笔记、进度恢复与三平台原生证据。
+本机固定性能验收的运行环境与启动故障见 [本机验收记录](docs/m1-local-acceptance.md)。

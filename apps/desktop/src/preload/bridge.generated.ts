@@ -5,6 +5,7 @@ import { AppError } from '@freeread/core';
 import type { FrEventName } from '@freeread/core';
 const events: readonly string[] = ["fr:parser:progress","fr:parser:failed","fr:translate:progress","fr:library:changed","fr:notes:changed","fr:app:updateAvailable","fr:agent:event","fr:project:changed"];
 const bridge: FrBridge = {
+  local: { pickPdf: () => ipcRenderer.invoke('fr-local:pickPdf'), cancelImport: () => ipcRenderer.invoke('fr-local:cancelImport') },
   library: {
     list: (req) => ipcRenderer.invoke('fr:library:list', req),
     get: (req) => ipcRenderer.invoke('fr:library:get', req),
