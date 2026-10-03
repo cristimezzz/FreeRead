@@ -67,6 +67,7 @@ test('M1 gate: force-kill main process and restore exact last sentence 20/20', a
   test.setTimeout(180_000);
   const dir = mkdtempSync(join(tmpdir(), 'fr-kill-e2e-')), source = join(dir, 'paper.pdf'); writePdf(source);
   let app = await launch(join(dir, 'user'));
+  let appProcess = app.process();
   try {
     await importPdf(app, await app.firstWindow(), source);
     for (let i = 0; i < 20; i++) {
@@ -74,16 +75,17 @@ test('M1 gate: force-kill main process and restore exact last sentence 20/20', a
       const id = `s_b_1_1_${i % 2 + 1}`;
       await page.locator(`[data-sentence-id="${id}"]`).focus();
       await expect(page.locator('.fr-status')).toHaveAttribute('data-saved', 'true');
-      const child = app.process(), exited = new Promise<void>((r) => child.once('exit', () => r()));
+      const child = appProcess, exited = new Promise<void>((r) => child.once('exit', () => r()));
       if (process.platform === 'win32' && child.pid) execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F']);
       else child.kill('SIGKILL');
       await exited;
       app = await launch(join(dir, 'user'));
+      appProcess = app.process();
       const reopened = await app.firstWindow(); await reopened.locator('.fr-document-open').click();
       await expect(reopened.locator('.fr-status')).toHaveAttribute('data-focused-sentence', id);
       await reopened.getByRole('button', { name: '返回文献库' }).click();
     }
-  } finally { if (app.process().exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+  } finally { if (appProcess.exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });
 test('M1 performance: 1000-page first paint ≤ 3 seconds, ten-second scrolling ≥ 55 fps', async () => {
   test.setTimeout(90_000);

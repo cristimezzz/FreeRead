@@ -11,7 +11,7 @@
 - 本机固定验收：已确认仓库低完整性标签使 exe 以低完整性运行，窗口站创建被拒。保留仓库标签，在普通系统临时目录运行字节一致的打包版，原生 4/4 E2E 与 1000 页性能通过（最终版首屏 402.93 ms / 120.14 fps），包含 E4 五次真正关闭、重启整个应用。内联主进程 AJV/Zod 并延迟编译未使用的验证器，首次启动由 3269–3308 ms 降为 2851 ms，仍失败；已有安装路径的五次独立复测 988–1146 ms 通过。全部结果保留，阈值不变；根因、机器参数、JSON/日志及脚本见 [本机验收记录](m1-local-acceptance.md)。
 - 原生 CI：[run 37101443857](https://github.com/cristimezzz/FreeRead/actions/runs/37101443857)（运行时代码 `f04f2bd`）三平台全绿，均完成 verify/build/size、4/4 开发版及 4/4 打包版 E2E、打包与冷启动。两组 E2E 均断言 5/5 句子恢复、高亮与笔记重启保留、renderer 崩溃自动重载及 20/20 进程树强杀恢复；打包测试断言 `app.isPackaged`。修复包含 sandbox preload 依赖内联、PDF.js legacy 兼容构建、Windows 强杀残留子进程清理，以及高亮等待 textLayer 几何就绪。草稿 [PR #2](https://github.com/cristimezzz/FreeRead/pull/2) 以尚未合并的 M0 分支为基线；未合并或发布。
 - 原生 hosted runner 打包版测量（同轮，Electron 39.8.10）：Windows x64 首屏 513 ms / 64.14 fps / 冷启动 995 ms；macOS arm64 475 ms / 60.11 fps / 1205 ms；Linux x64 268 ms / 60.11 fps / 599 ms。首屏与帧率使用合成 1000 页 PDF，canvas ≤ 5；冷启动独立运行且不连接调试器。性能数据不跨机器比较，不能代替固定机器正式验收。原始 `performance.json`（含 OS、CPU、内存、运行时版本）与截图可从该 CI 的 test-evidence 工件下载；Windows ARM64 与 macOS x64 安装包已构建，未在对应架构机器执行。
-- 提交 `7c0d62d` 的 [CI run 37119627119](https://github.com/cristimezzz/FreeRead/actions/runs/37119627119) 三平台完整门禁再次通过。本次启动优化与 E4 真正重启应用的强化测试已在本机通过，将随下一提交进入三平台 CI。
+- 提交 `7c0d62d` 的 [CI run 37119627119](https://github.com/cristimezzz/FreeRead/actions/runs/37119627119) 三平台完整门禁再次通过。启动优化候选 `4f98cbb` 的 [CI run 37122082721](https://github.com/cristimezzz/FreeRead/actions/runs/37122082721) 三平台开发版重启失败；已在本机复现，并恢复持久化文件验证器原来的提前编译，保留 IPC 按需编译与 E4 五次真正重启的断言。清理代码保存进程句柄，避免关闭后的 `app.process()` 异常掩盖原始错误。修复后的三平台 CI 待运行；候选版性能结果保留为历史证据。
 - 未决：首次冷启动超预算的稳定性风险及规范要求的自托管性能 runner。M2 版面解析、OCR、重排及 M3–M7 功能不在此次范围。
 
 以下截图来自上述 Linux 打包版 E2E 的合成 PDF，展示真实导入和重启后保留的高亮、笔记：
@@ -41,7 +41,7 @@
 | `THIRD_PARTY_NOTICES.md` | 7798 |
 | `apps/desktop/e2e/electron-app.ts` | 16 |
 | `apps/desktop/e2e/pdf-fixture.ts` | 20 |
-| `apps/desktop/e2e/reader.e2e.ts` | 113 |
+| `apps/desktop/e2e/reader.e2e.ts` | 115 |
 | `apps/desktop/e2e/shell.e2e.ts` | 38 |
 | `apps/desktop/electron.vite.config.ts` | 8 |
 | `apps/desktop/package.json` | 25 |
@@ -83,7 +83,7 @@
 | `docs/assets/m1-local-performance.json` | 1 |
 | `docs/assets/m1-reader.png` | 64925 bytes |
 | `docs/m1-delivery.md` | 107 |
-| `docs/m1-local-acceptance.md` | 67 |
+| `docs/m1-local-acceptance.md` | 69 |
 | `docs/run-m1-native-acceptance.ps1` | 30 |
 | `package.json` | 55 |
 | `packages/core/src/anchor/m1-model.ts` | 46 |
