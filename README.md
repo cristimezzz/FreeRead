@@ -7,7 +7,7 @@ M1 阅读内核已实现：PDF 导入、标签与全文检索、原文阅读、�
 
 不提供云端账号、计费额度或付费墙规避；V1 不包含浏览器自动化抓取。
 
-需要 Node 22.12+ 和 pnpm 11.21.0；Python 仅供后续 sidecar 与维护者采集样本使用。
+需要 Node 22.13+ 和 pnpm 11.21.0；Python 仅供后续 sidecar 与维护者采集样本使用。
 
 ```sh
 pnpm install --frozen-lockfile
