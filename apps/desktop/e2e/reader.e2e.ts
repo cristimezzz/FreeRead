@@ -32,6 +32,7 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
   test.setTimeout(120_000);
   const dir = mkdtempSync(join(tmpdir(), 'fr-reader-e2e-')), source = join(dir, 'paper.pdf'); writePdf(source);
   const app = await launch(join(dir, 'user'));
+  const appProcess = app.process();
   try {
     const page = await app.firstWindow(); await importPdf(app, page, source); await importPdf(app, page, source);
     await expect(page.getByText('该文献已在库中，已跳过重复导入')).toBeVisible();
@@ -55,7 +56,7 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
     try { const p = await reopened.firstWindow(); await p.locator('.fr-document-open').click();
       await p.getByRole('button', { name: '笔记', exact: true }).click(); await expect(p.getByText('Offline insight')).toBeVisible();
     } finally { await reopened.close(); }
-  } finally { if (app.process().exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { if (appProcess.exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 test('M1 gate: force-kill main process and restore exact last sentence 20/20', async () => {
   test.setTimeout(180_000);
