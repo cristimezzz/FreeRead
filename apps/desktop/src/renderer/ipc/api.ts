@@ -8,7 +8,9 @@ export async function unwrap<T>(request: Promise<ApiResult<T>>): Promise<T> {
 }
 export function errorKey(cause: unknown): string {
   const key = typeof cause === 'object' && cause !== null ? Reflect.get(cause, 'i18nKey') : undefined;
-  return typeof key === 'string' ? key : 'errors.FR-UI-001';
+  if (typeof key === 'string') return key;
+  const error = uiError('FR-UI-001'); console.error(error, cause);
+  return error.i18nKey;
 }
 export function uiError(code: AppErrorWire['code']): AppErrorWire {
   return { code, category: 'ui', severity: 'error', retryable: false, i18nKey: `errors.${code}`, message: code };

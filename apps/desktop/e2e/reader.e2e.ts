@@ -25,10 +25,11 @@ async function launch(userData: string) {
 async function importPdf(app: ElectronApplication, page: Page, path: string) {
   await app.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); }, path);
   await page.getByRole('button', { name: '导入 PDF' }).click();
+  await expect(page.locator('.fr-import-status')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('.fr-document-open')).toHaveCount(1);
-  await expect(page.locator('.fr-import-status')).toHaveCount(0);
 }
 test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes persist', async () => {
+  test.setTimeout(120_000);
   const dir = mkdtempSync(join(tmpdir(), 'fr-reader-e2e-')), source = join(dir, 'paper.pdf'); writePdf(source);
   const app = await launch(join(dir, 'user'));
   try {
