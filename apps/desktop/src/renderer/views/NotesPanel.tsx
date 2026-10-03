@@ -4,14 +4,14 @@ import type { Text } from '../i18n/text';
 import { errorKey, unwrap } from '../ipc/api';
 
 type Props = { docId: string; items: Annotation[]; t: Text; onAdd: (kind: 'highlight' | 'note' | 'bookmark', note?: string) => Promise<void>;
-  onDelete: (id: string) => void; onJump: (id: string) => void; onError: (key: string) => void };
+  canHighlight: boolean; onDelete: (id: string) => void; onJump: (id: string) => void; onError: (key: string) => void };
 export function NotesPanel(p: Props) {
   const [note, setNote] = useState(''), [markdown, setMarkdown] = useState('');
   useEffect(() => { void unwrap(window.fr.notes.exportMarkdown({ docId: p.docId, includeAnnotations: false, saveTo: 'none' }))
     .then((r) => setMarkdown(r.markdown)).catch((e: unknown) => p.onError(errorKey(e))); }, [p.docId, p.onError]);
   return <aside className="fr-notes-panel" aria-label={p.t('notes.title')}>
     <h2>{p.t('notes.title')}</h2><div className="fr-note-actions">
-      <button onClick={() => void p.onAdd('highlight')}>{p.t('notes.highlight')}</button>
+      <button disabled={!p.canHighlight} onClick={() => void p.onAdd('highlight')}>{p.t('notes.highlight')}</button>
       <button onClick={() => void p.onAdd('bookmark')}>{p.t('notes.bookmark')}</button></div>
     <label>{p.t('notes.new')}<textarea id="fr-note-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={p.t('notes.placeholder')} /></label>
     <button className="fr-primary" disabled={!note.trim()} onClick={() => void p.onAdd('note', note).then(() => setNote(''))}>{p.t('notes.add')}</button>

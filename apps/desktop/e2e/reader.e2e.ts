@@ -20,7 +20,7 @@ async function importPdf(app: ElectronApplication, page: Page, path: string) {
   await expect(page.locator('.fr-import-status')).toHaveCount(0, { timeout: 30_000 });
   await expect(page.locator('.fr-document-open')).toHaveCount(1);
 }
-test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes persist', async () => {
+test('E2/E4/E6/E11/E14/E15: dedup, tags/FTS, five exact restores, notes and renderer recovery', async () => {
   test.setTimeout(120_000);
   const dir = mkdtempSync(join(tmpdir(), 'fr-reader-e2e-')), source = join(dir, 'paper.pdf'); writePdf(source);
   const app = await launch(join(dir, 'user'));
@@ -39,12 +39,10 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
       await page.getByRole('button', { name: '返回文献库' }).click();
     }
     await page.locator('.fr-document-open').click();
-    const reloaded = page.waitForEvent('load');
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents.forcefullyCrashRenderer());
-    await reloaded;
-    await expect(page.locator('.fr-status')).toHaveAttribute('data-focused-sentence', 's_b_1_1_2');
     await page.getByRole('button', { name: '笔记', exact: true }).click();
     await page.getByRole('button', { name: '高亮', exact: true }).click();
+    await expect(page.locator('.fr-highlight-yellow')).toHaveCount(1);
+    await expect(page.getByRole('alert')).toHaveCount(0);
     await page.getByLabel('当前句子的笔记').fill('Offline insight'); await page.getByRole('button', { name: '保存笔记' }).click();
     await expect(page.getByText('Offline insight')).toBeVisible();
     await page.screenshot({ path: 'test-results/m1-reader.png' });
@@ -52,6 +50,15 @@ test('E2/E4/E6/E11/E15: dedup, tags/FTS, five exact restores, offline notes pers
     const reopened = await launch(join(dir, 'user'));
     try { const p = await reopened.firstWindow(); await p.locator('.fr-document-open').click();
       await p.getByRole('button', { name: '笔记', exact: true }).click(); await expect(p.getByText('Offline insight')).toBeVisible();
+      await expect(p.locator('.fr-highlight-yellow')).toHaveCount(1);
+      await reopened.evaluate(({ BrowserWindow }) => new Promise<void>((resolve) => {
+        const contents = BrowserWindow.getAllWindows()[0]?.webContents;
+        if (!contents) throw new Error('Missing reader window');
+        contents.once('did-finish-load', () => resolve()); contents.forcefullyCrashRenderer();
+      }));
+      await expect.poll(() => reopened.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.webContents
+        .executeJavaScript("document.querySelector('.fr-status')?.getAttribute('data-focused-sentence')")))
+        .toBe('s_b_1_1_2');
     } finally { await reopened.close(); }
   } finally { if (appProcess.exitCode === null) await app.close(); rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 });

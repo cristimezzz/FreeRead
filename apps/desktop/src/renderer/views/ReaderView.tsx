@@ -8,8 +8,10 @@ import { errorKey, unwrap } from '../ipc/api';
 type Props = { citekey: string; t: Text; onClose: () => void; onError: (key: string) => void };
 export function ReaderView(p: Props) {
   const state = useReader(p.citekey, p.onError), [zoom, setZoom] = useState(1), [notesOpen, setNotesOpen] = useState(false);
+  const [highlightReady, setHighlightReady] = useState(false);
   const scrollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const add = async (kind: 'highlight' | 'note' | 'bookmark', note?: string) => {
+    if (kind === 'highlight' && !highlightReady) return;
     try { await addAnnotation(state, kind, note); } catch (e) { p.onError(errorKey(e)); }
   };
   const close = async () => {
@@ -53,9 +55,9 @@ export function ReaderView(p: Props) {
     <p className="fr-banner">{p.t('reader.banner.quickMode')}{state.session.restored.degraded && ` · ${p.t('reader.banner.positionRestoredDegraded')}`}</p>
     <div className="fr-reader-columns"><ReaderNavigation state={state} t={p.t} />
       <OriginalPane url={state.session.pdfUrl} model={state.model} page={state.jump.page} ratio={state.jump.ratio}
-        focused={state.focused} annotations={state.items} t={p.t} onFocus={state.focus} onScroll={scroll} zoom={zoom} onError={p.onError} />
+        focused={state.focused} annotations={state.items} t={p.t} onFocus={state.focus} onScroll={scroll} zoom={zoom} onError={p.onError} onReady={setHighlightReady} />
       <div className={`fr-notes-container ${notesOpen ? 'fr-panel-open' : ''}`}><NotesPanel docId={state.session.docId} items={state.items} t={p.t} onAdd={add}
-        onJump={state.navigate} onError={p.onError} onDelete={(id) => {
+        canHighlight={highlightReady} onJump={state.navigate} onError={p.onError} onDelete={(id) => {
           void unwrap(window.fr.notes.delete({ docId: state.session?.docId ?? '', annotationId: id })).then(state.refresh).catch((e: unknown) => p.onError(errorKey(e)));
         }} /></div></div>
     <footer className="fr-status" data-focused-sentence={state.focused} data-saved={state.saved}>{p.t('reader.page')} {state.currentPage} / {state.session.pageCount}

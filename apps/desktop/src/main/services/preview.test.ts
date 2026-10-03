@@ -1,5 +1,5 @@
 import { test, expect } from 'vitest';
-import { chromium } from '@playwright/test';
+import { chromium, expect as expectPage } from '@playwright/test';
 import { createServer } from 'node:http';
 import { readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve, extname } from 'node:path';
@@ -57,6 +57,8 @@ test.runIf(process.env['FR_UI_PREVIEW'] === '1')('M1 real services + system brow
     await page.locator('[data-sentence-id="s_b_1_1_2"]').focus();
     await page.waitForFunction(() => document.querySelector('.fr-status')?.getAttribute('data-saved') === 'true');
     await page.getByRole('button', { name: '高亮', exact: true }).click();
+    await expectPage(page.locator('.fr-highlight-yellow')).toHaveCount(1);
+    await expectPage(page.getByRole('alert')).toHaveCount(0);
     await page.getByLabel('当前句子的笔记').fill('A local insight.'); await page.getByRole('button', { name: '保存笔记' }).click();
     await page.getByText('A local insight.').waitFor();
     await page.screenshot({ path: 'test-results/m1-reader-browser.png' });

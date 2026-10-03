@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
@@ -10,12 +10,19 @@ import { errorKey } from '../ipc/api';
 GlobalWorkerOptions.workerSrc = workerUrl;
 type Props = { url: string; model: DocAnchorModel; page: number; ratio: number; focused: string;
   annotations: Annotation[]; t: Text; onFocus: (id: string) => void; onScroll: (page: number, ratio: number) => void;
-  onError: (key: string) => void; zoom: number };
+  onError: (key: string) => void; onReady: (ready: boolean) => void; zoom: number };
 export function OriginalPane(props: Props) {
   const root = useRef<HTMLDivElement>(null);
   const userScrolled = useRef(false);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null), [width, setWidth] = useState(640);
   const [visible, setVisible] = useState(new Set([props.page]));
+  const [readyPages, setReadyPages] = useState(new Set<number>());
+  const pageReady = useCallback((page: number, ready: boolean) => setReadyPages((old) => {
+    if (old.has(page) === ready) return old;
+    const next = new Set(old); if (ready) next.add(page); else next.delete(page); return next;
+  }), []);
+  const focusedPage = props.model.sentences.find((s) => s.id === props.focused)?.page;
+  useEffect(() => props.onReady(focusedPage !== undefined && readyPages.has(focusedPage)), [focusedPage, readyPages, props.onReady]);
   const pages = Object.keys(props.model.pageSize).map(Number);
   useEffect(() => {
     const task = getDocument({ url: props.url, useSystemFonts: true,
@@ -53,7 +60,7 @@ export function OriginalPane(props: Props) {
       const scale = Math.min(width / size.w, 1.7) * props.zoom;
       return <div key={page} data-page={page} className="fr-pdf-page" style={{ width: size.w * scale, height: size.h * scale }}>
         {pdf && visible.has(page) && <PdfPage pdf={pdf} model={props.model} page={page} scale={scale} t={props.t}
-          annotations={props.annotations} focused={props.focused} onFocus={props.onFocus} onError={props.onError} />}
+          annotations={props.annotations} focused={props.focused} onFocus={props.onFocus} onError={props.onError} onReady={pageReady} />}
       </div>; })}
   </div>;
 }

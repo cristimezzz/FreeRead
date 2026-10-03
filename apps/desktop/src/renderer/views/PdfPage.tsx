@@ -6,12 +6,14 @@ import type { Text } from '../i18n/text';
 import { errorKey } from '../ipc/api';
 
 type Props = { pdf: PDFDocumentProxy; page: number; scale: number; model: DocAnchorModel;
-  annotations: Annotation[]; focused: string; t: Text; onFocus: (id: string) => void; onError: (key: string) => void };
+  annotations: Annotation[]; focused: string; t: Text; onFocus: (id: string) => void; onError: (key: string) => void;
+  onReady: (page: number, ready: boolean) => void };
 export function PdfPage(props: Props) {
   const canvas = useRef<HTMLCanvasElement>(null), text = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!canvas.current || !text.current) return;
     const target = canvas.current, layer = text.current;
+    props.onReady(props.page, false);
     let stopped = false, cancel = () => undefined as void;
     void props.pdf.getPage(props.page).then(async (page) => {
       if (stopped) return;
@@ -26,10 +28,10 @@ export function PdfPage(props: Props) {
       const textLayer = new TextLayer({ textContentSource: content, container: layer, viewport });
       cancel = () => { task.cancel(); textLayer.cancel(); };
       await textLayer.render();
-      if (!stopped) mapSentences(textLayer, props.model, props.page);
+      if (!stopped) { mapSentences(textLayer, props.model, props.page); props.onReady(props.page, true); }
     }).catch((cause: unknown) => { if (!stopped) props.onError(errorKey(cause)); });
-    return () => { stopped = true; cancel(); target.width = 0; target.height = 0; layer.replaceChildren(); };
-  }, [props.pdf, props.page, props.scale, props.model, props.onError]);
+    return () => { stopped = true; props.onReady(props.page, false); cancel(); target.width = 0; target.height = 0; layer.replaceChildren(); };
+  }, [props.pdf, props.page, props.scale, props.model, props.onError, props.onReady]);
   return <div className="fr-pdf-content" style={{ '--scale-factor': props.scale, '--total-scale-factor': props.scale } as React.CSSProperties}>
     <canvas ref={canvas} aria-label={`${props.t('reader.page')} ${props.page}`} />
     <div ref={text} className="textLayer" onClick={(event) => {

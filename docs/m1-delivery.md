@@ -34,7 +34,7 @@
 | `THIRD_PARTY_NOTICES.md` | 7798 |
 | `apps/desktop/e2e/electron-app.ts` | 16 |
 | `apps/desktop/e2e/pdf-fixture.ts` | 20 |
-| `apps/desktop/e2e/reader.e2e.ts` | 105 |
+| `apps/desktop/e2e/reader.e2e.ts` | 112 |
 | `apps/desktop/e2e/shell.e2e.ts` | 38 |
 | `apps/desktop/electron.vite.config.ts` | 8 |
 | `apps/desktop/package.json` | 25 |
@@ -51,7 +51,7 @@
 | `apps/desktop/src/main/services/library-service.ts` | 168 |
 | `apps/desktop/src/main/services/note-service.ts` | 121 |
 | `apps/desktop/src/main/services/pdf-worker.ts` | 32 |
-| `apps/desktop/src/main/services/preview.test.ts` | 94 |
+| `apps/desktop/src/main/services/preview.test.ts` | 96 |
 | `apps/desktop/src/main/services/reader-service.ts` | 38 |
 | `apps/desktop/src/preload/bridge.generated.ts` | 112 |
 | `apps/desktop/src/renderer/env.d.ts` | 1 |
@@ -65,12 +65,12 @@
 | `apps/desktop/src/renderer/shell.css` | 23 |
 | `apps/desktop/src/renderer/views/LibraryView.tsx` | 65 |
 | `apps/desktop/src/renderer/views/NotesPanel.tsx` | 30 |
-| `apps/desktop/src/renderer/views/OriginalPane.tsx` | 59 |
-| `apps/desktop/src/renderer/views/PdfPage.tsx` | 67 |
-| `apps/desktop/src/renderer/views/ReaderView.tsx` | 82 |
+| `apps/desktop/src/renderer/views/OriginalPane.tsx` | 66 |
+| `apps/desktop/src/renderer/views/PdfPage.tsx` | 69 |
+| `apps/desktop/src/renderer/views/ReaderView.tsx` | 84 |
 | `apps/desktop/src/renderer/views/use-reader.ts` | 91 |
 | `docs/adr/ADR-14-m1-reading.md` | 17 |
-| `docs/m1-delivery.md` | 89 |
+| `docs/m1-delivery.md` | 93 |
 | `docs/m1-local-acceptance.md` | 41 |
 | `packages/core/src/anchor/m1-model.ts` | 46 |
 | `packages/core/src/index.ts` | 16 |
