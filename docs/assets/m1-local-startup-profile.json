@@ -1,0 +1,14 @@
+{
+  "kind": "diagnostic, not acceptance timing",
+  "runtime": "Electron 39.8.10 / Chromium 142.0.7444.265",
+  "os": "Windows 10.0.26300.9457 x64",
+  "cpu": "Intel Core i5-12500H",
+  "events": [
+    { "name": "gpu::GpuInit::InitializeAndStartSandbox", "durationMs": 955.622 },
+    { "name": "RenderThreadImpl::EstablishGpuChannelSync", "durationMs": 782.851 },
+    { "name": "eglInitializeFn display", "durationMs": 550.997 },
+    { "name": "Load gles_library", "durationMs": 229.916 },
+    { "name": "Load egl_library", "durationMs": 95.969 }
+  ],
+  "note": "Nested and overlapping events must not be added together. Trace flags add overhead. No GPU or sandbox disabling. Raw trace remains in ignored artifacts/diagnostics."
+}

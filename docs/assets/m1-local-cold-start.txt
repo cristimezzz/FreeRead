@@ -75,3 +75,18 @@ Final repeat 5
 Cold launch: 1063 ms (budget 2500 ms, no debugger)
 Native bootstrap: 320 ms; main-to-first-frame: 743 ms
 Exit code: 0
+
+Regression fix bb65f9a, new staged path, first launch, no debugger:
+Cold launch: 2695 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1689 ms; main-to-first-frame: 1006 ms
+Result: failed; packaged E2E 4/4 passed afterward.
+
+Lazy reader candidate bb65f9a+dirty, new staged path, first launch:
+Cold launch: 2674 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1646 ms; main-to-first-frame: 1028 ms
+Result: failed; packaged E2E 4/4 passed afterward.
+
+Same lazy reader code, package built directly in a regular directory, first launch:
+Cold launch: 2733 ms (budget 2500 ms, no debugger)
+Native bootstrap: 1779 ms; main-to-first-frame: 954 ms
+Result: failed; no prior process was started from this package path.

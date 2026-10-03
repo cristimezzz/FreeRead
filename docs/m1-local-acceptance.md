@@ -10,15 +10,15 @@
 | GPU | Intel Iris Xe / NVIDIA RTX 3050 Ti Laptop；另有 GameViewer Virtual Display Adapter |
 | 运行时 | Electron 39.8.10，Chromium 142.0.7444.265，Node 22.22.1 |
 | 工程工具 | Node 24.18.1，pnpm 11.21.0 |
-| 打包版 | M1 Windows x64；构建清单为 `7c0d62d` + dirty，包含本次依赖内联/验证器延迟编译修改 |
-| 可执行文件 SHA256 | `94BE5DB1D8DFBA4DF4B62410BAB5FDA8027DAF2106682394CD2AE951DA81FD40` |
-| app.asar SHA256 | `6E2638B9957695899BB9A9DD0BB5E8F4EA963E63D8E1B692DE16E4FBEDCF2906` |
+| 打包版 | M1 Windows x64；构建清单为 `bb65f9a` + dirty，包含阅读模块按需加载与错误边界 |
+| 可执行文件 SHA256 | `1EA5B49F7C32A5ECEE739CB145D368955857F8A4682451F681E9AE1C9B7F0F74` |
+| app.asar SHA256 | `7EE9CC7BD2884D6D60C89A021C1711DE8B007BBE3F8AD8B078FF84F0D49BFE7B` |
 
 ## 本机原生结果
 
 - 打包版完整 E2E：4/4，通过导入/去重、标签/FTS、标注和笔记重启、renderer 崩溃重载、20/20 进程树强杀恢复，以及沙箱/零 Node 特权断言。
 - E4 加强验证：将原来仅往返文献库的五次恢复，改为真正关闭并重启整个应用；单独实跑 1/1 通过，之后也包含在优化版完整 4/4 E2E 中通过。
-- 候选版 1000 页首屏 402.93 ms、连续滚动 10 秒 120.14 fps、canvas ≤ 5，均通过。机器参数和运行时版本见 [原始测量 JSON](assets/m1-local-performance.json)；该样本是合成文本 PDF。
+- 按需加载版 1000 页首屏 922.19 ms（包含首次加载阅读模块）、连续滚动 10 秒 120.15 fps、canvas ≤ 5，均通过。机器参数和运行时版本见 [原始测量 JSON](assets/m1-local-performance.json)；该样本是合成文本 PDF。旧候选版 402.93 ms / 120.14 fps 的 [JSON](assets/m1-candidate-performance.json) 保留，不能与新代码混用。
 - 独立冷启动：每次启动新进程、使用新用户目录，不连接调试器。全部结果见 [冷启动原始记录](assets/m1-local-cold-start.txt)。旧版两个全新目录的首次启动分别为 3269 / 3308 ms；内联 AJV/Zod 后为 3014 ms，再延迟编译未使用的验证器后为 2851 ms。优化版在已有安装路径中的五次复测为 988–1146 ms，均通过。首次启动超时仍保留，不据后续通过删除失败或定义采样豁免。
 
 | 旧版测量 | 完整启动 | native bootstrap | main 至首帧 | 2500 ms 门禁 |
@@ -44,6 +44,10 @@
 软件渲染诊断对照（额外 `--disable-gpu`）首次 2749 ms，仍失败；正式应用和验收脚本未加入该开关。`native bootstrap` 是脚本的阶段名，实际包括原生初始化与主模块加载/顶层求值，因为 `app.main` 在静态 imports 后输出。首次路径的额外 I/O / 系统扫描原因仍未证实。建议延长首次冷启动的定位与优化时间，保持 2500 ms 预算。规范要求的自托管性能 runner 仍未配置；三平台 hosted CI 仅作为平台冒烟，完整性能验收保持部分完成。
 
 上述内联 + 延迟编译数据来自候选提交 `4f98cbb`，不能作为后续修复版本的正式验收结果。[该提交的 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37122082721) 在三平台开发版重启时失败。本机使用普通临时目录的 Electron 运行时也复现该失败；恢复持久化文件验证器的提前编译后，对照完整开发版测试 4/4 通过。IPC 验证器仍按首次请求编译并缓存，未删除校验或增加重试。更深层的加载失败原因尚未证实；主窗口局部引用假设未能修复，相关实验改动已撤回。
+
+修复 `bb65f9a` 的 [三平台 CI](https://github.com/cristimezzz/FreeRead/actions/runs/37123369010) 全部通过；本机打包版完整 4/4 也通过，首次冷启动为 2695 ms，仍失败。后续将阅读模块按需加载，入口脚本由 744.38 kB 降至 237.65 kB，阅读模块 507.32 kB 在打开文献时加载；全体前端 gzip 仍约 611 KiB。E1 断言空库未加载阅读模块，并模拟模块请求失败，确认 `FR-UI-001` 提示及返回文献库可用。该版首次为 2674 ms（1646 + 1028），直接在普通目录构建再首次运行为 2733 ms（1779 + 954），两者仍失败，不归因于二次复制。
+
+限定类别的 Chromium 启动 trace 显示 GPU 初始化约 955.62 ms，renderer 同步等待 GPU channel 约 782.85 ms；嵌套 EGL 初始化约 551 ms，加载 GLES/EGL 库约 230/96 ms。数字来自诊断，包含 trace 开销、嵌套及重叠，不能相加或替代无调试器验收。[脱敏摘要](assets/m1-local-startup-profile.json) 与 [Chromium trace 参数定义](https://chromium.googlesource.com/chromium/src/+/a0e9c1e80c1bd2ab242a969fd460af4a07cae15e/components/tracing/common/tracing_switches.cc) 可复核；首次路径的更早耗时尚未定位。用户已授权一次性本机自托管 runner，固定机器 CI 正在准备，不安装常驻服务。
 
 ## 启动故障根因与处理
 

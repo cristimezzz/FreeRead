@@ -10,6 +10,8 @@ test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async 
   try {
     const page = await app.firstWindow();
     await expect(page.getByRole('heading', { name: '文献库', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => performance.getEntriesByType('resource')
+      .some((entry) => /\/ReaderView-[^/]+\.js/.test(entry.name)))).toBe(false);
     await page.getByRole('button', { name: 'English' }).click();
     await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
     expect(await page.locator('html').getAttribute('lang')).toBe('en');
@@ -31,6 +33,13 @@ test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async 
         contextIsolation: preferences?.contextIsolation };
     })).toEqual({ sandbox: true, nodeIntegration: false, contextIsolation: true });
     await page.screenshot({ path: 'test-results/m1-library.png', fullPage: true });
+    await app.evaluate(({ session }) => session.defaultSession.webRequest.onBeforeRequest(
+      { urls: ['http://*/*', 'https://*/*', 'file://*/*ReaderView-*.js'] },
+      (_details, callback) => callback({ cancel: true })));
+    await page.evaluate(() => { location.hash = '/reader/unavailable'; });
+    await expect(page.getByRole('alert')).toContainText('The view failed');
+    await page.getByRole('button', { name: 'Back to library', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Library', exact: true })).toBeVisible();
   } finally {
     await app.close();
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
