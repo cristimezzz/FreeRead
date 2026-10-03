@@ -1,7 +1,7 @@
 import { existsSync, createReadStream, readdirSync, statSync, lstatSync, renameSync } from 'node:fs';
 import { copyFile, open } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { migrateMeta, makeCitekey } from '@freeread/core';
 import type { DocMeta, DocAnchorModel, IpcPayloads } from '@freeread/core';
 import { createFileValidator } from '../ipc/validate';
@@ -19,7 +19,9 @@ export class LibraryService {
   constructor(readonly root: string, readonly index: IndexStore,
     readonly extract: typeof extractPdf = extractPdf) { ensureDirectory(root); }
   path(docId: string, file: string): string {
-    return docPath(this.root, this.get(docId).meta.citekey, file);
+    const path = docPath(this.root, this.get(docId).meta.citekey, file);
+    contained(this.root, existsSync(path) ? path : dirname(path));
+    return path;
   }
   get(docId: string): StoredDocument {
     const item = this.documents.get(docId);

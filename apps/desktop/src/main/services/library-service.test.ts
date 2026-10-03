@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync, rmdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, renameSync, mkdirSync, rmdirSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -101,6 +101,13 @@ test('notes Markdown is file-backed, and remove moves user data to trash', async
   expect(await notes.markdown(docId, false)).toContain('More');
   const removed = library.remove({ docId, deleteFiles: true });
   expect(removed.trashed).toBe(true); expect(library.list({ offset: 0, limit: 10 }).total).toBe(0);
+});
+test('note writes reject a document directory replaced by an external junction', async () => {
+  await importPaper();
+  const documentDir = join(library.root, library.get(docId).meta.citekey), outside = join(dir, 'outside');
+  renameSync(documentDir, outside); symlinkSync(outside, documentDir, 'junction');
+  expect(() => notes.upsert(docId, annotation())).toThrow('FR-IPC-002');
+  await expect(notes.importMarkdown({ docId, markdown: 'escaped', mode: 'replace' })).rejects.toThrow('FR-IPC-002');
 });
 test('corrupt SQLite is preserved and rebuilt from files', async () => {
   await importPaper(); index.db.close();

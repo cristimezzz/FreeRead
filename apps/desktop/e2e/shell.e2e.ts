@@ -12,6 +12,7 @@ test('E1 M1 offline library: bilingual, sandboxed, no ambient privilege', async 
     args: [resolve('apps/desktop'), `--user-data-dir=${userData}`],
     env: environment,
   });
+  app.process().stderr?.on('data', (bytes: Buffer) => console.error(bytes.toString()));
   try {
     const page = await app.firstWindow();
     await expect(page.getByRole('heading', { name: '文献库', exact: true })).toBeVisible();

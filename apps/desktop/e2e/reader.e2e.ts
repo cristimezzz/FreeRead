@@ -7,7 +7,13 @@ import { writePdf } from './pdf-fixture';
 
 async function launch(userData: string) {
   const env = { ...process.env, ELECTRON_RENDERER_URL: '' }; delete env['ELECTRON_RUN_AS_NODE'];
-  return electron.launch({ chromiumSandbox: true, args: [resolve('apps/desktop'), `--user-data-dir=${userData}`], env });
+  const app = await electron.launch({ chromiumSandbox: true, args: [resolve('apps/desktop'), `--user-data-dir=${userData}`], env });
+  app.process().stderr?.on('data', (bytes: Buffer) => console.error(bytes.toString()));
+  app.on('window', (page) => {
+    page.on('pageerror', (error) => console.error(error));
+    page.on('console', (message) => { if (message.type() === 'error') console.error(message.text()); });
+  });
+  return app;
 }
 async function importPdf(app: ElectronApplication, page: Page, path: string) {
   await app.evaluate(({ dialog }, file) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [file] }); }, path);

@@ -8,7 +8,7 @@ import { ReaderService } from './services/reader-service';
 import { registerHandlers } from './ipc/handlers';
 import { servePdf } from './infra/pdf-protocol';
 import { loadConfig } from './infra/config';
-import { ensureDirectory, installationId } from './infra/files';
+import { ensureDirectory, installationId, fail } from './infra/files';
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'fr-file', privileges: { standard: true, secure: true,
   supportFetchAPI: true, stream: true, corsEnabled: true } }]);
@@ -27,7 +27,10 @@ async function createWindow(): Promise<void> {
   });
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
-  window.webContents.on('render-process-gone', () => { window.webContents.reload(); });
+  window.webContents.on('render-process-gone', (_event, details) => {
+    console.error(fail('FR-UI-003', details).toWire(), details);
+    window.webContents.reload();
+  });
   window.once('ready-to-show', () => {
     window.show();
     if (process.argv.includes('--fr-benchmark')) {
