@@ -6,17 +6,24 @@
 """
 
 import argparse
+import asyncio
+import logging
 import os
 import secrets
 import sys
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
+from freeread.api import jobs, settings
+from freeread.config import default_data_dir
+from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
 
 # Tauri WebView 的源（Windows 为 http://tauri.localhost，macOS/Linux 为 tauri://localhost）
@@ -29,12 +36,32 @@ ALLOWED_ORIGINS = [
 ]
 
 
-def create_app(token: str | None = None) -> FastAPI:
+def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAPI:
+    """组装应用。打开数据库（必要时迁移）是同步完成的；任务 worker 随 lifespan 启停。"""
+
     def verify_token(x_freeread_token: str | None = Header(default=None)) -> None:
         if token is not None and x_freeread_token != token:
             raise HTTPException(status_code=401, detail="invalid session token")
 
-    app = FastAPI(title="FreeRead Core", version=__version__, dependencies=[Depends(verify_token)])
+    ctx = AppContext.open(data_dir or default_data_dir())
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        ctx.bus.bind_loop(asyncio.get_running_loop())
+        await ctx.worker.start()
+        try:
+            yield
+        finally:
+            await ctx.worker.stop()
+            ctx.close()
+
+    app = FastAPI(
+        title="FreeRead Core",
+        version=__version__,
+        dependencies=[Depends(verify_token)],
+        lifespan=lifespan,
+    )
+    app.state.ctx = ctx
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ALLOWED_ORIGINS,
@@ -46,6 +73,8 @@ def create_app(token: str | None = None) -> FastAPI:
     def health() -> dict:
         return {"status": "ok", "version": __version__, "ir_schema_version": IR_SCHEMA_VERSION}
 
+    app.include_router(jobs.router)
+    app.include_router(settings.router)
     return app
 
 
@@ -108,13 +137,17 @@ def run(argv: list[str] | None = None) -> None:
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", default=None, help="会话 token；省略时随机生成并打印")
     parser.add_argument("--parent-pid", type=int, default=None, help="父进程退出后自动退出")
+    parser.add_argument(
+        "--data-dir", type=Path, default=None, help="数据目录；默认 %%APPDATA%%/FreeRead"
+    )
     args = parser.parse_args(argv)
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     token = args.token or secrets.token_urlsafe(24)
     if args.token is None:
         print(f"session token: {token}")
 
-    config = uvicorn.Config(create_app(token), host="127.0.0.1", port=args.port)
+    config = uvicorn.Config(create_app(token, args.data_dir), host="127.0.0.1", port=args.port)
     server = uvicorn.Server(config)
 
     if args.parent_pid is not None:

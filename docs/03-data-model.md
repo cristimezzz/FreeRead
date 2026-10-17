@@ -132,7 +132,8 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 ### translations
 | 列 | 类型 | 说明 |
 |---|---|---|
-| doc_id, block_id, lang | | 联合唯一（加上 model, prompt_version） |
+| id | INTEGER PK | 自增 |
+| doc_id, block_id, lang | | 联合唯一（加上 model, prompt_version）；block_id 不设外键，重新解析时按 IR §8 迁移 |
 | model | TEXT | provider/model |
 | prompt_version | TEXT | 如 `translate@3` |
 | text | TEXT | 含占位符的译文 |
@@ -220,6 +221,7 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 | payload | JSON |
 | status | `queued` / `running` / `done` / `failed` / `cancelled` |
 | progress | REAL 0–1 |
+| message | 当前进度说明 |
 | depends_on NULL | 前置 job id |
 | attempts, error | |
 | created_at, started_at, finished_at | |

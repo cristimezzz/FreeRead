@@ -41,7 +41,7 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def test_core_exits_after_parent_killed():
+def test_core_exits_after_parent_killed(tmp_path):
     parent = subprocess.Popen(SLEEPER)
     port = _free_port()
     core = subprocess.Popen(
@@ -55,6 +55,8 @@ def test_core_exits_after_parent_killed():
             "t",
             "--parent-pid",
             str(parent.pid),
+            "--data-dir",
+            str(tmp_path),
         ],
     )
     try:
