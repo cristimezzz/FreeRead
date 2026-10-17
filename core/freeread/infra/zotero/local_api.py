@@ -18,6 +18,16 @@ DEFAULT_BASE_URL = "http://localhost:23119/api/users/0/"
 PAGE_SIZE = 100
 SKIP_TYPES = frozenset({"attachment", "note", "annotation"})
 YEAR_RE = re.compile(r"\b(\d{4})\b")
+# 不同条目类型的"发表于"字段
+VENUE_FIELDS = (
+    "publicationTitle",
+    "proceedingsTitle",
+    "conferenceName",
+    "bookTitle",
+    "repository",
+    "university",
+    "websiteTitle",
+)
 
 
 class ZoteroUnavailableError(RuntimeError):
@@ -45,6 +55,8 @@ class LocalApiConnector:
             headers={"Zotero-API-Version": "3"},
         )
         self.data_dir = data_dir or default_data_dir()
+        # 最近一次响应头 Last-Modified-Version，即本次读取时的库版本
+        self.library_version: int | None = None
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -72,6 +84,8 @@ class LocalApiConnector:
                     f"Zotero 本地 API 返回 {resp.status_code}，可能未在设置中启用本地 API。"
                 )
             resp.raise_for_status()
+            if version := resp.headers.get("Last-Modified-Version"):
+                self.library_version = int(version)
             page = resp.json()
             out.extend(page)
             total = resp.headers.get("Total-Results")
@@ -96,12 +110,27 @@ class LocalApiConnector:
         att_rows = await self._get_all("items", {"itemType": "attachment", **params})
 
         attachments: dict[str, list[Attachment]] = {}
+        standalone: list[Item] = []
         for r in att_rows:
             d = r["data"]
             parent = d.get("parentItem")
-            if not parent:
-                continue
-            attachments.setdefault(parent, []).append(_attachment_from_row(r))
+            if parent:
+                attachments.setdefault(parent, []).append(_attachment_from_row(r))
+            elif d.get("contentType") == "application/pdf":
+                # 没有父条目的独立 PDF 也作为文献导入，标题取附件标题或文件名
+                att = _attachment_from_row(r)
+                standalone.append(
+                    Item(
+                        key=r["key"],
+                        version=r.get("version", d.get("version", 0)),
+                        item_type="attachment",
+                        title=d.get("title") or att.filename or r["key"],
+                        collection_keys=d.get("collections", []),
+                        tags=[t["tag"] for t in d.get("tags", [])],
+                        attachments=[att],
+                        extra={"standalone": True},
+                    )
+                )
 
         items = []
         for r in rows:
@@ -118,6 +147,7 @@ class LocalApiConnector:
                     creators=d.get("creators", []),
                     year=int(m.group(1)) if m else None,
                     doi=d.get("DOI") or None,
+                    venue=next((d[f] for f in VENUE_FIELDS if d.get(f)), None),
                     abstract=d.get("abstractNote") or None,
                     collection_keys=d.get("collections", []),
                     tags=[t["tag"] for t in d.get("tags", [])],
@@ -125,7 +155,7 @@ class LocalApiConnector:
                     extra={"language": d.get("language") or None},
                 )
             )
-        return items
+        return items + standalone
 
     async def resolve_attachment(self, item: Item, attachment: Attachment) -> Path | None:
         candidates: list[Path] = []

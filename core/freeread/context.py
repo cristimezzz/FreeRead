@@ -14,6 +14,8 @@ from freeread.infra.jobs.worker import JobWorker
 from freeread.infra.llm.default_gateway import DefaultGateway
 from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
+from freeread.infra.zotero.local_api import LocalApiConnector
+from freeread.services.library import LibraryService
 from freeread.services.settings import SettingsService
 
 
@@ -26,6 +28,7 @@ class AppContext:
     jobs: JobQueue
     worker: JobWorker
     settings: SettingsService
+    library: LibraryService
     secrets: SecretStore
     prompts: PromptRegistry
     llm: DefaultGateway
@@ -42,6 +45,9 @@ class AppContext:
         sessions = make_session_factory(engine)
         bus = EventBus()
         jobs = JobQueue(sessions, bus)
+        worker = JobWorker(jobs, bus)
+        library = LibraryService(sessions, paths, jobs, LocalApiConnector)
+        worker.register("sync", library.run_sync_job)
         settings = SettingsService(sessions)
         secrets = secrets if secrets is not None else SecretStore.from_env()
         return cls(
@@ -50,8 +56,9 @@ class AppContext:
             sessions=sessions,
             bus=bus,
             jobs=jobs,
-            worker=JobWorker(jobs, bus),
+            worker=worker,
             settings=settings,
+            library=library,
             secrets=secrets,
             prompts=PromptRegistry(),
             llm=DefaultGateway(settings, sessions, secrets),
