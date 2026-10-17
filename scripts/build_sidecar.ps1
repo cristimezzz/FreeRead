@@ -48,10 +48,13 @@ $Triple = (rustc -vV | Select-String "^host: (.+)$").Matches[0].Groups[1].Value
 Write-Host "==> target triple: $Triple"
 
 # uvicorn 按字符串动态加载 loop / protocol 实现，需要显式收集。
+# Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上。
+$Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Common = @(
     "--noconfirm", "--clean", "--console",
     "--name", "freeread-core",
     "--collect-submodules", "uvicorn",
+    "--add-data", "${Migrations};freeread/infra/db/migrations",
     "--workpath", (Join-Path $Build "work"),
     "--specpath", $Build,
     $Entry

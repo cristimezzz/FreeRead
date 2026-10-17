@@ -3,16 +3,16 @@ from fastapi.testclient import TestClient
 from freeread.main import create_app
 
 
-def test_health_requires_token():
-    client = TestClient(create_app(token="secret"))
+def test_health_requires_token(tmp_path):
+    client = TestClient(create_app(token="secret", data_dir=tmp_path))
     assert client.get("/health").status_code == 401
     resp = client.get("/health", headers={"X-FreeRead-Token": "secret"})
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
 
 
-def test_cors_preflight_from_tauri_webview():
-    client = TestClient(create_app(token="secret"))
+def test_cors_preflight_from_tauri_webview(tmp_path):
+    client = TestClient(create_app(token="secret", data_dir=tmp_path))
     resp = client.options(
         "/health",
         headers={
@@ -23,3 +23,8 @@ def test_cors_preflight_from_tauri_webview():
     )
     assert resp.status_code == 200
     assert resp.headers["access-control-allow-origin"] == "http://tauri.localhost"
+
+
+def test_all_routes_require_token(client):
+    for path in ("/jobs", "/settings"):
+        assert client.get(path, headers={"X-FreeRead-Token": "wrong"}).status_code == 401
