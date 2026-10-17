@@ -9,13 +9,13 @@
 
 目标：消除最大的技术风险，确定 IR。
 
-- [ ] 建立评测集：20–50 篇代表性 PDF（双栏、公式密集、表格多、扫描版、中文论文、长附录）。
-- [ ] 对比至少两个高质量解析引擎 + PyMuPDF 快速模式：块类型准确率、阅读顺序、公式质量、耗时、显存占用。
-- [ ] 用选定引擎实现 Normalizer 原型，输出符合 [IR 0.1](02-document-ir.md) 的 JSON。
-- [ ] 验证 Tauri 2 + Python sidecar 在 Windows 上的打包、启动时间、进程退出清理。
-- [ ] 验证 Zotero 7 本地 API 能取到条目、分类和附件路径。
+- [x] 建立评测集：20–50 篇代表性 PDF（双栏、公式密集、表格多、扫描版、中文论文、长附录）。（本地 Zotero 库 31 篇，[清单](../core/tests/fixtures/pdfs/manifest.yaml)）
+- [x] 对比至少两个高质量解析引擎 + PyMuPDF 快速模式：块类型准确率、阅读顺序、公式质量、耗时、显存占用。（MinerU / Docling / PyMuPDF，Marker 因 4GB 显存下过慢移除；[报告](m0/parser-eval.md)）
+- [x] 用选定引擎实现 Normalizer 原型，输出符合 [IR 0.1](02-document-ir.md) 的 JSON。（四个引擎的 Normalizer，校验问题 0）
+- [x] 验证 Tauri 2 + Python sidecar 在 Windows 上的打包、启动时间、进程退出清理（[结果](m0-tauri-sidecar.md)）。
+- [x] 验证 Zotero 7 本地 API 能取到条目、分类和附件路径。（[结果](m0/zotero-local-api.md)）
 
-**交付**：评测报告、ADR-0003 定稿、IR 0.1 定稿。
+**交付**：评测报告、ADR-0003 定稿、IR 0.1 定稿。——已完成，见 [M0 总结](m0/README.md)。
 
 ## M1 MVP：导入、重排、翻译（4–6 周）
 

@@ -1,0 +1,7 @@
+# Advanced Data Analysis for FL-SMLM (Frontiers)
+pages:
+  0:
+    drop: [0, 4, 9, 10, 11, 14, 16, 20]   # 期刊标志 / Check for updates；侧栏重复切分
+    type: {1: title, 2: author_info, 3: author_info, 5: other, 6: other, 7: other, 8: other, 12: other, 13: other, 15: other, 17: other, 18: other, 19: other, 21: other, 22: abstract, 23: other}
+  5:
+    drop: [14]                            # 4.2.1 标题重复

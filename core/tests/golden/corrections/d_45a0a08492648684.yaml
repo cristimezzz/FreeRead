@@ -1,0 +1,9 @@
+# Highly accurate protein structure prediction with AlphaFold (Nature)
+pages:
+  0:
+    drop: [0, 2, 6, 7, 10, 11]
+    type: {1: title, 3: footnote, 4: footnote, 5: footnote, 8: author_info, 9: abstract, 15: footnote}
+  3:
+    drop: [0]
+  6:
+    drop: [62, 65]                     # CC 许可图标、版权行

@@ -1,0 +1,8 @@
+# codonGPT 中文译本（PDFMathTranslate mono）
+pages:
+  0:
+    drop: [10, 11]                     # 期刊标志
+    type: {0: title, 1: author_info, 2: author_info, 3: author_info, 5: abstract, 14: footnote}
+  8:
+    drop: [2, 4]                       # 译文叠排产生的重复行
+  13: {}                               # 复核：Docling 单独检出的参考文献续行保留

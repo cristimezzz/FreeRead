@@ -54,7 +54,9 @@ class InlineKind(StrEnum):
 
 class Anchor(BaseModel):
     page: int = Field(ge=0, description="页码，从 0 开始")
-    bbox: tuple[float, float, float, float] = Field(description="[x0, y0, x1, y1]，PDF 点，左上原点")
+    bbox: tuple[float, float, float, float] = Field(
+        description="[x0, y0, x1, y1]，PDF 点，左上原点"
+    )
 
 
 class Inline(BaseModel):
@@ -152,6 +154,9 @@ class ParserInfo(BaseModel):
     engine_version: str
     normalizer_version: str
     created_at: str
+    pages_parsed: list[int] | None = Field(
+        default=None, description="只解析了部分页时的页码列表；None 表示全部"
+    )
 
 
 class Document(BaseModel):

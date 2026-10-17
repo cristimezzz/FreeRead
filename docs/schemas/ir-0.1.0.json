@@ -1,0 +1,850 @@
+{
+  "$defs": {
+    "Anchor": {
+      "properties": {
+        "page": {
+          "description": "页码，从 0 开始",
+          "minimum": 0,
+          "title": "Page",
+          "type": "integer"
+        },
+        "bbox": {
+          "description": "[x0, y0, x1, y1]，PDF 点，左上原点",
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        }
+      },
+      "required": [
+        "page",
+        "bbox"
+      ],
+      "title": "Anchor",
+      "type": "object"
+    },
+    "Asset": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "image",
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "bbox": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bbox"
+        },
+        "width_px": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Width Px"
+        },
+        "height_px": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Height Px"
+        }
+      },
+      "required": [
+        "id",
+        "path"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
+    "Author": {
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "affiliation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Affiliation"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Author",
+      "type": "object"
+    },
+    "Block": {
+      "properties": {
+        "id": {
+          "pattern": "^b_\\d{4,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/BlockType"
+        },
+        "order": {
+          "minimum": 0,
+          "title": "Order",
+          "type": "integer"
+        },
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Id"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Level"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "inlines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Inline"
+          },
+          "title": "Inlines",
+          "type": "array"
+        },
+        "latex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latex"
+        },
+        "html": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Html"
+        },
+        "asset_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Id"
+        },
+        "caption_of": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption Of"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "anchors": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Anchor"
+          },
+          "title": "Anchors",
+          "type": "array"
+        },
+        "content_hash": {
+          "title": "Content Hash",
+          "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
+        "flags": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "order",
+        "content_hash"
+      ],
+      "title": "Block",
+      "type": "object"
+    },
+    "BlockType": {
+      "enum": [
+        "title",
+        "author_info",
+        "abstract",
+        "heading",
+        "paragraph",
+        "list_item",
+        "equation",
+        "figure",
+        "table",
+        "caption",
+        "code",
+        "footnote",
+        "reference_entry",
+        "other"
+      ],
+      "title": "BlockType",
+      "type": "string"
+    },
+    "Inline": {
+      "properties": {
+        "key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "kind": {
+          "$ref": "#/$defs/InlineKind"
+        },
+        "latex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latex"
+        },
+        "ref_ids": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Ref Ids",
+          "type": "array"
+        },
+        "target_block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Block Id"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "span": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Span"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "title": "Inline",
+      "type": "object"
+    },
+    "InlineKind": {
+      "enum": [
+        "math",
+        "cite",
+        "xref",
+        "url",
+        "code"
+      ],
+      "title": "InlineKind",
+      "type": "string"
+    },
+    "Meta": {
+      "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "authors": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Author"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        },
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Venue"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "zotero_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Zotero Key"
+        }
+      },
+      "title": "Meta",
+      "type": "object"
+    },
+    "PageInfo": {
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        },
+        "height": {
+          "title": "Height",
+          "type": "number"
+        }
+      },
+      "required": [
+        "index",
+        "width",
+        "height"
+      ],
+      "title": "PageInfo",
+      "type": "object"
+    },
+    "ParserInfo": {
+      "properties": {
+        "engine": {
+          "title": "Engine",
+          "type": "string"
+        },
+        "engine_version": {
+          "title": "Engine Version",
+          "type": "string"
+        },
+        "normalizer_version": {
+          "title": "Normalizer Version",
+          "type": "string"
+        },
+        "created_at": {
+          "title": "Created At",
+          "type": "string"
+        },
+        "pages_parsed": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "只解析了部分页时的页码列表；None 表示全部",
+          "title": "Pages Parsed"
+        }
+      },
+      "required": [
+        "engine",
+        "engine_version",
+        "normalizer_version",
+        "created_at"
+      ],
+      "title": "ParserInfo",
+      "type": "object"
+    },
+    "Reference": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "raw_block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Block Id"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "authors": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        },
+        "venue": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Venue"
+        },
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "arxiv_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arxiv Id"
+        },
+        "linked_doc_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linked Doc Id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "Section": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "level": {
+          "title": "Level",
+          "type": "integer"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        },
+        "heading_block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Heading Block Id"
+        },
+        "block_range": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Range"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "level"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "Source": {
+      "properties": {
+        "pdf_sha256": {
+          "title": "Pdf Sha256",
+          "type": "string"
+        },
+        "page_count": {
+          "title": "Page Count",
+          "type": "integer"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageInfo"
+          },
+          "title": "Pages",
+          "type": "array"
+        }
+      },
+      "required": [
+        "pdf_sha256",
+        "page_count",
+        "pages"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "default": "0.1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "doc_id": {
+      "pattern": "^d_[0-9a-f]{16}$",
+      "title": "Doc Id",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/Source"
+    },
+    "meta": {
+      "$ref": "#/$defs/Meta",
+      "default": {
+        "title": null,
+        "authors": [],
+        "year": null,
+        "doi": null,
+        "venue": null,
+        "language": null,
+        "zotero_key": null
+      }
+    },
+    "parser": {
+      "$ref": "#/$defs/ParserInfo"
+    },
+    "sections": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Section"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "blocks": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Block"
+      },
+      "title": "Blocks",
+      "type": "array"
+    },
+    "references": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "title": "References",
+      "type": "array"
+    },
+    "assets": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Asset"
+      },
+      "title": "Assets",
+      "type": "array"
+    }
+  },
+  "required": [
+    "doc_id",
+    "source",
+    "parser"
+  ],
+  "title": "Document",
+  "type": "object"
+}

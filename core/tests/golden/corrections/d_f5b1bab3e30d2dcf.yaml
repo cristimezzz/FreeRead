@@ -1,0 +1,9 @@
+# Body mass and encephalization in Pleistocene Homo (Nature 1997, 原始扫描件 + OCR 文本层)
+pages:
+  0:
+    type: {9: paragraph, 11: title, 12: author_info, 13: footnote, 14: footnote, 15: paragraph, 16: paragraph}
+  1:
+    drop: [0, 9]                    # 栏目页眉 letters to nature；扫描噪点
+    type: {5: caption, 7: footnote, 8: footnote, 10: footnote}
+  2:
+    drop: [12, 16]                  # MinerU 把多行公式拆出的重复单行

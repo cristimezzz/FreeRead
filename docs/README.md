@@ -4,9 +4,10 @@
 |---|---|---|
 | [00-PRD.md](00-PRD.md) | 产品需求：目标用户、场景、功能清单与优先级 | 草案 |
 | [01-architecture.md](01-architecture.md) | 系统架构：分层、模块、关键流程、技术选型 | 草案 |
-| [02-document-ir.md](02-document-ir.md) | 统一文档模型（Document IR）规范 | 草案 |
+| [02-document-ir.md](02-document-ir.md) | 统一文档模型（Document IR）规范 | 已定稿（0.1.0） |
 | [03-data-model.md](03-data-model.md) | SQLite 数据模型与存储布局 | 草案 |
 | [04-roadmap.md](04-roadmap.md) | 里程碑与验收标准 | 草案 |
+| [m0/](m0/README.md) | M0 技术验证：解析评测、Zotero 本地 API、Tauri sidecar | 已完成 |
 | [adr/](adr/) | 架构决策记录（ADR） | 持续更新 |
 
 ## 约定

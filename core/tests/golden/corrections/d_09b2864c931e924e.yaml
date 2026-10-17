@@ -1,0 +1,9 @@
+# Genetic sources of population epigenomic variation (Nat Rev Genet)
+pages:
+  0:
+    drop: [0, 3, 4]          # 栏目名 EPIGENETICS、刊头 REVIEWS
+    type: {1: title, 2: author_info, 10: footnote}
+  5:
+    drop: [1, 2, 6, 7, 8, 9]   # Figure 2 的 a、b、c 各块合为整图
+    add: [{type: figure, bbox: [40, 135, 554, 585], before: 3}]
+    type: {10: caption}      # 跨栏图注的后半

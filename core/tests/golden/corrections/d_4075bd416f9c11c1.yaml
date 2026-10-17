@@ -1,0 +1,7 @@
+# Chip-Tip single-cell proteomics (Nat Methods)
+pages:
+  0:
+    drop: [0, 1, 6, 9, 10, 13]      # 栏目名、DOI、Check for updates；单位脚注取整块 14
+    type: {2: title, 3: footnote, 4: footnote, 5: footnote, 7: author_info, 8: abstract}
+  2:
+    drop: [0, 2, 3, 4, 5, 6, 7, 9, 10]   # Fig. 1 取 Docling 整图

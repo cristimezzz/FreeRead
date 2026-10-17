@@ -1,0 +1,11 @@
+# LinearDesign 中文译本（PDFMathTranslate mono）
+pages:
+  0:
+    drop: [1, 6, 7, 8]                 # DOI、开放获取、检查更新
+    type: {0: title, 2: footnote, 3: footnote, 4: footnote, 5: author_info, 9: abstract}
+  1:
+    drop: [1, 2, 3, 4, 5, 6, 7, 9]     # 图1 取 Docling 整图
+  14:
+    drop: [0, 1, 2, 3, 4, 5, 6, 7]     # 扩展数据图1：上下两块 + 图内文字，合为整图
+    add: [{type: figure, bbox: [43, 115, 547, 546], before: 8}]
+    type: {8: caption, 9: caption}

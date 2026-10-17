@@ -1,0 +1,11 @@
+# Multiomic QTL mapping (Cell Genomics)
+pages:
+  0:
+    drop: [0, 15, 16]               # 期刊标志
+    type: {1: title, 2: heading, 5: list_item, 6: list_item, 7: list_item, 8: list_item, 11: author_info}
+  15:
+    drop: [0, 1, 16]                # 页眉 "Cell / Article"、标志
+    type: {17: reference_entry}     # 跨栏续接的参考文献
+  17:
+    drop: [0, 1, 5]
+    type: {6: other}                # "(Continued on next page)"

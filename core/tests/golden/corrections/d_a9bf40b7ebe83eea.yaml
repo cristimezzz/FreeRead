@@ -1,0 +1,10 @@
+# RoseTTAFold (Science)
+pages:
+  0:
+    drop: [0, 1, 2, 13]             # 装饰符号、栏目标签、下载水印
+    type: {3: title, 4: author_info, 5: abstract}
+  1:
+    drop: [3]
+    type: {1: caption}
+  3:
+    drop: [1, 5, 6, 7, 8, 9, 10, 11, 14, 17]   # Fig. 3 取 Docling 整图

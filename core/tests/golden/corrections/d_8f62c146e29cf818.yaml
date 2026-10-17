@@ -1,0 +1,10 @@
+# Characterization of Fluorescent Proteins (PLOS ONE)
+pages:
+  0:
+    drop: [0, 1, 2, 3, 12]             # PLOS 标志、CrossMark、栏目名
+    type: {4: other, 5: other, 6: other, 7: other, 8: other, 9: other, 10: other, 11: other, 13: other, 14: title, 15: author_info, 16: author_info, 17: author_info, 19: abstract}
+  6:
+    drop: [2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
+    add: [{type: figure, bbox: [39, 404, 570, 635], before: 23}]   # Fig 3 整图（A、B 两图合一）
+  7:
+    drop: [3, 5, 8, 9]                 # 一个段落被 MinerU 拆成两块；页眉标志

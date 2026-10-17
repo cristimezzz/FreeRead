@@ -1,0 +1,8 @@
+# Multitissue H3K27ac profiling of GTEx samples (Nat Genet)
+pages:
+  0:
+    drop: [0, 2, 3, 7, 10, 11]      # 栏目名、期刊标志、DOI 行、Check for updates
+    type: {1: title, 4: footnote, 5: footnote, 6: footnote, 8: author_info, 9: abstract}
+  8:
+    drop: [0, 1, 2, 4, 5, 6, 7, 9, 10]   # Fig. 6 取 Docling 整图
+    type: {11: caption}

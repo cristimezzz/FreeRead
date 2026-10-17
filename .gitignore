@@ -12,12 +12,23 @@ build/
 node_modules/
 apps/desktop/dist/
 apps/desktop/src-tauri/target/
+target/
+# scripts/build_sidecar.ps1 生成的 sidecar 二进制
+apps/desktop/src-tauri/binaries/
 
 # 本地数据与评测 PDF（可能受版权保护，不入库）
 *.db
 *.db-wal
 *.db-shm
 core/tests/fixtures/pdfs/*.pdf
+core/tests/fixtures/pdfs/files/
+core/tests/golden/*.json
+core/tests/golden/review/
+core/tests/golden/draft/
+eval-out/
+
+# M0 解析引擎独立环境（scripts/m0_setup_engines.sh）
+.engines/
 
 # 编辑器 / 系统
 .vscode/
@@ -25,3 +36,6 @@ core/tests/fixtures/pdfs/*.pdf
 .DS_Store
 Thumbs.db
 .env
+
+# pytest 在沙箱里退回到项目内的临时目录
+core/pytest-of-*/

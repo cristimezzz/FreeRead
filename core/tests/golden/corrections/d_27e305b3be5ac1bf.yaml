@@ -1,0 +1,13 @@
+# 合成扫描版：Body mass and encephalization（栅格化，无文本层；文本取 OCR medoid）
+pages:
+  0:
+    drop: [13, 14, 16, 17, 18, 22, 29]   # 作者 / 单位取 MinerU 整块；页眉；图内数字
+    type: {9: paragraph, 10: footnote, 11: title, 12: author_info, 15: footnote, 19: footnote}
+  1:
+    drop: [0]
+    type: {7: footnote, 8: footnote, 9: footnote}
+  2:
+    drop: [2, 13, 14, 15]                # 图内坐标轴文字；公式 (3) 由两行合成一个块
+    type: {11: equation}
+    latex: {11: "BM = 2.239 \times FH - 39.9; r = 0.98"}
+    add: [{type: equation, bbox: [330, 591, 547, 614], after: 12, latex: "BM = 2.741 \times FH - 54.9; r = 0.50 (males); BM = 2.426 \times FH - 35.1; r = 0.411 (females)"}]

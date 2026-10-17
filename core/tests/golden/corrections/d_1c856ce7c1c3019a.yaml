@@ -1,0 +1,11 @@
+# Population Variation and Genetic Control of Modular Chromatin Architecture (Cell)
+pages:
+  0:
+    drop: [1, 2, 5, 6, 7, 8, 9, 10, 22, 23, 24]   # 期刊标志；Graphical Abstract 取 Docling 整图 4
+    type: {0: title, 3: heading, 12: list_item, 13: list_item, 14: list_item, 15: list_item, 17: author_info}
+  6:
+    drop: [0, 2, 4, 8, 10, 15]      # 子图标号、图内文字
+    type: {6: caption, 9: caption, 14: caption}   # Cell 侧栏图注（标题 + 分段）
+  11:
+    drop: [17, 18, 19, 20, 22]      # 日期取 MinerU 整块；REFERENCES 重复
+    type: {16: footnote}

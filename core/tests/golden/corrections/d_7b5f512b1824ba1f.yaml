@@ -1,0 +1,9 @@
+# Epigenetic moonlighting (Science review)
+pages:
+  0:
+    drop: [0, 5, 6, 12]                # 栏目名、Check for updates、版权框、下载水印
+    type: {1: title, 2: author_info, 3: abstract, 13: footnote, 14: footnote}
+  1:
+    drop: [5]
+  5:
+    drop: [6]

@@ -1,0 +1,11 @@
+# LinearDesign: Algorithm for optimized mRNA design (Nature)
+pages:
+  0:
+    drop: [1, 2, 6, 7, 10, 11]      # 栏目名、DOI、Open access、Check for updates
+    type: {0: title, 3: footnote, 4: footnote, 5: footnote, 8: author_info, 9: abstract, 15: footnote}
+  1:
+    drop: [0, 1, 2, 3, 6, 7, 8]     # Fig. 1 取 Docling 整图
+    type: {4: caption}
+  14:
+    drop: [0, 2, 3, 4, 5, 6]        # 页眉 Article；图内文字
+    type: {7: caption, 8: caption}  # Extended Data Fig. 1 图注（跨栏两块）

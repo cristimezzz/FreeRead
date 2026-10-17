@@ -1,0 +1,9 @@
+# A Draft Sequence of the Neandertal Genome (Science)
+pages:
+  0:
+    drop: [13, 14, 15, 16]          # 下载水印；通讯作者脚注取 MinerU 整块
+    type: {0: title, 1: author_info, 2: abstract}
+  3:
+    drop: [8]
+  7:
+    drop: [10]

@@ -1,0 +1,10 @@
+# Rational Optimizations of the Marine-Derived Peptide Sungsanpin (ChemMedChem)
+pages:
+  0:
+    drop: [0, 7, 10, 11, 15]           # 栏目名、期刊标志
+    type: {1: title, 2: author_info, 3: author_info, 4: author_info, 5: abstract, 6: other}
+  5:
+    drop: [0, 1, 2, 3, 4, 5, 6, 7]     # 下载水印、子图标号；Figure 5 三个子图合为整图
+    add: [{type: figure, bbox: [67, 72, 506, 232], before: 8}]
+  8:
+    drop: [0, 13]

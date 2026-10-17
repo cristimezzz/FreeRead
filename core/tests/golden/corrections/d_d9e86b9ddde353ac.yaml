@@ -1,0 +1,5 @@
+# Caffeine as a psychomotor stimulant (CMLS)
+pages:
+  0:
+    drop: [0, 1]                    # 栏目名 Review、刊头
+    type: {2: title, 3: author_info, 4: author_info, 5: footnote, 6: abstract, 7: abstract, 8: other}

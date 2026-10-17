@@ -1,0 +1,80 @@
+"""在独立 Python 环境中以子进程运行解析引擎（见 ADR-0003）。
+
+每个重型引擎（MinerU / Docling / Marker）有自己的虚拟环境，避免 torch 等依赖冲突；
+引擎侧的薄包装脚本位于 scripts/engines/run_<engine>.py，只负责调用引擎并把原生输出写到 raw 目录。
+"""
+
+import asyncio
+import json
+import os
+import sys
+from pathlib import Path
+
+from freeread.infra.parsers.base import ParserCaps, ProgressCb, RawLayout
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+
+
+def engine_python(engine: str) -> Path:
+    env = os.environ.get(f"FREEREAD_{engine.upper()}_PYTHON")
+    if env:
+        return Path(env)
+    sub = "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
+    return REPO_ROOT / ".engines" / engine / sub
+
+
+def engine_env() -> dict[str, str]:
+    """模型与缓存统一放到 .engines/cache/，并关闭遥测。与 scripts/engines/env.sh 保持一致。"""
+    cache = Path(os.environ.get("ENGINE_CACHE", REPO_ROOT / ".engines" / "cache"))
+    env = dict(os.environ)
+    env.update(
+        {
+            "ENGINE_CACHE": str(cache),
+            "MINERU_HOME": str(cache / "mineru"),
+            "HF_HOME": str(cache / "hf"),
+            "TORCH_HOME": str(cache / "torch"),
+            "XDG_CACHE_HOME": str(cache / "xdg"),
+            "MODEL_CACHE_DIR": str(cache / "marker"),
+            "DO_NOT_TRACK": "1",
+            "HF_HUB_DISABLE_TELEMETRY": "1",
+            "PYTHONIOENCODING": "utf-8",
+        }
+    )
+    return env
+
+
+def engine_command(
+    engine: str, pdf: Path, out_dir: Path, extra: list[str] | None = None
+) -> list[str]:
+    script = REPO_ROOT / "scripts" / "engines" / f"run_{engine}.py"
+    return [str(engine_python(engine)), str(script), str(pdf), str(out_dir), *(extra or [])]
+
+
+class SubprocessParser:
+    def __init__(self, name: str, caps: ParserCaps, extra_args: list[str] | None = None) -> None:
+        self.name = name
+        self.version = "subprocess"
+        self._caps = caps
+        self._extra = extra_args or []
+
+    def capabilities(self) -> ParserCaps:
+        return self._caps
+
+    async def parse(self, pdf: Path, out_dir: Path, progress: ProgressCb) -> RawLayout:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        progress(0.0, f"{self.name}: start")
+        with (out_dir / "engine.log").open("wb") as log:
+            proc = await asyncio.create_subprocess_exec(
+                *engine_command(self.name, pdf, out_dir, self._extra),
+                env=engine_env(),
+                stdout=log,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            rc = await proc.wait()
+        if rc != 0:
+            raise RuntimeError(f"{self.name} exited with {rc}; see {out_dir / 'engine.log'}")
+        info = json.loads((out_dir / "engine.json").read_text(encoding="utf-8"))
+        progress(1.0, f"{self.name}: done")
+        return RawLayout(
+            engine=self.name, engine_version=info["engine_version"], raw_dir=out_dir, data=None
+        )

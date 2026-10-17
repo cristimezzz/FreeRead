@@ -1,7 +1,9 @@
 # Document IR 规范
 
-- schema_version：`0.1.0`（草案）
+- schema_version：`0.1.0`（**定稿**，M0）
 - 更新日期：2026-10-17
+- JSON Schema：[schemas/ir-0.1.0.json](schemas/ir-0.1.0.json)（由 `models.py` 导出）
+- 参考实现：`core/freeread/infra/parsers/`（PyMuPDF / MinerU / Docling / Marker 四个 Normalizer，公共部分见 `normalize_common.py`）
 - 决策依据：[ADR-0004](adr/0004-document-ir-as-core.md)
 - 机器可读定义：`core/freeread/domain/ir/models.py`（Pydantic，可导出 JSON Schema）
 
@@ -37,7 +39,8 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
     "engine": "mineru",
     "engine_version": "x.y.z",
     "normalizer_version": "0.1.0",
-    "created_at": "2026-10-17T12:00:00Z"
+    "created_at": "2026-10-17T12:00:00Z",
+    "pages_parsed": null               // 只解析了部分页时为页码列表（按页重解析、评测抽样）
   },
   "sections": [ /* 章节树，见 §4 */ ],
   "blocks": [ /* 按阅读顺序排列的块，见 §3 */ ],
@@ -54,6 +57,7 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
   "type": "paragraph",
   "section_id": "s_3_2",             // 所属章节，可空（如标题页信息）
   "order": 12,                       // 阅读顺序，从 0 开始
+  "level": null,                     // heading：1–4；list_item：嵌套层级；其余为 null
   "text": "We propose … as shown in ⟦EQ1⟧ [12].",  // 纯文本（行内公式用占位符）
   "inlines": [                       // 行内特殊元素，与 text 中的占位符对应
     { "key": "EQ1", "kind": "math", "latex": "\\alpha + \\beta" },
@@ -69,7 +73,7 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
   ],
   "content_hash": "sha256:…",        // 规范化 text/latex/html 的哈希，用于重解析后迁移
   "confidence": 0.93,                // 解析置信度，可空
-  "flags": []                        // 如 "low_confidence"、"ocr"、"user_edited"
+  "flags": []                        // 见 §3.5
 }
 ```
 
@@ -102,7 +106,7 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
 
 - `doc_id`：`d_` + PDF sha256 前 16 位十六进制。
 - `block.id`：`b_` + 四位以上的阅读顺序号，如 `b_0012`。**同一次解析内稳定**；重新解析后通过 `content_hash` 迁移（§8）。
-- `section.id`：`s_` + 章节编号路径，如 `s_3_2`；无编号章节用顺序号 `s_u7`。
+- `section.id`：`s_` + 章节编号路径（取自标题文本开头的 `3.2` 之类编号），如 `s_3_2`；无编号或编号重复的章节用顺序号 `s_u7`。章节层级取 heading 的 `level`。
 - 全局引用一个块时使用 `doc_id#block_id`，如 `d_3f9a…#b_0012`。
 
 ### 3.4 行内元素
@@ -111,6 +115,28 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
 
 - `math` 必须在 `text` 中以 `⟦KEY⟧` 占位，翻译时保持占位符不变。
 - `cite`、`xref`、`url` 可以用 `span`（字符区间，左闭右开）标注在 `text` 中的位置，也可以用占位符；翻译前统一转换为占位符。
+
+### 3.5 flags 取值
+
+| flag | 含义 |
+|---|---|
+| `ocr` | 文本来自 OCR（扫描页或文本层不可用） |
+| `fast_mode` | 由 PyMuPDF 快速模式产生（无公式 / 表格识别） |
+| `no_latex` | 引擎识别出公式区域但没有给出 LaTeX |
+| `ir_warning` | 该块未通过 §7 的某条规则检查（详情见解析日志） |
+| `low_confidence` | 解析置信度低于阈值 |
+| `user_edited` | 用户手动修改过 |
+
+### 3.6 Normalizer 约定（M0 实践确定）
+
+- **页眉、页脚、页码**一律丢弃，不进入 IR。
+- **跨栏 / 跨页续段**合并为一个块，`anchors` 按顺序列出每一段的位置；块的 `section_id` 取第一段所在章节。
+- **图内文字**（坐标轴标签、子图标号等）不单独成块。
+- **表格 HTML** 中的行内公式统一写作 `<math>LaTeX</math>`；单元格内的其他标签只保留 `table/tr/td/th`（含 `rowspan`/`colspan`）、`math`、`sup`、`sub`、`b`、`i`。
+- **图 / 表** 一律登记一个 `Asset`（`path` 为 `assets/<asset_id>.png`，由解析任务按 bbox 截图生成），因此 `figure` 总有 `asset_id`，`table` 在没有 HTML 时也能显示截图。
+- **参考文献**：引擎直接给出的 reference 块，或"References / Bibliography / 参考文献"标题之后的段落与列表项，都视为 `reference_entry`；条目以编号开头时 `Reference.id` 为 `r_<编号>`，否则为 `r_x<序号>`。
+- **图注配对**：`caption_of` 指向同页、距离最近、且与图注标签（Figure / Table / 图 / 表）类型一致的 figure / table。
+- `meta.language` 在 Zotero 元数据缺失时按正文 CJK 字符占比推断（> 20% 记为 `zh`）。
 
 ## 4. Section
 

@@ -1,0 +1,9 @@
+# cGAS-mediated mechanism in naked mole-rats (Science)
+pages:
+  0:
+    drop: [2, 3, 5, 14]             # Check for updates、二维码、栏目名、下载水印
+    type: {0: title, 1: author_info, 4: footnote, 9: caption, 13: figure}
+  4:
+    drop: [0, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21]   # Fig. 3 取 Docling 整图
+  7:
+    drop: [8]

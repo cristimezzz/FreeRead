@@ -1,0 +1,10 @@
+# Caffeine in tea Camellia sinensis (J Nutr Health Aging)
+# 该 PDF 文本层与渲染存在约 18pt 的纵向错位，Docling 的标题框整体偏上；以 MinerU 框为准。
+pages:
+  0:
+    drop: [1, 5, 7, 11, 17]         # Docling 偏移的重复框、页码
+    type: {0: title, 2: author_info, 3: author_info, 4: abstract, 6: other}
+  3:
+    drop: [0, 8]                    # 页眉
+  4:
+    exclude: true                   # 参考文献两栏错位严重，无法可靠标注

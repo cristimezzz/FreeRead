@@ -1,0 +1,8 @@
+# cGAS 裸鼹鼠 中文译本（PDFMathTranslate mono）
+pages:
+  0:
+    drop: [1, 2, 5, 16]
+    type: {0: title, 3: footnote, 4: author_info, 9: caption, 10: caption, 14: footnote, 15: figure}
+  4:
+    drop: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    add: [{type: figure, bbox: [36, 225, 557, 626], before: 24}]   # 图3 各子图合为整图

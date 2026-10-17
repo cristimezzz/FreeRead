@@ -1,0 +1,10 @@
+# Structural basis for hijacking siderophore receptors (Nat Chem Biol, brief communication)
+pages:
+  0:
+    drop: [0, 1, 2, 3, 6, 7, 11]   # 版权竖排、npg 标志、栏目名、出版行；作者行取 MinerU 整块
+    type: {4: title, 5: author_info}
+  1:
+    drop: [0, 1]
+  2:
+    drop: [1, 2, 3, 4, 5, 6, 7]    # 版权、标志；Fig. 2 取 Docling 整图；2 为图注最后一行
+    type: {12: footnote}           # 收稿日期

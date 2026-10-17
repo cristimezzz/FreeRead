@@ -1,0 +1,6 @@
+# When and Why Did Human Brains Decrease in Size? (Frontiers)
+pages:
+  0:
+    drop: [3, 5, 7, 9, 11, 12, 13, 14, 22]   # 期刊标志；侧栏以 MinerU 粒度为准
+    type: {0: title, 1: author_info, 2: author_info, 4: other, 6: other, 8: other, 10: other, 15: other, 16: other, 17: other, 18: other, 19: other, 20: abstract, 21: other}
+  7: {}                                       # 复核：MinerU 单独检出的参考文献条目保留

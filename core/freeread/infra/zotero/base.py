@@ -21,6 +21,9 @@ class Attachment:
     key: str
     content_type: str
     filename: str | None = None
+    link_mode: str | None = None  # imported_file | imported_url | linked_file | linked_url
+    path: str | None = None  # "storage:<filename>" 或链接文件的绝对路径
+    href: str | None = None  # 本地 API 的 links.enclosure.href（file:/// URL）
 
 
 @dataclass

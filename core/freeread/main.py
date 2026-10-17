@@ -1,17 +1,32 @@
 """Core Service 入口。
 
 由 Tauri 壳以 sidecar 方式启动：
-    freeread-core --port <随机端口> --token <会话 token>
+    freeread-core --port <随机端口> --token <会话 token> --parent-pid <壳进程 PID>
 见 docs/01-architecture.md §3。
 """
 
 import argparse
+import os
 import secrets
+import sys
+import threading
+import time
+from collections.abc import Callable
 
 from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
+
+# Tauri WebView 的源（Windows 为 http://tauri.localhost，macOS/Linux 为 tauri://localhost）
+# 以及 `tauri dev` 的 Vite 开发服务器。前端请求带自定义头，需要通过 CORS 预检。
+ALLOWED_ORIGINS = [
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "tauri://localhost",
+    "http://localhost:1420",
+]
 
 
 def create_app(token: str | None = None) -> FastAPI:
@@ -20,6 +35,12 @@ def create_app(token: str | None = None) -> FastAPI:
             raise HTTPException(status_code=401, detail="invalid session token")
 
     app = FastAPI(title="FreeRead Core", version=__version__, dependencies=[Depends(verify_token)])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ALLOWED_ORIGINS,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/health")
     def health() -> dict:
@@ -28,18 +49,86 @@ def create_app(token: str | None = None) -> FastAPI:
     return app
 
 
-def run() -> None:
+def _wait_parent_windows(pid: int) -> None:
+    """阻塞直到 pid 对应的进程退出。持有进程句柄，不受 PID 复用影响。"""
+    import ctypes
+    from ctypes import wintypes
+
+    SYNCHRONIZE = 0x00100000
+    INFINITE = 0xFFFFFFFF
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+
+    handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not handle:  # 进程已不存在（或无权访问，按已退出处理）
+        return
+    try:
+        kernel32.WaitForSingleObject(handle, INFINITE)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _wait_parent_posix(pid: int, interval: float) -> None:
+    while True:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            pass  # 进程存在，只是属于别的用户
+        time.sleep(interval)
+
+
+def watch_parent(pid: int, on_exit: Callable[[], None], interval: float = 1.0) -> threading.Thread:
+    """看门狗：父进程（Tauri 壳）消失后调用 on_exit。
+
+    壳正常退出时会主动 kill sidecar，Windows 上还有 Job Object 兜底；
+    这里是第三道保险，覆盖 sidecar 被单独启动或 Job 失效的情况。
+    """
+
+    def target() -> None:
+        if sys.platform == "win32":
+            _wait_parent_windows(pid)
+        else:
+            _wait_parent_posix(pid, interval)
+        on_exit()
+
+    thread = threading.Thread(target=target, name="parent-watchdog", daemon=True)
+    thread.start()
+    return thread
+
+
+def run(argv: list[str] | None = None) -> None:
     import uvicorn
 
     parser = argparse.ArgumentParser(prog="freeread-core")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--token", default=None, help="会话 token；省略时随机生成并打印")
-    args = parser.parse_args()
+    parser.add_argument("--parent-pid", type=int, default=None, help="父进程退出后自动退出")
+    args = parser.parse_args(argv)
 
     token = args.token or secrets.token_urlsafe(24)
     if args.token is None:
         print(f"session token: {token}")
-    uvicorn.run(create_app(token), host="127.0.0.1", port=args.port)
+
+    config = uvicorn.Config(create_app(token), host="127.0.0.1", port=args.port)
+    server = uvicorn.Server(config)
+
+    if args.parent_pid is not None:
+
+        def shutdown() -> None:
+            server.should_exit = True
+            # 优雅退出卡住时（如长请求未结束）强制结束
+            timer = threading.Timer(5.0, os._exit, args=(0,))
+            timer.daemon = True
+            timer.start()
+
+        watch_parent(args.parent_pid, shutdown)
+
+    server.run()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,9 @@
+# 合成扫描版：Caffeine as a psychomotor stimulant（栅格化，无文本层；文本取 OCR medoid）
+pages:
+  0:
+    drop: [0, 1, 8]                      # 栏目名、刊头；Docling 跨栏合并的摘要
+    type: {2: title, 3: author_info, 4: author_info, 5: footnote, 6: abstract, 7: abstract, 9: other}
+  1:
+    drop: [10]                           # Docling 跨两栏的错误合并块
+  4:
+    drop: [4, 5]

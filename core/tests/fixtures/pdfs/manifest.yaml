@@ -1,0 +1,769 @@
+version: 1
+source: local Zotero library via Zotero 7 local API
+notes: PDF 文件不入库；用 scripts/m0_build_eval_set.py 重新生成 files/。 已手工移除 d_101c3c79f940b28d（与
+  d_e7a7f677a36ad72a 为同一篇论文的另一份下载，Zotero 中无标题导致去重漏掉）。
+category_counts:
+  two_column: 24
+  formula: 8
+  table_heavy: 11
+  scanned: 2
+  chinese: 5
+  long_appendix: 5
+documents:
+- doc_id: d_09b2864c931e924e
+  sha256: 09b2864c931e924e94dd50aea07a5713f693979e24a3befdf5451a877dcfb9f1
+  zotero_item_key: 8T846ERD
+  zotero_attachment_key: GX7LBYNN
+  variant: original
+  title: Genetic sources of population epigenomic variation
+  year: 2016
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  - formula
+  - table_heavy
+  features:
+    page_count: 14
+    chars_per_page: 6151
+    min_chars_page: 2861
+    cjk_ratio: 0.0
+    math_span_ratio: 0.3295
+    two_column_ratio: 0.71
+    tables_per_page: 0.36
+    page_size:
+    - 595.3
+    - 782.4
+- doc_id: d_e7a7f677a36ad72a
+  sha256: e7a7f677a36ad72aa97eebf58de38604f33c4d4a474a4532c92e786ace9d3313
+  zotero_item_key: 7IYITSCK
+  zotero_attachment_key: 7VFSKZGF
+  variant: original
+  title: Deep generative models design mRNA sequences with enhanced translational
+    capacity and stability
+  year: null
+  collections:
+  - 校赛
+  language: en
+  tags:
+  - two_column
+  - formula
+  features:
+    page_count: 15
+    chars_per_page: 5364
+    min_chars_page: 151
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0769
+    two_column_ratio: 0.67
+    tables_per_page: 0.0
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_33a4283b7a7ed8d7
+  sha256: 33a4283b7a7ed8d785ae3629ea2379ce775781940e026640c8dfc481164fc432
+  zotero_item_key: Y78T7GS3
+  zotero_attachment_key: V9BTA2MZ
+  variant: original
+  title: Structural basis for hijacking siderophore receptors by antimicrobial lasso
+    peptides
+  year: 2014
+  collections:
+  - PRP49
+  language: en
+  tags:
+  - two_column
+  - formula
+  features:
+    page_count: 5
+    chars_per_page: 6397
+    min_chars_page: 1255
+    cjk_ratio: 0.0
+    math_span_ratio: 0.036
+    two_column_ratio: 0.8
+    tables_per_page: 0.2
+    page_size:
+    - 595.3
+    - 782.4
+- doc_id: d_da3cade93d6c00c0
+  sha256: da3cade93d6c00c015101d78a0fbc7d9131d7d17d3ebdc74ab57aaa72a1cfe66
+  zotero_item_key: 7WNZVBI5
+  zotero_attachment_key: 26S3QJM7
+  variant: original
+  title: Advanced Data Analysis for Fluorescence-Lifetime Single-Molecule Localization
+    Microscopy
+  year: 2021
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  - formula
+  features:
+    page_count: 11
+    chars_per_page: 4944
+    min_chars_page: 2089
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0359
+    two_column_ratio: 0.82
+    tables_per_page: 0.0
+    page_size:
+    - 595.3
+    - 779.5
+- doc_id: d_d70ca03ba85765ed
+  sha256: d70ca03ba85765edb71c76bd84f8a5a8f304ef0dafa14596a436e82f74cb9184
+  zotero_item_key: JY8GI7CP
+  zotero_attachment_key: Z5PL8RZC
+  variant: original
+  title: Multitissue H3K27ac profiling of GTEx samples links epigenomic variation
+    to disease
+  year: 2023
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - long_appendix
+  features:
+    page_count: 37
+    chars_per_page: 3779
+    min_chars_page: 0
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.47
+    tables_per_page: 0.07
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_9ef90bbd516984e0
+  sha256: 9ef90bbd516984e0c76515bf7f99f82a289ebf25bca7274c9c278810e5f50e99
+  zotero_item_key: P7V8DLD4
+  zotero_attachment_key: IXU7YYFE
+  variant: original
+  title: Multiomic QTL mapping reveals phenotypic complexity of GWAS loci and prioritizes
+    putative causal variants
+  year: 2025
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - table_heavy
+  - long_appendix
+  features:
+    page_count: 31
+    chars_per_page: 4721
+    min_chars_page: 1161
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.31
+    tables_per_page: 0.31
+    page_size:
+    - 603.0
+    - 783.0
+- doc_id: d_2d8e7b5188a46ca6
+  sha256: 2d8e7b5188a46ca6372f52e3abf785ae38f86af3b6394d52f51c91d3c46bfa9c
+  zotero_item_key: 42G4XCHG
+  zotero_attachment_key: HQDYTSBT
+  variant: original
+  title: Algorithm for optimized mRNA design improves stability and immunogenicity
+  year: 2023
+  collections:
+  - 校赛
+  language: en
+  tags:
+  - two_column
+  - table_heavy
+  - long_appendix
+  features:
+    page_count: 28
+    chars_per_page: 3802
+    min_chars_page: 485
+    cjk_ratio: 0.0
+    math_span_ratio: 0.011
+    two_column_ratio: 0.5
+    tables_per_page: 0.38
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_aa88488a2afe2915
+  sha256: aa88488a2afe29159fcc9c133010b3e3a18bc828f575875048d49d48f788b1ea
+  zotero_item_key: A4D6SEAL
+  zotero_attachment_key: MGF9UKCV
+  variant: original
+  title: Craniofacial Feminization, Social Tolerance, and the Origins of Behavioral
+    Modernity
+  year: 2014
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  - long_appendix
+  features:
+    page_count: 26
+    chars_per_page: 5463
+    min_chars_page: 1262
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0038
+    two_column_ratio: 0.73
+    tables_per_page: 0.27
+    page_size:
+    - 595.0
+    - 878.0
+- doc_id: d_be31326296626169
+  sha256: be31326296626169527af44364c049ad37383820ba5eed1f8854a57efe8db615
+  zotero_item_key: YIGE88TS
+  zotero_attachment_key: PV9RBZ79
+  variant: original
+  title: A cGAS-mediated mechanism in naked mole-rats potentiates DNA repair and delays
+    aging
+  year: 2025
+  collections:
+  - 生物信息学概论
+  language: en
+  tags:
+  - two_column
+  - formula
+  - table_heavy
+  features:
+    page_count: 15
+    chars_per_page: 6256
+    min_chars_page: 1022
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0339
+    two_column_ratio: 0.73
+    tables_per_page: 1.93
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_4075bd416f9c11c1
+  sha256: 4075bd416f9c11c15f18ad678fcbba5fd67d4041fd92ae63b26010685c22f5c5
+  zotero_item_key: GWQEEDKV
+  zotero_attachment_key: 8V9PW8SB
+  variant: original
+  title: Enhanced sensitivity and scalability with a Chip-Tip workflow enables deep
+    single-cell proteomics
+  year: 2025
+  collections: []
+  language: en
+  tags:
+  - table_heavy
+  features:
+    page_count: 24
+    chars_per_page: 3708
+    min_chars_page: 0
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0016
+    two_column_ratio: 0.43
+    tables_per_page: 1.0
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_a9bf40b7ebe83eea
+  sha256: a9bf40b7ebe83eeaab5919170e5569d9dd1e584dbc61f634272400f7f46ffda2
+  zotero_item_key: XJHNWPZR
+  zotero_attachment_key: UM8X6ULQ
+  variant: original
+  title: Accurate prediction of protein structures and interactions using a three-track
+    neural network
+  year: null
+  collections:
+  - 生物信息学概论
+  language: en
+  tags:
+  - two_column
+  - table_heavy
+  features:
+    page_count: 6
+    chars_per_page: 6379
+    min_chars_page: 5162
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 1.0
+    tables_per_page: 1.0
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_08c88ab9255efd72
+  sha256: 08c88ab9255efd722d6ad150caf0dc3b076198ce7f0b46b00d5a2b91b0419323
+  zotero_item_key: KD3XXZE8
+  zotero_attachment_key: UCDDHX8I
+  variant: original
+  title: Tissue-Specific Trans Regulation of the Mouse Epigenome
+  year: null
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 15
+    chars_per_page: 5500
+    min_chars_page: 3733
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.93
+    tables_per_page: 0.0
+    page_size:
+    - 603.0
+    - 783.0
+- doc_id: d_f5b1bab3e30d2dcf
+  sha256: f5b1bab3e30d2dcf00e54919ab1a6052632495b09d4dd02df7941daf0e42c748
+  zotero_item_key: 29RUAJ4E
+  zotero_attachment_key: EYPA9TSW
+  variant: original
+  title: Body mass and encephalization in Pleistocene Homo
+  year: 1997
+  collections: &id001
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 4
+    chars_per_page: 7214
+    min_chars_page: 5836
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 1.0
+    tables_per_page: 0.0
+    page_size:
+    - 581.1
+    - 793.7
+- doc_id: d_d9e86b9ddde353ac
+  sha256: d9e86b9ddde353ac3bac0104390c4f6f27ed3ede52d69fe792c2225275f187e0
+  zotero_item_key: 3F3629HD
+  zotero_attachment_key: ARRBDQAP
+  variant: original
+  title: 'Caffeine as a psychomotor stimulant: mechanism of action'
+  year: 2004
+  collections: &id002
+  - 生物学导论（微观生物学）
+  language: en
+  tags: []
+  features:
+    page_count: 16
+    chars_per_page: 5628
+    min_chars_page: 3577
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0061
+    two_column_ratio: 0.25
+    tables_per_page: 0.0
+    page_size:
+    - 595.0
+    - 785.0
+- doc_id: d_fe7fafb0d756fbb7
+  sha256: fe7fafb0d756fbb7d840bcbec6b443d2663121379157ad713518498150997fc8
+  zotero_item_key: R879L6KA
+  zotero_attachment_key: I7297VW2
+  variant: original
+  title: A Draft Sequence of the Neandertal Genome
+  year: 2010
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  - table_heavy
+  features:
+    page_count: 14
+    chars_per_page: 6823
+    min_chars_page: 2503
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.86
+    tables_per_page: 0.43
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_56173974a2a49baf
+  sha256: 56173974a2a49baf4434d7873aafad015cb08d0061359aa698de5cd0ba609587
+  zotero_item_key: B3RQUJ7H
+  zotero_attachment_key: GFCB8BMZ
+  variant: original
+  title: Caffeine in tea Camellia sinensis — Content, absorption, benefits and risks
+    of consumption
+  year: 2014
+  collections:
+  - 生物学导论（微观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 7
+    chars_per_page: 6592
+    min_chars_page: 3536
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.57
+    tables_per_page: 0.14
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_1c856ce7c1c3019a
+  sha256: 1c856ce7c1c3019a9aad63eabfda2ebfe86f1400f708cf77dd18552e08df01b3
+  zotero_item_key: 3KXQDSEF
+  zotero_attachment_key: WIFKJFKK
+  variant: original
+  title: Population Variation and Genetic Control of Modular Chromatin Architecture
+    in Humans
+  year: 2015
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 13
+    chars_per_page: 4915
+    min_chars_page: 1049
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.69
+    tables_per_page: 0.0
+    page_size:
+    - 603.0
+    - 783.0
+- doc_id: d_b11f9cbbf7d10707
+  sha256: b11f9cbbf7d107073c3c2061eac2d9e2a4df1ccfeb7953b50f6cd14008a056ed
+  zotero_item_key: RI2ZG39W
+  zotero_attachment_key: ZHCB8X6W
+  variant: original
+  title: Genetic Control of Chromatin States in Humans Involves Local and Distal Chromosomal
+    Interactions
+  year: 2015
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 16
+    chars_per_page: 3869
+    min_chars_page: 87
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.56
+    tables_per_page: 0.0
+    page_size:
+    - 603.0
+    - 783.0
+- doc_id: d_8f62c146e29cf818
+  sha256: 8f62c146e29cf818fc6f79d0e26d89ab5d313e2faa383117cea23cf15f78382a
+  zotero_item_key: B27FPFAH
+  zotero_attachment_key: 56R3HQ2G
+  variant: original
+  title: Characterization of Fluorescent Proteins for Three- and Four-Color Live-Cell
+    Imaging in S. cerevisiae
+  year: 2016
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags: []
+  features:
+    page_count: 15
+    chars_per_page: 3387
+    min_chars_page: 817
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.0
+    tables_per_page: 0.07
+    page_size:
+    - 612.0
+    - 792.0
+- doc_id: d_37bcc3e133bd767e
+  sha256: 37bcc3e133bd767e8f8666532a3ac94e7f4e1542872468d2f074bb9bb6324040
+  zotero_item_key: RW2XTXGS
+  zotero_attachment_key: TMH77LUQ
+  variant: original
+  title: Structural mechanism of transcription inhibition by lasso peptides microcin
+    J25 and capistruin
+  year: 2019
+  collections:
+  - PRP49
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 6
+    chars_per_page: 7112
+    min_chars_page: 4951
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 1.0
+    tables_per_page: 0.0
+    page_size:
+    - 585.0
+    - 783.0
+- doc_id: d_45a0a08492648684
+  sha256: 45a0a08492648684cc2604e607e51a706f8897efcee7457a7fc303afb0f543aa
+  zotero_item_key: 3CXYXKRU
+  zotero_attachment_key: ZDG5IDNA
+  variant: original
+  title: Highly accurate protein structure prediction with AlphaFold
+  year: 2021
+  collections:
+  - 生物信息学概论
+  language: en
+  tags:
+  - two_column
+  - table_heavy
+  features:
+    page_count: 12
+    chars_per_page: 6425
+    min_chars_page: 3752
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0037
+    two_column_ratio: 0.67
+    tables_per_page: 0.67
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_53dc34d5363b4c85
+  sha256: 53dc34d5363b4c852d6b369dd462223e4b6abff745ea9f012889453b6947fa75
+  zotero_item_key: 6ICBSENK
+  zotero_attachment_key: MRNSFKMC
+  variant: original
+  title: When and Why Did Human Brains Decrease in Size? A New Change-Point Analysis
+    and Insights From Brain Evolution in Ants
+  year: 2021
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 11
+    chars_per_page: 6539
+    min_chars_page: 3909
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0036
+    two_column_ratio: 0.91
+    tables_per_page: 0.0
+    page_size:
+    - 595.3
+    - 779.5
+- doc_id: d_066ea2969e49f33d
+  sha256: 066ea2969e49f33da8159521453272711c2b95dea1e7695246a2e744f3bb2984
+  zotero_item_key: 7NPC6GYH
+  zotero_attachment_key: MSC8XZ2D
+  variant: original
+  title: Rational Optimizations of the Marine‐Derived Peptide Sungsanpin as Novel
+    Inhibitors of Cell Invasion
+  year: 2023
+  collections:
+  - PRP49
+  language: en
+  tags:
+  - two_column
+  features:
+    page_count: 10
+    chars_per_page: 3368
+    min_chars_page: 1064
+    cjk_ratio: 0.0
+    math_span_ratio: 0.009
+    two_column_ratio: 0.7
+    tables_per_page: 0.0
+    page_size:
+    - 595.3
+    - 782.4
+- doc_id: d_7b5f512b1824ba1f
+  sha256: 7b5f512b1824ba1fab757630207c86d64fa1fc66dfd39cd4f33a978dec50fd3c
+  zotero_item_key: HHMVDJHY
+  zotero_attachment_key: WWHV2DTN
+  variant: original
+  title: 'Epigenetic moonlighting: Catalytic-independent functions of histone modifiers
+    in regulating transcription'
+  year: 2023
+  collections:
+  - 生物学导论（宏观生物学）
+  language: en
+  tags:
+  - two_column
+  - formula
+  features:
+    page_count: 11
+    chars_per_page: 6073
+    min_chars_page: 806
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0201
+    two_column_ratio: 0.64
+    tables_per_page: 0.0
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_6aab4d5ccb8cfa1e
+  sha256: 6aab4d5ccb8cfa1e6da138f28770b62dce7ed34a1fd732a2c86f1b0b20de1898
+  zotero_item_key: 42G4XCHG
+  zotero_attachment_key: 7MJQKV5F
+  variant: mono
+  title: Algorithm for optimized mRNA design improves stability and immunogenicity
+  year: 2023
+  collections:
+  - 校赛
+  language: zh
+  tags:
+  - two_column
+  - table_heavy
+  - chinese
+  - long_appendix
+  features:
+    page_count: 28
+    chars_per_page: 1597
+    min_chars_page: 203
+    cjk_ratio: 0.523
+    math_span_ratio: 0.0074
+    two_column_ratio: 0.5
+    tables_per_page: 0.38
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_91a8e34fcbcd248d
+  sha256: 91a8e34fcbcd248db4b1f65d0ef5c0b1e8530d1dc60e43c1fa7cbccddc7e83fd
+  zotero_item_key: 7IYITSCK
+  zotero_attachment_key: N4YE39DU
+  variant: mono
+  title: Deep generative models design mRNA sequences with enhanced translational
+    capacity and stability
+  year: null
+  collections:
+  - 校赛
+  language: zh
+  tags:
+  - two_column
+  - formula
+  - chinese
+  features:
+    page_count: 15
+    chars_per_page: 2182
+    min_chars_page: 44
+    cjk_ratio: 0.495
+    math_span_ratio: 0.0284
+    two_column_ratio: 0.53
+    tables_per_page: 0.0
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_2ca951d5e87040a4
+  sha256: 2ca951d5e87040a48f3120b3da83cab98fde2ccb47c63e544a23d3f542ed27c8
+  zotero_item_key: GIKTY9ZW
+  zotero_attachment_key: QK8RPUUQ
+  variant: mono
+  title: 'codonGPT: reinforcement learning on a generative language model enables
+    scalable mRNA design'
+  year: 2025
+  collections:
+  - 校赛
+  language: zh
+  tags:
+  - two_column
+  - formula
+  - chinese
+  features:
+    page_count: 16
+    chars_per_page: 1904
+    min_chars_page: 520
+    cjk_ratio: 0.515
+    math_span_ratio: 0.0415
+    two_column_ratio: 0.5
+    tables_per_page: 0.0
+    page_size:
+    - 612.0
+    - 792.0
+- doc_id: d_cf3224806f31b924
+  sha256: cf3224806f31b924e9983058e151d0b4b7df48ed9e0e7cb4e9f02343ff04928d
+  zotero_item_key: LGYSS429
+  zotero_attachment_key: GFPUVRIY
+  variant: mono
+  title: 'CodonTransformer: a multispecies codon opti mizer using context-aware neural
+    networks'
+  year: 2025
+  collections:
+  - 校赛
+  language: zh
+  tags:
+  - two_column
+  - table_heavy
+  - chinese
+  features:
+    page_count: 12
+    chars_per_page: 2328
+    min_chars_page: 857
+    cjk_ratio: 0.491
+    math_span_ratio: 0.0
+    two_column_ratio: 0.67
+    tables_per_page: 0.42
+    page_size:
+    - 595.3
+    - 790.9
+- doc_id: d_105e1a4141d07b00
+  sha256: 105e1a4141d07b000514ec8f88e1d3563d382044eaa370b56475caa9897e0767
+  zotero_item_key: YIGE88TS
+  zotero_attachment_key: IML6G5SR
+  variant: mono
+  title: A cGAS-mediated mechanism in naked mole-rats potentiates DNA repair and delays
+    aging
+  year: 2025
+  collections:
+  - 生物信息学概论
+  language: zh
+  tags:
+  - two_column
+  - table_heavy
+  - chinese
+  features:
+    page_count: 15
+    chars_per_page: 2839
+    min_chars_page: 474
+    cjk_ratio: 0.4
+    math_span_ratio: 0.0125
+    two_column_ratio: 0.73
+    tables_per_page: 1.87
+    page_size:
+    - 594.0
+    - 756.0
+- doc_id: d_27e305b3be5ac1bf
+  sha256: 27e305b3be5ac1bfa981091f53fe07b4db709f0c0a2274b222943c09b3dbadeb
+  zotero_item_key: 29RUAJ4E
+  zotero_attachment_key: EYPA9TSW
+  variant: synthetic_scan
+  title: Body mass and encephalization in Pleistocene Homo
+  year: 1997
+  collections: *id001
+  language: en
+  tags:
+  - scanned
+  - synthetic_scan
+  features:
+    page_count: 4
+    chars_per_page: 0
+    min_chars_page: 0
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.0
+    tables_per_page: 0.0
+    page_size:
+    - 581.1
+    - 793.7
+- doc_id: d_c7ac15aa1be2372c
+  sha256: c7ac15aa1be2372c886f7549ae35c5282ffffe2bea80f8feb0d129c84275c10c
+  zotero_item_key: 3F3629HD
+  zotero_attachment_key: ARRBDQAP
+  variant: synthetic_scan
+  title: 'Caffeine as a psychomotor stimulant: mechanism of action'
+  year: 2004
+  collections: *id002
+  language: en
+  tags:
+  - scanned
+  - synthetic_scan
+  features:
+    page_count: 8
+    chars_per_page: 0
+    min_chars_page: 0
+    cjk_ratio: 0.0
+    math_span_ratio: 0.0
+    two_column_ratio: 0.0
+    tables_per_page: 0.0
+    page_size:
+    - 595.0
+    - 785.0
