@@ -56,6 +56,20 @@ def test_settings_invalid_stored_value_falls_back_to_default(client):
     assert s["parse_engine"] == "auto" and s["target_lang"] == "en"
 
 
+def test_settings_fallback_keeps_routes_when_routes_row_comes_first(client):
+    # routes 依赖 providers；逐字段回退时不能因为数据库行顺序把合法路由丢掉。
+    ctx = client.app.state.ctx
+    from freeread.infra.db.models import SettingRow
+
+    with ctx.sessions.begin() as s:
+        s.merge(SettingRow(key="routes", value={"translate": {"provider_id": "p1", "model": "m"}}))
+        s.merge(SettingRow(key="appearance", value={"seed_color": "red"}))
+        s.merge(SettingRow(key="providers", value=[PROVIDER | {"id": "p1"}]))
+    s = client.get("/settings").json()
+    assert s["appearance"]["seed_color"] == "#6750A4"
+    assert s["routes"]["translate"] == {"provider_id": "p1", "model": "m"}
+
+
 def test_jobs_api(client):
     ctx = client.app.state.ctx
     job = ctx.jobs.enqueue("no_handler_yet", {"doc_id": "d_1"})

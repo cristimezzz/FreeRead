@@ -185,3 +185,32 @@ async def test_job_events_are_published(ctx, worker):
                 if event.data["status"] == JobStatus.DONE:
                     break
     assert statuses == [("queued", 0.0), ("running", 0.0), ("running", 0.3), ("done", 1.0)]
+
+
+async def test_cancel_after_handler_returns_still_marks_done(ctx, worker, monkeypatch):
+    # handler 已返回、DONE 尚未写库时被取消，任务不能停在 running。
+    in_finish = asyncio.Event()
+    release = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    original = worker._finish_done
+
+    def slow_finish(job_id):
+        loop.call_soon_threadsafe(in_finish.set)
+        asyncio.run_coroutine_threadsafe(release.wait(), loop).result()
+        original(job_id)
+
+    monkeypatch.setattr(worker, "_finish_done", slow_finish)
+
+    async def quick(job_ctx: JobContext):
+        pass
+
+    worker.register("quick", quick)
+    job = ctx.jobs.enqueue("quick")
+    await worker.start()
+    await asyncio.wait_for(in_finish.wait(), 5)
+    cancel = asyncio.create_task(worker.cancel(job.id))
+    await asyncio.sleep(0.05)
+    release.set()
+    await asyncio.wait_for(cancel, 5)
+    assert ctx.jobs.get(job.id).status == JobStatus.DONE
+    assert worker.running_ids == set()

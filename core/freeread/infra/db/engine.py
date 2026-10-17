@@ -1,5 +1,6 @@
 """SQLite 引擎与会话。见 docs/03-data-model.md §1 的约定。"""
 
+import json
 from pathlib import Path
 
 from sqlalchemy import Engine, create_engine, event
@@ -22,6 +23,8 @@ def make_engine(db_path: Path) -> Engine:
     engine = create_engine(
         f"sqlite:///{db_path.as_posix()}",
         connect_args={"check_same_thread": False},
+        # 默认 ensure_ascii=True 会把中文存成 \uXXXX，导致对 JSON 列（如 authors）的 LIKE 搜索匹配不到。
+        json_serializer=lambda obj: json.dumps(obj, ensure_ascii=False),
     )
     event.listen(engine, "connect", _set_pragmas)
     return engine

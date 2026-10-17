@@ -222,10 +222,15 @@ async def test_listing_filters_search_and_counts(ctx, zotero):
     assert [i.title for i in root_items.items] == ["Attention Is All You Need"]
     assert ctx.library.list_items(q="vaswani").total == 1  # 作者
     assert ctx.library.list_items(q="100%").total == 0  # LIKE 通配符被转义
+    with ctx.sessions.begin() as s:
+        s.add(
+            ItemRow(item_type="book", title="深度学习", authors=[{"last": "王", "first": "小明"}])
+        )
+    assert ctx.library.list_items(q="小明").total == 1  # 中文作者
     titles = [i.title for i in ctx.library.list_items(sort="title").items]
     assert titles == sorted(titles)
     page = ctx.library.list_items(sort="title", offset=1, limit=2)
-    assert page.total == 4 and len(page.items) == 2
+    assert page.total == 5 and len(page.items) == 2
 
 
 async def test_import_file_copies_and_dedupes(ctx, tmp_path):

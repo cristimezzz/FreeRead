@@ -80,8 +80,12 @@ class SettingsService:
             return AppSettings.model_validate(known)
         except ValueError:
             # 旧版本写入的值不再合法时逐个字段回退默认值，而不是让整个应用起不来。
+            # 按 schema 字段顺序逐个应用：routes 的校验依赖 providers，必须排在它之后。
             settings = AppSettings()
-            for key, value in known.items():
+            for key in AppSettings.model_fields:
+                if key not in known:
+                    continue
+                value = known[key]
                 try:
                     settings = AppSettings.model_validate(
                         settings.model_dump(mode="json") | {key: value}

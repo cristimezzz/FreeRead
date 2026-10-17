@@ -122,6 +122,11 @@ class JobWorker:
             task = asyncio.create_task(self._execute(job), name=f"job-{job.kind}-{job.id}")
             self._running[job.id] = (job.kind, task)
 
+    def _finish_done(self, job_id: str) -> None:
+        current = self.queue.get(job_id)
+        if current is not None and current.status not in FINISHED:
+            self.queue.finish(job_id, JobStatus.DONE)
+
     async def _execute(self, job: JobOut) -> None:
         spec = self._specs[job.kind]
         try:
@@ -138,9 +143,14 @@ class JobWorker:
             status = JobStatus.QUEUED if job.attempts < spec.max_attempts else JobStatus.FAILED
             await asyncio.to_thread(self.queue.finish, job.id, status, error)
         else:
-            current = await asyncio.to_thread(self.queue.get, job.id)
-            if current is not None and current.status not in FINISHED:
-                await asyncio.to_thread(self.queue.finish, job.id, JobStatus.DONE)
+            # handler 已经成功：即使此时被取消（用户取消或应用退出），也要把结果落库，
+            # 否则任务会一直停在 running。
+            done = asyncio.ensure_future(asyncio.to_thread(self._finish_done, job.id))
+            try:
+                await asyncio.shield(done)
+            except asyncio.CancelledError:
+                await done
+                raise
         finally:
             self._running.pop(job.id, None)
             self._user_cancelled.discard(job.id)
