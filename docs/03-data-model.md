@@ -229,12 +229,14 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 ### llm_cache
 | 列 | 说明 |
 |---|---|
-| key PK | `sha256(provider|model|prompt_id@version|canonical_input)` |
-| response | JSON |
+| key PK | `sha256(provider|model|prompt_id@version|canonical_input)`；嵌入按单条文本，prompt_id 为 `embed@1` |
+| response | JSON：`{text, model, usage}`；嵌入为 `{embedding}` |
 | created_at, hit_count | |
 
 ### llm_calls
 `id, task_kind, provider, model, prompt_id, input_tokens, output_tokens, cost_estimate, latency_ms, cache_hit, doc_id NULL, created_at`
+
+每次成功的调用写一行；缓存命中 `cache_hit=1` 且 token 记 0。`cost_estimate` 暂不计算（NULL）。
 
 ### settings
 `key PK, value JSON`。**API Key 不存这里**，存在系统钥匙串。
