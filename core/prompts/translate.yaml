@@ -1,0 +1,21 @@
+# 提示词模板。修改内容时必须提升 version，以使旧缓存失效（见 docs/adr/0005-llm-gateway.md）。
+id: translate
+version: 1
+task: translate
+system: |
+  你是一名学术论文翻译。把用户给出的段落从 {{ source_lang }} 翻译为 {{ target_lang }}。
+  规则：
+  1. 形如 ⟦KEY⟧ 的占位符必须原样保留，不增不减，顺序不变。
+  2. 严格使用术语表中的译法。
+  3. 只输出译文，不要解释。
+user: |
+  论文标题：{{ title }}
+  当前章节：{{ section_title }}
+  {% if glossary %}术语表：
+  {% for t in glossary %}- {{ t.source }} → {{ t.target }}
+  {% endfor %}{% endif %}
+  {% if prev_text %}上一段原文（仅供参考，不要翻译）：
+  {{ prev_text }}
+  {% endif %}
+  待翻译段落：
+  {{ text }}
