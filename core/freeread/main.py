@@ -21,10 +21,11 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
-from freeread.api import jobs, settings
+from freeread.api import jobs, llm, settings
 from freeread.config import default_data_dir
 from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
+from freeread.infra.llm.secrets import RedactingFilter
 
 # Tauri WebView 的源（Windows 为 http://tauri.localhost，macOS/Linux 为 tauri://localhost）
 # 以及 `tauri dev` 的 Vite 开发服务器。前端请求带自定义头，需要通过 CORS 预检。
@@ -53,6 +54,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
             yield
         finally:
             await ctx.worker.stop()
+            await ctx.llm.aclose()
             ctx.close()
 
     app = FastAPI(
@@ -75,6 +77,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
 
     app.include_router(jobs.router)
     app.include_router(settings.router)
+    app.include_router(llm.router)
     return app
 
 
@@ -147,7 +150,14 @@ def run(argv: list[str] | None = None) -> None:
     if args.token is None:
         print(f"session token: {token}")
 
-    config = uvicorn.Config(create_app(token, args.data_dir), host="127.0.0.1", port=args.port)
+    app = create_app(token, args.data_dir)
+    config = uvicorn.Config(app, host="127.0.0.1", port=args.port)
+    # 兜底：日志里出现已知密钥都替换为 ***。uvicorn 的 logger 不向 root 传播，
+    # 要在 Config（它会配置日志）之后给各自的 handler 都挂上。
+    redactor = RedactingFilter(app.state.ctx.secrets)
+    for name in ("", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        for handler in logging.getLogger(name).handlers:
+            handler.addFilter(redactor)
     server = uvicorn.Server(config)
 
     if args.parent_pid is not None:

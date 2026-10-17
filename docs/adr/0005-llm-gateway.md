@@ -1,6 +1,6 @@
 # ADR-0005：统一 LLM Gateway，按任务路由模型
 
-- 状态：提议
+- 状态：已接受（M1-P4 实现，2026-10-18）
 - 日期：2026-10-17
 
 ## 背景
@@ -29,3 +29,11 @@
 - 正面：替换模型不影响业务代码；缓存和成本统计集中管理。
 - 负面：需要自行维护 provider 适配层（以 OpenAI 兼容协议为主可覆盖大多数情况）。
 - 跟进：提示词修改必须提升版本号，从而自动使旧缓存失效。
+
+## 实现说明（M1-P4）
+
+- 代码在 `core/freeread/infra/llm/`：`default_gateway.py`（路由、缓存、令牌桶、重试、审计）、`openai_compatible.py`（httpx，不依赖 LiteLLM）、`fake.py`（测试与无密钥开发）、`prompts.py`、`secrets.py`。
+- `anthropic` 与 `ollama` 两种 kind 暂时也走 OpenAI 兼容端点；原生适配器按需再加。
+- 重试最多 3 次尝试，退避 1s、2s（优先使用 `Retry-After`）；流式调用只在输出第一个 chunk 之前重试。
+- `llm_calls` 只记录成功的调用（含缓存命中，命中时 token 记 0，即不计费）；失败只写日志。
+- 嵌入按单条文本缓存（`prompt_id` 固定为 `embed@1`）。

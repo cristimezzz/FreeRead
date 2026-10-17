@@ -8,6 +8,7 @@
 
 #[cfg(windows)]
 mod job;
+mod keys;
 
 use std::net::TcpListener;
 use std::sync::Mutex;
@@ -79,9 +80,12 @@ fn spawn_core(app: &tauri::AppHandle) -> Result<Sidecar, Box<dyn std::error::Err
         .inspect_err(|e| eprintln!("[shell] create job object failed: {e}"))
         .ok();
 
-    let (mut rx, child) = app
-        .shell()
-        .sidecar("freeread-core")?
+    let mut command = app.shell().sidecar("freeread-core")?;
+    // API Key 只经环境变量交给 sidecar，不出现在命令行参数里（进程列表可见）。
+    if let Some(secrets) = keys::env_value() {
+        command = command.env(keys::ENV_VAR, secrets);
+    }
+    let (mut rx, child) = command
         .args([
             "--port",
             &port.to_string(),
@@ -144,7 +148,11 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![core_info])
+        .invoke_handler(tauri::generate_handler![
+            core_info,
+            keys::set_api_key,
+            keys::delete_api_key
+        ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
