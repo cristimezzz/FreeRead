@@ -19,7 +19,7 @@
 
 ## 需要在 M1 决定或处理的事项
 
-1. **PyMuPDF 的 AGPL 许可**：快速模式改用 pypdfium2，或者接受 AGPL 义务。
+1. ~~PyMuPDF 的 AGPL 许可~~：已决定 FreeRead 采用 AGPL-3.0-or-later，PyMuPDF 可以直接分发。MinerU 仍按"用户首次使用时下载、独立进程运行"的方式提供（见 ADR-0003）。
 2. **MinerU 模型权重的许可证**：分发前逐个确认；权重改为首次使用时下载。
 3. **代码签名与 onedir 打包**：Kaspersky 等主动防御会拦截无签名的新 exe。
 4. **常驻解析 worker**：MinerU 冷启动约 40 秒，不能每篇文档新起进程。

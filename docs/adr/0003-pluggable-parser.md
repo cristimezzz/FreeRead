@@ -36,7 +36,8 @@
 - 许可证：
   - MinerU：Apache-2.0 加附加条款（合并口径 MAU 超过 1 亿或月收入超过 2000 万美元需另行取得商业许可；以 MinerU 提供在线服务须显著标明）。其模型权重的许可证需要在分发前逐个确认。
   - Docling：MIT。
-  - **PyMuPDF：AGPL-3.0 / 商业双许可**。分发 sidecar 之前，要么把快速模式改为基于 pypdfium2（Apache-2.0 / BSD）实现，要么接受 AGPL 义务。M1 决定。
+  - **PyMuPDF：AGPL-3.0 / 商业双许可**。FreeRead 本身采用 AGPL-3.0-or-later（2026-10-18 决定），因此可以直接随 sidecar 分发 PyMuPDF，不需要替换。
+  - MinerU 的附加条款（规模门槛、在线服务标识）超出了 AGPL 允许的"进一步限制"。因此 MinerU 不随安装包分发，而是由用户在首次使用时下载到独立环境，作为单独的程序通过子进程调用。不要把 MinerU 代码静态打包进 FreeRead 的发行物。
 - 跟进（M1）：
   - MinerU Normalizer 合并"同一图注之上的相邻 figure 块"，并过滤子图标号。
   - Docling Normalizer 补充 title、reference、footnote 的位置 / 关键词规则。

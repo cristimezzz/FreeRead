@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core (Python ${{ matrix.python }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12"]
+        include:
+          - os: ubuntu-latest
+            python: "3.11"
+    defaults:
+      run:
+        working-directory: core
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: core/pyproject.toml
+      - name: Install
+        run: python -m pip install -e ".[dev,parse-fast,eval]"
+      - name: Ruff lint
+        run: ruff check freeread tests ../scripts
+      - name: Ruff format
+        run: ruff format --check freeread tests ../scripts
+      - name: Pytest
+        run: pytest -q
+      - name: IR JSON Schema is up to date
+        if: runner.os == 'Linux'
+        run: |
+          python -c "import json; from freeread.domain.ir.models import Document; print(json.dumps(Document.model_json_schema(), ensure_ascii=False, indent=2))" > /tmp/ir.json
+          diff -u ../docs/schemas/ir-0.1.0.json /tmp/ir.json
+
+  desktop-frontend:
+    name: Desktop frontend (tsc + vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  desktop-rust:
+    name: Desktop shell (Rust, Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Build frontend (tauri-build needs frontendDist)
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run build
+      - name: Placeholder sidecar for externalBin
+        shell: pwsh
+        run: |
+          $triple = (rustc -vV | Select-String "^host: (.+)$").Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force apps/desktop/src-tauri/binaries | Out-Null
+          New-Item -ItemType File -Force "apps/desktop/src-tauri/binaries/freeread-core-$triple.exe" | Out-Null
+      - name: rustfmt
+        working-directory: apps/desktop/src-tauri
+        run: cargo fmt --check
+      - name: clippy
+        working-directory: apps/desktop/src-tauri
+        run: cargo clippy --locked --all-targets -- -D warnings

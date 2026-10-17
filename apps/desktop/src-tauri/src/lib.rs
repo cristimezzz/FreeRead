@@ -96,10 +96,10 @@ fn spawn_core(app: &tauri::AppHandle) -> Result<Sidecar, Box<dyn std::error::Err
 
     // 尽早放进 job：onefile 引导进程要先解压才会派生 Python 子进程，子进程自动继承 job。
     #[cfg(windows)]
-    if let Some(job) = &job {
-        if let Err(e) = job.assign_pid(child.pid()) {
-            eprintln!("[shell] assign sidecar to job failed: {e}");
-        }
+    if let Some(job) = &job
+        && let Err(e) = job.assign_pid(child.pid())
+    {
+        eprintln!("[shell] assign sidecar to job failed: {e}");
     }
 
     tauri::async_runtime::spawn(async move {
@@ -117,7 +117,11 @@ fn spawn_core(app: &tauri::AppHandle) -> Result<Sidecar, Box<dyn std::error::Err
     });
 
     Ok(Sidecar {
-        info: CoreInfo { port, token, spawned_at_ms },
+        info: CoreInfo {
+            port,
+            token,
+            spawned_at_ms,
+        },
         child: Mutex::new(Some(child)),
         #[cfg(windows)]
         job,
@@ -144,10 +148,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            if let RunEvent::Exit = event {
-                if let Some(sidecar) = app.try_state::<Sidecar>() {
-                    sidecar.shutdown();
-                }
+            if let RunEvent::Exit = event
+                && let Some(sidecar) = app.try_state::<Sidecar>()
+            {
+                sidecar.shutdown();
             }
         });
 }

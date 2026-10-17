@@ -1,0 +1,38 @@
+name: Desktop build (Windows installer)
+
+# 手动触发：打包 sidecar（PyInstaller）+ Tauri NSIS 安装包，作为 artifact 上传。
+# 未签名，仅供内部测试；正式发布前需要 Authenticode 签名（见 ADR-0001）。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Build sidecar
+        shell: pwsh
+        run: ./scripts/build_sidecar.ps1 -SkipOnedir
+      - name: Build installer
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run tauri build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeread-windows-nsis
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error

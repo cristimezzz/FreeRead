@@ -45,15 +45,25 @@ def test_core_exits_after_parent_killed():
     parent = subprocess.Popen(SLEEPER)
     port = _free_port()
     core = subprocess.Popen(
-        [sys.executable, "-m", "freeread.main", "--port", str(port), "--token", "t",
-         "--parent-pid", str(parent.pid)],
+        [
+            sys.executable,
+            "-m",
+            "freeread.main",
+            "--port",
+            str(port),
+            "--token",
+            "t",
+            "--parent-pid",
+            str(parent.pid),
+        ],
     )
     try:
         deadline = time.monotonic() + 20
         while True:
             try:
-                resp = httpx.get(f"http://127.0.0.1:{port}/health",
-                                 headers={"X-FreeRead-Token": "t"})
+                resp = httpx.get(
+                    f"http://127.0.0.1:{port}/health", headers={"X-FreeRead-Token": "t"}
+                )
                 assert resp.json()["status"] == "ok"
                 break
             except httpx.TransportError:

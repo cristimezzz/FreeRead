@@ -9,7 +9,7 @@
 
 1. **默认高质量引擎：MinerU 4.x（`effort=medium`，本地版面 / 公式 / OCR / 表格模型，不使用 VLM）。** 它在块类型、阅读顺序、标题、参考文献和扫描页上都明显领先。在 4GB 显存的笔记本 GPU 上可以跑（峰值显存约 2.6 GB）。如果 sidecar 常驻一个解析 worker 进程，每页边际耗时约 0.6 秒。
 2. **备选高质量引擎：Docling 2.x（MIT）。** 检测率与 MinerU 持平，图、图注和表格结构更好，但类型判断较弱：标题记成 section_header，参考文献记成 list_item，脚注识别差。适合作为"许可证最宽松"的选项，以及按页重解析时的第二意见。
-3. **快速模式：PyMuPDF。** 31 篇共 460 页不到 20 秒。阅读顺序可用（τ = 0.92），但块切分和类型很粗，没有公式和表格，扫描页完全不可用。它的作用是让用户在模型下载完或解析完成之前就能先读。**PyMuPDF 是 AGPL-3.0 / 商业双许可**，打包分发前需要决定：改用 pypdfium2（Apache-2.0 / BSD），或者接受 AGPL 义务。
+3. **快速模式：PyMuPDF。** 31 篇共 460 页不到 20 秒。阅读顺序可用（τ = 0.92），但块切分和类型很粗，没有公式和表格，扫描页完全不可用。它的作用是让用户在模型下载完或解析完成之前就能先读。**PyMuPDF 是 AGPL-3.0 / 商业双许可**；FreeRead 已决定采用 AGPL-3.0-or-later，因此可以直接分发 PyMuPDF。
 4. **Marker 已从候选中移除。** 在 4GB 显存上，它的 surya OCR 会把显存占满并溢出到共享内存。3 个抽样页的耗时在 57–695 秒之间，第 4 篇跑了 16 分钟以上仍未完成，无法作为默认引擎。另外，Marker 2.x 需要 Docker vLLM 或单独下载的 llama-server，许可证（GPL-3.0，模型权重有商用限制）也不适合分发。
 5. **IR 0.1 可以定稿。** PyMuPDF、MinerU、Docling 三个 Normalizer 在 31 篇共 460 页（1,380 页次）的输出上都通过了 IR 校验，问题数为 0（Marker Normalizer 在已完成的 3 篇上同样为 0）。实现过程中确定的约定已经写进 [IR 规范 §3.5–3.6](../02-document-ir.md)。
 
@@ -136,7 +136,7 @@
 - **常驻解析进程**：MinerU 每次启动加载模型约 40 秒，sidecar 应当保留一个长生命周期的解析 worker（与架构 §5.8 的独立进程池一致），而不是每篇文档新起一个进程。
 - **显存**：在 4GB 显卡上峰值约 2.6 GB。与 LLM 本地推理（如 Ollama）同时运行时需要排队，并发数保持为 1。
 - **Normalizer 改进清单**：MinerU 的子图合并、子图标号过滤；Docling 的 title / reference / footnote 规则；所有引擎都补上 abstract 和 author_info 的识别。
-- **许可证**：MinerU 为 Apache-2.0 加附加条款（MAU 超过 1 亿或月收入超过 2000 万美元需另行取得商业许可；提供在线服务须标明使用了 MinerU）；其模型权重的许可证需要在分发前逐个确认。Docling 为 MIT。PyMuPDF 为 AGPL-3.0。
+- **许可证**：MinerU 为 Apache-2.0 加附加条款（MAU 超过 1 亿或月收入超过 2000 万美元需另行取得商业许可；提供在线服务须标明使用了 MinerU）；其模型权重的许可证需要在分发前逐个确认。Docling 为 MIT。PyMuPDF 为 AGPL-3.0（与 FreeRead 的 AGPL-3.0-or-later 兼容）。
 
 ## 复现
 

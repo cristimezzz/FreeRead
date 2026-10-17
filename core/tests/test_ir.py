@@ -18,9 +18,14 @@ SHA = "3f9a1c2b7e4d5a60" + "0" * 48
 def make_doc(blocks: list[Block]) -> Document:
     return Document(
         doc_id=doc_id_from_sha256(SHA),
-        source=Source(pdf_sha256=SHA, page_count=1, pages=[PageInfo(index=0, width=612, height=792)]),
+        source=Source(
+            pdf_sha256=SHA, page_count=1, pages=[PageInfo(index=0, width=612, height=792)]
+        ),
         parser=ParserInfo(
-            engine="test", engine_version="0", normalizer_version="0", created_at="2026-10-17T00:00:00Z"
+            engine="test",
+            engine_version="0",
+            normalizer_version="0",
+            created_at="2026-10-17T00:00:00Z",
         ),
         blocks=blocks,
     )

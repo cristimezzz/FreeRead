@@ -45,3 +45,9 @@ core/.venv/Scripts/python scripts/m0_report.py                    # 指标 → d
 ```
 
 详见 [docs/m0/parser-eval.md](docs/m0/parser-eval.md#复现)。
+
+## 许可证
+
+FreeRead 以 [GNU Affero General Public License v3.0 或更高版本](LICENSE)（AGPL-3.0-or-later）发布。
+
+可选的解析引擎（MinerU、Docling）不随安装包分发，由用户首次使用时下载到独立环境，并遵循各自的许可证：MinerU 为 Apache-2.0 加附加条款，Docling 为 MIT。详见 [ADR-0003](docs/adr/0003-pluggable-parser.md)。

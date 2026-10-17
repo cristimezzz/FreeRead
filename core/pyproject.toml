@@ -3,6 +3,7 @@ name = "freeread-core"
 version = "0.0.1"
 description = "FreeRead core service: library import, PDF parsing to Document IR, LLM translation, summary and graph QA."
 requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.29",
