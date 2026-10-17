@@ -100,7 +100,11 @@ class ZoteroConnector(Protocol):
 | `SqliteSnapshotConnector` | 能找到 Zotero 数据目录 | Zotero 未运行时；**先复制 `zotero.sqlite` 到快照目录再只读打开**，附件路径从 `storage/<key>/` 解析 |
 | `WebApiConnector` | 用户提供 API Key 与 library ID | 云同步；后续用于写回 |
 
-同步策略：记录每个 library 的最后同步 version，增量拉取；本地以 `zotero_key` 作为外部主键做 upsert；Zotero 端删除的条目在本地标记为 `archived`，不立即物理删除。
+同步策略：记录每个 library 的最后同步 version，增量拉取；本地以 `zotero_key` 作为外部主键做 upsert；Zotero 端删除的条目在本地标记为 `archived`，不立即物理删除。M1 先做全量拉取（`LibraryService.sync_zotero`），增量在 M2。
+
+- 没有父条目的独立 PDF 也作为文献导入（`item_type = attachment`，`extra.standalone = true`，标题取附件标题或文件名）。
+- 同步时可以指定一个分类：元数据仍全量更新，只为该分类（含子分类）下的条目建解析任务。
+- Zotero 附件原地引用；手动导入的 PDF 复制到 `documents/<doc_id>/source.pdf`，因为原文件可能被移动或删除。
 
 ### 5.2 解析管线
 

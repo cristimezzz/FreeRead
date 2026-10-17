@@ -35,6 +35,7 @@ class Item:
     creators: list[dict] = field(default_factory=list)
     year: int | None = None
     doi: str | None = None
+    venue: str | None = None
     abstract: str | None = None
     collection_keys: list[str] = field(default_factory=list)
     tags: list[str] = field(default_factory=list)

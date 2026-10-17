@@ -114,3 +114,62 @@ async def test_unavailable_gives_clear_error():
     async with LocalApiConnector(transport=httpx.MockTransport(refuse)) as z:
         with pytest.raises(ZoteroUnavailableError):
             await z.list_collections()
+
+
+async def test_standalone_pdf_venue_and_library_version(tmp_path):
+    rows = {
+        "items": [
+            {
+                "key": "PAPER002",
+                "version": 9,
+                "data": {
+                    "itemType": "conferencePaper",
+                    "title": "Conf Paper",
+                    "proceedingsTitle": "Proceedings of ACL",
+                },
+            }
+        ],
+        "attachments": [
+            {
+                "key": "SOLO0001",
+                "version": 8,
+                "data": {
+                    "itemType": "attachment",
+                    "title": "译文副本",
+                    "contentType": "application/pdf",
+                    "filename": "copy.pdf",
+                    "collections": ["COLL0001"],
+                    "tags": [{"tag": "zh"}],
+                },
+            },
+            {
+                "key": "SNAP0001",
+                "version": 8,
+                "data": {"itemType": "attachment", "contentType": "text/html"},
+            },
+        ],
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        t = request.url.params.get("itemType")
+        data = rows["attachments"] if t == "attachment" else rows["items"]
+        return httpx.Response(
+            200,
+            json=data,
+            headers={"Total-Results": str(len(data)), "Last-Modified-Version": "123"},
+        )
+
+    async with LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/",
+        data_dir=tmp_path,
+        transport=httpx.MockTransport(handler),
+    ) as z:
+        items = await z.list_items()
+        assert z.library_version == 123
+
+    paper, solo = items  # 非 PDF 的独立附件（网页快照）被忽略
+    assert paper.venue == "Proceedings of ACL"
+    assert (solo.key, solo.item_type, solo.title) == ("SOLO0001", "attachment", "译文副本")
+    assert solo.collection_keys == ["COLL0001"] and solo.tags == ["zh"]
+    assert solo.extra == {"standalone": True}
+    assert [a.key for a in solo.attachments] == ["SOLO0001"]

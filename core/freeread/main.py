@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
-from freeread.api import jobs, settings
+from freeread.api import jobs, library, settings
 from freeread.config import default_data_dir
 from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
@@ -74,6 +74,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
         return {"status": "ok", "version": __version__, "ir_schema_version": IR_SCHEMA_VERSION}
 
     app.include_router(jobs.router)
+    app.include_router(library.router)
     app.include_router(settings.router)
     return app
 
