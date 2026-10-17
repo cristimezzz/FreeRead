@@ -30,6 +30,6 @@ src/
 └─ components/
 ```
 
-主要依赖：`pdfjs-dist`、`katex`、`dompurify`、`zustand`、`@xyflow/react`（问答画布）、`cytoscape`（图谱浏览）。
+主要依赖：`@material/web`、`@material/material-color-utilities`（Material 3 组件与主题色，见 [ADR-0006](../../docs/adr/0006-material3-ui.md)）、`pdfjs-dist`、`katex`、`dompurify`、`zustand`、`@xyflow/react`（问答画布）、`cytoscape`（图谱浏览）。
 
 Rust 壳职责：启动 / 关闭 `freeread-core` sidecar（传入随机端口与会话 token）、从系统钥匙串读取 API Key 并注入 sidecar 环境变量、文件对话框。

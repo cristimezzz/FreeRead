@@ -2,7 +2,7 @@
 
 - 版本：0.1（草案）
 - 更新日期：2026-10-17
-- 相关决策：[ADR-0001](adr/0001-tauri-python-sidecar.md)、[ADR-0002](adr/0002-local-first-sqlite.md)、[ADR-0003](adr/0003-pluggable-parser.md)、[ADR-0004](adr/0004-document-ir-as-core.md)、[ADR-0005](adr/0005-llm-gateway.md)
+- 相关决策：[ADR-0001](adr/0001-tauri-python-sidecar.md)、[ADR-0002](adr/0002-local-first-sqlite.md)、[ADR-0003](adr/0003-pluggable-parser.md)、[ADR-0004](adr/0004-document-ir-as-core.md)、[ADR-0005](adr/0005-llm-gateway.md)、[ADR-0006](adr/0006-material3-ui.md)
 
 ## 1. 设计原则
 
@@ -231,7 +231,7 @@ class LLMGateway:
 
 ```
 apps/desktop/src/
-├─ app/              路由、布局、全局 Provider
+├─ app/              路由、布局、全局 Provider（含 ThemeProvider）
 ├─ api/              生成的类型 + fetch / SSE 客户端
 ├─ features/
 │  ├─ library/       文献列表、分类树、同步状态
@@ -240,8 +240,10 @@ apps/desktop/src/
 │  ├─ summary/       总结面板、引用跳转
 │  └─ graph/         图谱浏览(Cytoscape.js)、问答画布(React Flow)
 ├─ stores/           Zustand
-└─ components/       通用 UI
+└─ components/       通用 UI；m3/ 放官方缺失的 M3 组件（导航栏、侧边面板、表格等）
 ```
+
+UI 采用 Material 3，组件使用官方 `@material/web`，配色由 `@material/material-color-utilities` 按用户选择的种子色生成，见 [ADR-0006](adr/0006-material3-ui.md)。
 
 ## 8. 数据目录布局
 
