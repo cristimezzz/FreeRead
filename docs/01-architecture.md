@@ -135,6 +135,15 @@ class Parser(Protocol):
 
 每个引擎一个 Normalizer，保证上层只看到 IR。
 
+M1 实现（`services/parse.py`）：
+
+- 两类任务：`parse`（PyMuPDF 快速模式，并发 2，秒级出可读 IR）和 `parse_hq`（MinerU / Docling，全局并发 1）。`parse` 完成后按设置 `parse_engine` 追加 `parse_hq`；`auto` 表示 MinerU 可用时升级。
+- 自动流程不会用低质量引擎的结果覆盖高质量结果；用户手动重新解析（`POST /documents/{id}/parse`）不受此限。
+- `raw/<engine>/engine.json` 存在即视为原生输出完整：只升级 Normalizer 时直接从 `raw/` 重新规范化，不重新跑引擎。
+- 图 / 表图片按 bbox 从 PDF 页面截取（150 dpi），与引擎无关。
+- MinerU 以常驻 worker 运行（`infra/parsers/resident.py` + `scripts/engines/mineru_worker.py`，JSON Lines 协议），空闲 10 分钟退出。本机 RTX 3050 Ti 4GB 上合成 PDF：冷启动 31 s，热调用 1.4 s。
+- 第一次解析失败标记 `failed`；已有可读 IR 时升级失败保持 `ready`。解析状态变化通过 `/jobs/stream` 的 `document` 事件推送。
+
 ### 5.3 重排渲染与双向定位
 
 - 前端按 IR 渲染：`heading/paragraph` → 语义 HTML；`equation` → KaTeX；`table` → 净化后的 HTML；`figure` → 图片 + 图注。

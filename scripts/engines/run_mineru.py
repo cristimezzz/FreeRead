@@ -16,13 +16,17 @@ def main() -> None:
     ap.add_argument("out_dir")
     ap.add_argument("--effort", default="medium", choices=["flash", "medium", "high", "xhigh"])
     a = ap.parse_args()
-    out = Path(a.out_dir)
+    analyze(Path(a.pdf), Path(a.out_dir), a.effort)
+
+
+def analyze(pdf: Path, out: Path, effort: str = "medium") -> str:
+    """解析一篇 PDF，原生输出写到 out。返回 MinerU 版本号。常驻 worker（mineru_worker.py）复用此函数。"""
     out.mkdir(parents=True, exist_ok=True)
 
     from mineru.backend.analyze import doc_analyze
     from mineru.version import __version__
 
-    middle, model = doc_analyze(Path(a.pdf).read_bytes(), effort=a.effort, parse_mode="auto")
+    middle, model = doc_analyze(pdf.read_bytes(), effort=effort, parse_mode="auto")
     middle, model = _jsonable(middle), _jsonable(model)
     counter = [0]
     _strip_images(middle, out / "images", counter)
@@ -31,9 +35,10 @@ def main() -> None:
     (out / "middle.json").write_text(dump(middle), encoding="utf-8")
     (out / "model.json").write_text(dump(model), encoding="utf-8")
     (out / "engine.json").write_text(
-        json.dumps({"engine": "mineru", "engine_version": __version__, "effort": a.effort}),
+        json.dumps({"engine": "mineru", "engine_version": __version__, "effort": effort}),
         encoding="utf-8",
     )
+    return __version__
 
 
 def _jsonable(o):

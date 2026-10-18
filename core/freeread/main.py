@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
-from freeread.api import jobs, library, llm, settings
+from freeread.api import documents, jobs, library, llm, settings
 from freeread.config import default_data_dir
 from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
@@ -54,6 +54,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
             yield
         finally:
             await ctx.worker.stop()
+            await ctx.parse.registry.close()
             await ctx.llm.aclose()
             ctx.close()
 
@@ -77,6 +78,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
 
     app.include_router(jobs.router)
     app.include_router(library.router)
+    app.include_router(documents.router)
     app.include_router(settings.router)
     app.include_router(llm.router)
     return app

@@ -42,5 +42,5 @@
   - MinerU Normalizer 合并"同一图注之上的相邻 figure 块"，并过滤子图标号。
   - Docling Normalizer 补充 title、reference、footnote 的位置 / 关键词规则。
   - 所有 Normalizer 识别 abstract 和 author_info。
-  - sidecar 保持一个常驻的解析 worker 进程，摊薄模型加载开销。
+  - ~~sidecar 保持一个常驻的解析 worker 进程，摊薄模型加载开销。~~ M1-P3 完成（`infra/parsers/resident.py`）。
   - 模型权重改为首次使用时下载，不打进安装包（与 ADR-0001 一致）。
