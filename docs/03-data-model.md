@@ -5,13 +5,13 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**M1 实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings。下文标"计划"的表（block_embeddings、annotations、glossary_terms、summaries、kg_*、qa_*）和两个 FTS5 虚拟表还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建。下文标"计划"的表（annotations、glossary_terms、summaries、kg_*、qa_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
 ```
 items ─┬─< attachments ──1:1── documents ─┬─< blocks ─┬─< translations
-       │                                  │           ├─< block_embeddings
+       │                                  │           ├─< embedding_chunks ── vec_chunks_<dim>
        ├─< item_collections >─ collections│           └─< annotations
        └─< item_tags                      ├─< summaries
                                           └─< kg_relations(source)
@@ -93,7 +93,8 @@ settings       sync_state
 | ir_schema_version | TEXT NULL | |
 | parser_engine / parser_version / normalizer_version | TEXT NULL | 当前 IR 来自哪个引擎；自动流程不会用低等级引擎的结果覆盖高等级的（ADR-0003） |
 | parse_status | TEXT | `pending` / `parsing` / `ready` / `failed`；已有 IR 时重新解析失败会回到 `ready` |
-| embed_status / kg_status | TEXT | 同上；M1 不用，恒为 `pending` |
+| embed_status | TEXT | `pending / embedding / ready / failed`；嵌入来源不可用时保持 `pending` |
+| kg_status | TEXT | 同 parse_status；M3 前恒为 `pending` |
 | language | TEXT NULL | |
 | created_at / updated_at | TEXT | |
 
@@ -111,16 +112,39 @@ settings       sync_state
 | anchors | JSON | |
 | content_hash | TEXT | |
 
-索引：`ix_blocks_doc_id_ord`、`ix_blocks_content_hash`。重新解析时整篇替换（与写 ir.json 在同一事务）。FTS5 `blocks_fts(text)`：计划（M2，关键词检索与向量检索混合使用）。
+索引：`ix_blocks_doc_id_ord`、`ix_blocks_content_hash`。重新解析时整篇替换（与写 ir.json 在同一事务）。FTS5 `blocks_fts`：见下。
 
-### block_embeddings（sqlite-vec 虚拟表，计划）
+### blocks_fts（FTS5 虚拟表）
 ```sql
-CREATE VIRTUAL TABLE block_embeddings USING vec0(
-  rowid INTEGER PRIMARY KEY,     -- 映射到 embedding_map.rowid
-  embedding FLOAT[1024]          -- 维度随嵌入模型而定，换模型需重建
+CREATE VIRTUAL TABLE blocks_fts USING fts5(
+  text, doc_id UNINDEXED, block_id UNINDEXED, tokenize='trigram'
 );
 ```
-`embedding_map(rowid PK, doc_id, block_id, model, chunk_text_hash)`：一个块可能被切分成多个 chunk，也可能多个短块合并为一个 chunk。
+每个可检索块（可翻译类型 + 表格）一行，`text` 是展开占位符后的纯文本（行内公式换成 LaTeX，表格取单元格文本）。trigram 分词对中文不需要分词，少于 3 个字符的查询词退回 `LIKE`。独立存内容，不用 external content：`blocks` 是复合主键，隐式 rowid 在 VACUUM 后可能变。与 `blocks` 在同一事务里替换（`ParseService._store`）。
+
+### embedding_chunks
+| 列 | 类型 | 说明 |
+|---|---|---|
+| rowid | INTEGER PK | 对应向量表的 `chunk_rowid` |
+| doc_id | TEXT FK → documents ON DELETE CASCADE | |
+| ord | INTEGER | 文档内顺序 |
+| block_ids | JSON | 覆盖的块；短块合并、长块拆分，所以是多对多 |
+| model | TEXT | 嵌入来源，如 `local/multilingual-e5-small`、`<provider_id>/<model>` |
+| text_hash | TEXT | chunk 文本的 sha256；重新解析后文本没变的 chunk 直接复用旧向量 |
+| text | TEXT | 送去嵌入的文本（section 标题 + 块文本） |
+
+索引：`ix_embedding_chunks_doc_id_ord`、`ix_embedding_chunks_model_text_hash`。
+
+### vec_chunks_<dim>（sqlite-vec 虚拟表，运行时创建）
+```sql
+CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
+  chunk_rowid integer primary key,   -- embedding_chunks.rowid
+  doc_id text partition key,         -- 按文档检索时只扫这一篇
+  embedding float[384] distance_metric=cosine,
+  chunk_size=128                     -- 每个分区至少占一个块；默认 1024 对单篇论文太大
+);
+```
+维度随模型而定，所以不在迁移里建，由 `SqliteVecIndex.ensure` 按第一批向量的维度创建；当前模型和维度记在 `settings` 的内部键 `_vector_index`。表名带维度：WAL 模式下在显式事务里 DROP vec0 表会报 `SQL logic error`，所以换模型时只清空，旧维度的空表由 `drop_unused` 在 autocommit 连接上删除。
 
 ### annotations（计划）
 | 列 | 说明 |
@@ -249,10 +273,10 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 每次成功的调用写一行；缓存命中 `cache_hit=1` 且 token 记 0。`cost_estimate` 暂不计算（NULL）。
 
 ### settings
-`key PK, value JSON`。每个顶层设置项一行，键即 `AppSettings` 的字段名：`appearance`、`target_lang`、`parse_engine`、`providers`、`routes`、`consented_providers`（`services/settings.py`）。读取时不认识的键忽略，单个字段不合法时回退默认值。**API Key 不存这里**，存在系统钥匙串（由壳以 `FREEREAD_SECRETS` 注入 sidecar）。
+`key PK, value JSON`。每个顶层设置项一行，键即 `AppSettings` 的字段名：`appearance`、`target_lang`、`parse_engine`、`providers`、`routes`、`consented_providers`、`embedding`（`services/settings.py`）。以 `_` 开头的键是内部状态（如 `_vector_index`），不属于设置。读取时不认识的键忽略，单个字段不合法时回退默认值。**API Key 不存这里**，存在系统钥匙串（由壳以 `FREEREAD_SECRETS` 注入 sidecar）。
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0001`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
-- 更换嵌入模型（维度变化）时，删除并重建 `block_embeddings`，作为后台任务执行。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0002`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
+- 更换嵌入来源 / 模型时清空向量索引和 embedding_chunks，所有文档 `embed_status` 置回 `pending` 并重新排队（`EmbedService.enqueue_missing`，启动和保存设置时调用）。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。

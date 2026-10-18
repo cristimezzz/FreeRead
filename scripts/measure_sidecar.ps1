@@ -5,7 +5,7 @@
 .DESCRIPTION
   每次启动用一个新的空数据目录（所以每次都会跑一遍 Alembic 迁移），从 Start-Process 计时，
   每 20 ms 请求一次 GET /health，到返回 200 为止；然后检查数据库已迁移到 head、
-  /llm/providers 可用（提示词已加载，否则 sidecar 启动即失败），导入一个小 PDF 并等快速解析
+  /llm/providers 可用（提示词已加载，否则 sidecar 启动即失败），导入一个小 PDF 并等快速解析、再检索一次
   （PyMuPDF）完成，最后 taskkill /T /F。解析检查不计入启动时间。
 
   -Mode warm：同一路径先预热 1 次（不计），再测 -Runs 次。
@@ -66,12 +66,18 @@ function Test-Parse($Client, [string]$Base) {
     $body = [Net.Http.StringContent]::new((@{ path = $pdf } | ConvertTo-Json), [Text.Encoding]::UTF8, "application/json")
     $resp = $Client.PostAsync("$Base/library/import-file", $body).GetAwaiter().GetResult()
     if (-not $resp.IsSuccessStatusCode) { throw "import-file 返回 $($resp.StatusCode)" }
+    $docId = ($resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json).item.documents[0].doc_id
     $deadline = (Get-Date).AddSeconds(30)
     while ((Get-Date) -lt $deadline) {
         $jobs = $Client.GetStringAsync("$Base/jobs?kind=parse").GetAwaiter().GetResult() | ConvertFrom-Json
         $failed = @($jobs | Where-Object status -in "failed", "cancelled")
         if ($failed) { throw "解析失败：$($failed[0].message)" }
-        if ($jobs -and @($jobs | Where-Object status -ne "done").Count -eq 0) { return }
+        if ($jobs -and @($jobs | Where-Object status -ne "done").Count -eq 0) {
+            # 全文索引（FTS5）随解析写入；连接上能加载 sqlite-vec（vec0.dll），否则 sidecar 启动即失败
+            $hits = $Client.GetStringAsync("$Base/documents/$docId/search?q=packaging").GetAwaiter().GetResult() | ConvertFrom-Json
+            if (-not $hits.hits) { throw "解析后检索不到文本" }
+            return
+        }
         Start-Sleep -Milliseconds 200
     }
     throw "30 s 内解析未完成"

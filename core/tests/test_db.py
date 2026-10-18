@@ -7,7 +7,7 @@ from sqlalchemy import inspect, text
 
 from freeread.config import DataPaths
 from freeread.infra.db import migrate
-from freeread.infra.db.base import Base, new_ulid, utcnow
+from freeread.infra.db.base import Base, include_name, new_ulid, utcnow
 from freeread.infra.db.engine import make_engine
 from freeread.infra.db.models import SettingRow
 
@@ -44,7 +44,8 @@ def test_migrations_match_models(tmp_path):
     engine = make_engine(db)
     migrate.upgrade(engine, db)
     with engine.connect() as conn:
-        diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
+        mc = MigrationContext.configure(conn, opts={"include_name": include_name})
+        diff = compare_metadata(mc, Base.metadata)
     assert diff == []
 
 

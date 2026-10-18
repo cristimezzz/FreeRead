@@ -406,6 +406,80 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search Document */
+        get: operations["search_document_documents__doc_id__search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/embedding/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Embedding Status */
+        get: operations["embedding_status_embedding_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/embedding/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download Model
+         * @description 下载当前设置的内置嵌入模型（已有下载任务时返回它）。
+         */
+        post: operations["download_model_embedding_download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/embedding/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild Index
+         * @description 清空向量索引，所有已解析文档重新嵌入。返回新建任务的 ID。
+         */
+        post: operations["rebuild_index_embedding_rebuild_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -449,6 +523,15 @@ export interface components {
              * @default []
              */
             consented_providers: string[];
+            /**
+             * @default {
+             *       "source": "local",
+             *       "local_model": "multilingual-e5-small",
+             *       "auto": true,
+             *       "mirror": "https://huggingface.co"
+             *     }
+             */
+            embedding: components["schemas"]["EmbeddingSettings"];
         };
         /** Appearance */
         Appearance: {
@@ -510,6 +593,8 @@ export interface components {
             page_count: number | null;
             /** Parse Status */
             parse_status: string;
+            /** Embed Status */
+            embed_status: string;
             /** Parser Engine */
             parser_engine: string | null;
             /** Parser Version */
@@ -522,6 +607,80 @@ export interface components {
             language: string | null;
             /** Updated At */
             updated_at: string;
+        };
+        /** EmbeddingSettings */
+        EmbeddingSettings: {
+            /**
+             * Source
+             * @default local
+             * @enum {string}
+             */
+            source: "local" | "provider";
+            /**
+             * Local Model
+             * @default multilingual-e5-small
+             */
+            local_model: string;
+            /**
+             * Auto
+             * @default true
+             */
+            auto: boolean;
+            /**
+             * Mirror
+             * @default https://huggingface.co
+             */
+            mirror: string;
+        };
+        /** EmbeddingStatus */
+        EmbeddingStatus: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "local" | "provider";
+            /** Model Key */
+            model_key: string | null;
+            /** Ready */
+            ready: boolean;
+            /** Not Ready */
+            not_ready?: ("model_not_downloaded" | "unknown_model" | "route_not_configured" | "missing_api_key" | "consent_required") | null;
+            /** Message */
+            message?: string | null;
+            /** Local Model */
+            local_model?: string | null;
+            /** Local Label */
+            local_label?: string | null;
+            /**
+             * Downloaded
+             * @default false
+             */
+            downloaded: boolean;
+            /**
+             * Size Bytes
+             * @default 0
+             */
+            size_bytes: number;
+            /**
+             * Downloaded Bytes
+             * @default 0
+             */
+            downloaded_bytes: number;
+            download_job?: components["schemas"]["JobOut"] | null;
+            /** Index Model */
+            index_model?: string | null;
+            /** Index Dim */
+            index_dim?: number | null;
+            /**
+             * Docs Total
+             * @default 0
+             */
+            docs_total: number;
+            /**
+             * Docs Embedded
+             * @default 0
+             */
+            docs_embedded: number;
         };
         /** EngineOut */
         EngineOut: {
@@ -705,6 +864,32 @@ export interface components {
             kind: string;
             /** Has Key */
             has_key: boolean;
+        };
+        /** SearchHit */
+        SearchHit: {
+            /** Doc Id */
+            doc_id: string;
+            /** Block Id */
+            block_id: string;
+            /** Type */
+            type: string;
+            /** Page */
+            page: number | null;
+            /** Score */
+            score: number;
+            /** Sources */
+            sources: ("fts" | "vector")[];
+            /** Snippet */
+            snippet: string;
+        };
+        /** SearchResponse */
+        SearchResponse: {
+            /** Query */
+            query: string;
+            /** Modes */
+            modes: ("fts" | "vector")[];
+            /** Hits */
+            hits: components["schemas"]["SearchHit"][];
         };
         /** SyncRequest */
         SyncRequest: {
@@ -1578,6 +1763,135 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranslationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_document_documents__doc_id__search_get: {
+        parameters: {
+            query: {
+                q: string;
+                k?: number;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    embedding_status_embedding_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_model_embedding_download_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebuild_index_embedding_rebuild_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */

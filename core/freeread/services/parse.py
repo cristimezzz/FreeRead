@@ -37,6 +37,7 @@ from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
 from freeread.infra.parsers.base import RawLayout
 from freeread.infra.parsers.registry import EngineSpec, ParserRegistry
+from freeread.infra.search import fts
 from freeread.services.settings import SettingsService
 
 log = logging.getLogger(__name__)
@@ -51,6 +52,7 @@ class DocumentOut(BaseModel):
     doc_id: str
     page_count: int | None
     parse_status: str  # pending | parsing | ready | failed
+    embed_status: str  # pending | embedding | ready | failed
     parser_engine: str | None
     parser_version: str | None
     normalizer_version: str | None
@@ -118,6 +120,8 @@ class ParseService:
         # parse 与 parse_hq 是两种任务、可以同时运行；同一文档的解析必须串行，
         # 否则会同时写 raw/、assets/、ir.json 和 blocks 表
         self._doc_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        # 块替换后调用（同步，在线程里）：由 AppContext 接到 EmbedService.enqueue_embed
+        self.on_blocks_replaced: Callable[[str], object] | None = None
 
     # ------------------------------------------------------------ 查询
 
@@ -192,6 +196,7 @@ class ParseService:
         engine = p.get("engine") or "pymupdf"
         outcome = await self.run(p["doc_id"], engine, ctx.report, force=p.get("force", False))
         await ctx.report(1.0, outcome.summary())
+        await self._after_parse(p["doc_id"], outcome)
         if "engine" not in p:
             await asyncio.to_thread(self._chain_hq, p["doc_id"])
 
@@ -199,6 +204,11 @@ class ParseService:
         p = ctx.job.payload
         outcome = await self.run(p["doc_id"], p["engine"], ctx.report, force=p.get("force", False))
         await ctx.report(1.0, outcome.summary())
+        await self._after_parse(p["doc_id"], outcome)
+
+    async def _after_parse(self, doc_id: str, outcome: "ParseOutcome") -> None:
+        if outcome.status in ("parsed", "renormalized") and self.on_blocks_replaced:
+            await asyncio.to_thread(self.on_blocks_replaced, doc_id)
 
     def _chain_hq(self, doc_id: str) -> JobOut | None:
         """快速解析完成后，按设置追加高质量解析。"""
@@ -309,7 +319,7 @@ class ParseService:
     def _store(
         self, info: _DocInfo, spec: EngineSpec, raw: RawLayout, doc: Document
     ) -> tuple[int, int]:
-        """原子写 ir.json，替换 blocks，迁移译文的块 ID。返回 (迁移数, 失效数)。"""
+        """原子写 ir.json，替换 blocks（及全文索引），迁移译文的块 ID。返回 (迁移数, 失效数)。"""
         ir_path = self.ir_path(info.doc_id)
         tmp = ir_path.with_suffix(".json.tmp")
         tmp.write_text(doc.model_dump_json(exclude_none=True), encoding="utf-8")
@@ -340,6 +350,7 @@ class ParseService:
                 )
                 for b in doc.blocks
             )
+            fts.replace_doc(s, info.doc_id, doc.blocks)
             row = s.get(DocumentRow, info.doc_id)
             row.page_count = doc.source.page_count
             row.ir_path = ir_path.relative_to(self._paths.root).as_posix()

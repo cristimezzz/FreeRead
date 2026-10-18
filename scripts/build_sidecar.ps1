@@ -10,8 +10,9 @@
      安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core.exe（apps/desktop/src-tauri/src/lib.rs）。
      不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
      选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
-  3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据。
-     打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF）。
+  3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据、
+     sqlite-vec 扩展（vec0.dll）。
+     打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF、检索）。
 
 .EXAMPLE
   pwsh scripts/build_sidecar.ps1
@@ -51,6 +52,8 @@ if __name__ == "__main__":
 # Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上；
 # 迁移脚本里 import 的 alembic.op / sqlalchemy 方言也要收集（静态分析看不到）。
 # PyMuPDF 快速解析器用 importlib.metadata 取版本号，要带上包元数据。
+# sqlite-vec 的 vec0.dll 在包目录里、由 sqlite_vec.loadable_path() 按路径加载，静态分析看不到。
+# onnxruntime / tokenizers 由 pyinstaller-hooks-contrib 的 hook 收集原生库；嵌入模型本身不打包，首次使用时下载。
 # 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Prompts = Join-Path $Core "prompts"
@@ -63,6 +66,8 @@ Write-Host "==> PyInstaller --onedir"
     --collect-submodules alembic `
     --hidden-import sqlalchemy.dialects.sqlite `
     --copy-metadata pymupdf `
+    --collect-binaries sqlite_vec `
+    --collect-binaries onnxruntime `
     --add-data "${Migrations};freeread/infra/db/migrations" `
     --add-data "${Prompts};prompts" `
     --distpath $Dist `
@@ -74,7 +79,8 @@ $OneDir = Join-Path $Dist "freeread-core"
 foreach ($required in @(
         "freeread-core.exe",
         "_internal/freeread/infra/db/migrations/env.py",
-        "_internal/prompts/translate.yaml"
+        "_internal/prompts/translate.yaml",
+        "_internal/sqlite_vec/vec0.dll"
     )) {
     if (-not (Test-Path (Join-Path $OneDir $required))) {
         throw "onedir 产物缺少 $required"

@@ -134,6 +134,29 @@ class BlockRow(Base):
     __table_args__ = (Index("ix_blocks_doc_id_ord", "doc_id", "ord"),)
 
 
+class EmbeddingChunkRow(Base):
+    """嵌入的检索单元。一个 chunk 可以覆盖多个相邻短块，长块也可以拆成多个 chunk。
+
+    向量存在运行时创建的 vec0 虚拟表 vec_chunks（维度随模型），以 rowid 关联；
+    blocks_fts（FTS5）在迁移 0002 中创建。两者都不在 ORM 里，见 base.include_name。
+    """
+
+    __tablename__ = "embedding_chunks"
+
+    rowid: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    ord: Mapped[int] = mapped_column(Integer)
+    block_ids: Mapped[list[str]] = mapped_column(JSON)
+    model: Mapped[str] = mapped_column(String)
+    text_hash: Mapped[str] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_embedding_chunks_doc_id_ord", "doc_id", "ord"),
+        Index("ix_embedding_chunks_model_text_hash", "model", "text_hash"),
+    )
+
+
 # ---------------------------------------------------------------- 翻译
 
 

@@ -6,6 +6,8 @@ const KIND_LABEL: Record<string, string> = {
   sync: "同步 Zotero",
   parse: "快速解析",
   parse_hq: "高质量解析",
+  embed: "建立语义索引",
+  model_download: "下载嵌入模型",
 };
 
 export function JobsBar() {

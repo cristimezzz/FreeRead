@@ -4,7 +4,7 @@ import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
 import { PRESET_SEEDS } from "../../app/theme";
 import { Icon } from "../../components/icons";
-import { Segmented, Select, TextField } from "../../components/md";
+import { Segmented, Select, Switch, TextField } from "../../components/md";
 
 type Provider = Schemas["ProviderConfig"];
 
@@ -205,6 +205,8 @@ export function SettingsView() {
           </div>
         </section>
 
+        <EmbeddingSection settings={settings} update={update} />
+
         <section aria-labelledby="s-llm">
           <h2 id="s-llm">大模型服务</h2>
           <p className="hint">支持 OpenAI 兼容接口（OpenAI、DeepSeek、通义、Moonshot、vLLM 等）。API Key 保存在系统钥匙串，不写入设置文件。</p>
@@ -328,5 +330,169 @@ function ProviderCard({ provider, hasKey, onChange, onKey, onTest, onRemove }: P
         </md-icon-button>
       </div>
     </div>
+  );
+}
+
+type Embedding = Settings["embedding"];
+
+function EmbeddingSection({
+  settings,
+  update,
+}: {
+  settings: Settings;
+  update: (patch: Partial<Settings>) => Promise<void>;
+}) {
+  const toast = useApp((s) => s.toast);
+  const jobs = useApp((s) => s.jobs);
+  const [status, setStatus] = useState<Schemas["EmbeddingStatus"] | null>(null);
+  const embedding: Embedding = settings.embedding ?? {
+    source: "local",
+    local_model: "multilingual-e5-small",
+    auto: true,
+    mirror: "https://huggingface.co",
+  };
+  const route = settings.routes.embed;
+
+  const download = Object.values(jobs).find(
+    (j) => j.kind === "model_download" && (j.status === "queued" || j.status === "running"),
+  );
+  const embedJobs = Object.values(jobs).filter(
+    (j) => j.kind === "embed" && (j.status === "queued" || j.status === "running"),
+  ).length;
+  // 下载 / 嵌入任务的进展会改变状态：任务数或下载进度变化时刷新
+  const jobKey = `${download?.status}:${Math.round((download?.progress ?? 0) * 20)}:${embedJobs}`;
+
+  useEffect(() => {
+    void api()
+      .GET("/embedding/status")
+      .then((r) => setStatus(unwrap(r)))
+      .catch(() => {});
+  }, [settings, jobKey]);
+
+  const set = (patch: Partial<Embedding>) => update({ embedding: { ...embedding, ...patch } });
+
+  const startDownload = async () => {
+    try {
+      unwrap(await api().POST("/embedding/download"));
+    } catch (e) {
+      toast(`无法开始下载：${e}`);
+    }
+  };
+
+  const rebuild = async () => {
+    try {
+      const ids = unwrap(await api().POST("/embedding/rebuild"));
+      toast(`已重新排队 ${ids.length} 篇文档`);
+    } catch (e) {
+      toast(`重建失败：${e}`);
+    }
+  };
+
+  const mb = (n: number) => `${Math.round(n / (1 << 20))} MB`;
+  const providerName = settings.providers.find((p) => p.id === route?.provider_id)?.name;
+
+  return (
+    <section aria-labelledby="s-search">
+      <h2 id="s-search">检索</h2>
+      <p className="hint">
+        为论文建立语义索引后，阅读器里的搜索（Ctrl+F）可以按意思找段落，之后的总结和问答也会用到它。关键词搜索不需要索引。
+      </p>
+      <div className="row">
+        <Select
+          label="嵌入模型来源"
+          value={embedding.source}
+          options={[
+            { value: "local", label: "内置本地模型（推荐，不上传内容）" },
+            { value: "provider", label: "大模型服务" },
+          ]}
+          onValue={(source) => set({ source })}
+        />
+        <Switch label="解析后自动建立索引" selected={embedding.auto} onValue={(auto) => set({ auto })} />
+      </div>
+
+      {embedding.source === "local" ? (
+        <>
+          <div className="row">
+            <span>
+              {status?.local_label ?? embedding.local_model}
+              {status && `，约 ${mb(status.size_bytes)}`}：
+              {download
+                ? `下载中 ${Math.round(download.progress * 100)}%`
+                : status?.downloaded
+                  ? "已就绪"
+                  : "未下载"}
+            </span>
+            {!status?.downloaded && (
+              <md-filled-tonal-button disabled={Boolean(download) || undefined} onClick={startDownload}>
+                下载模型
+              </md-filled-tonal-button>
+            )}
+          </div>
+          {download && <md-linear-progress value={download.progress} />}
+          <div className="row">
+            <TextField
+              label="下载源"
+              value={embedding.mirror}
+              commitOnChange
+              onValue={(mirror) => set({ mirror })}
+              supportingText="Hugging Face 访问慢时可改为镜像，如 https://hf-mirror.com"
+            />
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="row">
+            <Select
+              label="嵌入使用的服务"
+              value={route?.provider_id ?? ""}
+              options={[
+                { value: "", label: "未配置" },
+                ...settings.providers.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+              onValue={(provider_id) =>
+                update({
+                  routes: provider_id
+                    ? { ...settings.routes, embed: { provider_id, model: route?.model ?? "text-embedding-3-small" } }
+                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "embed")),
+                })
+              }
+            />
+            {route && (
+              <TextField
+                label="嵌入模型"
+                value={route.model}
+                commitOnChange
+                onValue={(model) => update({ routes: { ...settings.routes, embed: { ...route, model } } })}
+              />
+            )}
+          </div>
+          {status?.not_ready === "consent_required" && route && (
+            <div className="row">
+              <span className="hint">建立索引需要把论文段落发送给 {providerName ?? route.provider_id}。</span>
+              <md-text-button
+                onClick={() =>
+                  update({ consented_providers: [...settings.consented_providers, route.provider_id] })
+                }
+              >
+                允许
+              </md-text-button>
+            </div>
+          )}
+          {status?.not_ready === "missing_api_key" && <p className="hint">这个服务还没有保存 API Key。</p>}
+        </>
+      )}
+
+      {status && (
+        <div className="row">
+          <span className="hint">
+            已建立索引 {status.docs_embedded} / {status.docs_total} 篇
+            {embedJobs > 0 && `，${embedJobs} 篇排队中`}
+          </span>
+          <md-text-button disabled={!status.ready || undefined} onClick={rebuild}>
+            重建索引
+          </md-text-button>
+        </div>
+      )}
+    </section>
   );
 }

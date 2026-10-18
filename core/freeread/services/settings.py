@@ -47,6 +47,16 @@ class ModelRoute(_Strict):
     model: str
 
 
+class EmbeddingSettings(_Strict):
+    # local：内置本地模型（首次使用前要下载）；provider：走 routes["embed"] 指定的大模型服务
+    source: Literal["local", "provider"] = "local"
+    local_model: str = "multilingual-e5-small"
+    # 解析完成后自动嵌入
+    auto: bool = True
+    # 模型下载源：Hugging Face 或兼容镜像（如 https://hf-mirror.com）
+    mirror: str = Field(default="https://huggingface.co", pattern=r"^https?://\S+$")
+
+
 class AppSettings(_Strict):
     appearance: Appearance = Appearance()
     target_lang: str = "zh-CN"
@@ -56,6 +66,7 @@ class AppSettings(_Strict):
     routes: dict[TaskKind, ModelRoute] = {}
     # 用户已同意向其发送文档内容的 provider（architecture §10）
     consented_providers: list[str] = []
+    embedding: EmbeddingSettings = EmbeddingSettings()
 
     @model_validator(mode="after")
     def _check_refs(self) -> "AppSettings":

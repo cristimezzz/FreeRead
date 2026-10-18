@@ -21,7 +21,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
-from freeread.api import documents, jobs, library, llm, settings, translate
+from freeread.api import documents, embedding, jobs, library, llm, search, settings, translate
 from freeread.config import default_data_dir
 from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
@@ -55,6 +55,9 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
         renorm = await asyncio.to_thread(ctx.parse.enqueue_renormalize)
         if renorm:
             log.info("queued %d re-normalize jobs (normalizer upgraded)", len(renorm))
+        embeds = await asyncio.to_thread(ctx.embed.enqueue_missing)
+        if embeds:
+            log.info("queued %d embed jobs", len(embeds))
         try:
             yield
         finally:
@@ -87,6 +90,8 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
     app.include_router(settings.router)
     app.include_router(llm.router)
     app.include_router(translate.router)
+    app.include_router(search.router)
+    app.include_router(embedding.router)
     return app
 
 

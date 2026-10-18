@@ -1527,6 +1527,239 @@
           }
         }
       }
+    },
+    "/documents/{doc_id}/search": {
+      "get": {
+        "tags": [
+          "search"
+        ],
+        "summary": "Search Document",
+        "operationId": "search_document_documents__doc_id__search_get",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc Id"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 500,
+              "title": "Q"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "K"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embedding/status": {
+      "get": {
+        "tags": [
+          "embedding"
+        ],
+        "summary": "Embedding Status",
+        "operationId": "embedding_status_embedding_status_get",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embedding/download": {
+      "post": {
+        "tags": [
+          "embedding"
+        ],
+        "summary": "Download Model",
+        "description": "下载当前设置的内置嵌入模型（已有下载任务时返回它）。",
+        "operationId": "download_model_embedding_download_post",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/embedding/rebuild": {
+      "post": {
+        "tags": [
+          "embedding"
+        ],
+        "summary": "Rebuild Index",
+        "description": "清空向量索引，所有已解析文档重新嵌入。返回新建任务的 ID。",
+        "operationId": "rebuild_index_embedding_rebuild_post",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Response Rebuild Index Embedding Rebuild Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1584,6 +1817,15 @@
             "type": "array",
             "title": "Consented Providers",
             "default": []
+          },
+          "embedding": {
+            "$ref": "#/components/schemas/EmbeddingSettings",
+            "default": {
+              "source": "local",
+              "local_model": "multilingual-e5-small",
+              "auto": true,
+              "mirror": "https://huggingface.co"
+            }
           }
         },
         "additionalProperties": false,
@@ -1738,6 +1980,10 @@
             "type": "string",
             "title": "Parse Status"
           },
+          "embed_status": {
+            "type": "string",
+            "title": "Embed Status"
+          },
           "parser_engine": {
             "anyOf": [
               {
@@ -1803,6 +2049,7 @@
           "doc_id",
           "page_count",
           "parse_status",
+          "embed_status",
           "parser_engine",
           "parser_version",
           "normalizer_version",
@@ -1811,6 +2058,180 @@
           "updated_at"
         ],
         "title": "DocumentOut"
+      },
+      "EmbeddingSettings": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "provider"
+            ],
+            "title": "Source",
+            "default": "local"
+          },
+          "local_model": {
+            "type": "string",
+            "title": "Local Model",
+            "default": "multilingual-e5-small"
+          },
+          "auto": {
+            "type": "boolean",
+            "title": "Auto",
+            "default": true
+          },
+          "mirror": {
+            "type": "string",
+            "pattern": "^https?://\\S+$",
+            "title": "Mirror",
+            "default": "https://huggingface.co"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "EmbeddingSettings"
+      },
+      "EmbeddingStatus": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "local",
+              "provider"
+            ],
+            "title": "Source"
+          },
+          "model_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Key"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "not_ready": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "model_not_downloaded",
+                  "unknown_model",
+                  "route_not_configured",
+                  "missing_api_key",
+                  "consent_required"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Ready"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "local_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Model"
+          },
+          "local_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Label"
+          },
+          "downloaded": {
+            "type": "boolean",
+            "title": "Downloaded",
+            "default": false
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes",
+            "default": 0
+          },
+          "downloaded_bytes": {
+            "type": "integer",
+            "title": "Downloaded Bytes",
+            "default": 0
+          },
+          "download_job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "index_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Model"
+          },
+          "index_dim": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Dim"
+          },
+          "docs_total": {
+            "type": "integer",
+            "title": "Docs Total",
+            "default": 0
+          },
+          "docs_embedded": {
+            "type": "integer",
+            "title": "Docs Embedded",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "model_key",
+          "ready"
+        ],
+        "title": "EmbeddingStatus"
       },
       "EngineOut": {
         "properties": {
@@ -2361,6 +2782,96 @@
           "has_key"
         ],
         "title": "ProviderStatus"
+      },
+      "SearchHit": {
+        "properties": {
+          "doc_id": {
+            "type": "string",
+            "title": "Doc Id"
+          },
+          "block_id": {
+            "type": "string",
+            "title": "Block Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "sources": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fts",
+                "vector"
+              ]
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "snippet": {
+            "type": "string",
+            "title": "Snippet"
+          }
+        },
+        "type": "object",
+        "required": [
+          "doc_id",
+          "block_id",
+          "type",
+          "page",
+          "score",
+          "sources",
+          "snippet"
+        ],
+        "title": "SearchHit"
+      },
+      "SearchResponse": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "title": "Query"
+          },
+          "modes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "fts",
+                "vector"
+              ]
+            },
+            "type": "array",
+            "title": "Modes"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SearchHit"
+            },
+            "type": "array",
+            "title": "Hits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query",
+          "modes",
+          "hits"
+        ],
+        "title": "SearchResponse"
       },
       "SyncRequest": {
         "properties": {

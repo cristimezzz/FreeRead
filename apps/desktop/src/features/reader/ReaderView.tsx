@@ -8,6 +8,7 @@ import { useTranslations } from "../translate/useTranslations";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
 import { PdfView } from "./PdfView";
 import { ReflowView, type TranslationMode } from "./ReflowView";
+import { SearchPanel } from "./SearchPanel";
 
 type Layout = "pdf" | "split" | "reflow";
 
@@ -40,6 +41,8 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   const [reflowScroll, setReflowScroll] = useState(0);
   const firstVisible = useRef<string | null>(null);
   const prevDoc = useRef<Document | null>(null);
+  const loadedParse = useRef<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const version = useApp((s) => s.documentVersion[docId] ?? 0);
   const settings = useApp((s) => s.settings);
   const toast = useApp((s) => s.toast);
@@ -71,10 +74,14 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
       if (cancelled) return;
       setStatus(s);
       if (s.parse_status !== "ready") return;
+      // 只有解析结果变了才重新拉 IR；嵌入状态之类的变化也会发 document 事件
+      const parseKey = [s.parser_engine, s.parser_version, s.normalizer_version].join("|");
+      if (parseKey === loadedParse.current) return;
       try {
         const ir = (await (await rawFetch(`/documents/${docId}/ir`)).json()) as Document;
         if (cancelled) return;
         prevDoc.current = doc;
+        loadedParse.current = parseKey;
         setDoc(ir);
         setIrVersion((v) => v + 1);
       } catch (e) {
@@ -144,6 +151,28 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
 
   const onPdfError = useCallback((m: string) => toast(m), [toast]);
 
+  const jumpTo = useCallback(
+    (id: string) => {
+      setLocated(id);
+      setPdfHighlight(primaryAnchor(byId.get(id)));
+      setPdfScroll((k) => k + 1);
+      setReflowScroll((k) => k + 1);
+    },
+    [byId],
+  );
+
+  // Ctrl+F / ⌘F 打开文内搜索
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const parsing = Object.values(jobs).find(
     (j) => (j.kind === "parse" || j.kind === "parse_hq") && j.payload.doc_id === docId && (j.status === "running" || j.status === "queued"),
   );
@@ -201,6 +230,15 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
           </label>
         )}
         <span style={{ flex: 1 }} />
+        {ready && (
+          <md-icon-button
+            aria-label="搜索本文（Ctrl+F）"
+            title="搜索本文（Ctrl+F）"
+            onClick={() => setSearchOpen((o) => !o)}
+          >
+            <Icon name="search" />
+          </md-icon-button>
+        )}
         <span className="reader-status">
           {parsing && <md-circular-progress indeterminate style={{ "--md-circular-progress-size": "20px" } as React.CSSProperties} />}
           {parsing
@@ -228,6 +266,14 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
             fontSize={prefs.fontSize}
             onLocate={onLocateBlock}
             onVisible={onVisible}
+          />
+        )}
+        {searchOpen && ready && (
+          <SearchPanel
+            docId={docId}
+            embedStatus={status?.embed_status}
+            onPick={jumpTo}
+            onClose={() => setSearchOpen(false)}
           />
         )}
       </div>
