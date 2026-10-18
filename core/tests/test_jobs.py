@@ -161,6 +161,19 @@ async def test_shutdown_requeues_and_restart_resumes(ctx, worker):
     assert finished == [job.id] and done.attempts == 2
 
 
+async def test_stop_is_not_swallowed_by_simultaneous_wake(ctx):
+    """stop() 的取消与 wake 落在同一轮事件循环时，调度循环也必须退出。
+
+    Python 3.11 的 asyncio.wait_for 在内层 future 恰好完成时会吞掉取消，
+    调度循环就会一直转下去，stop() 永远等不到它（CI 上曾因此卡死）。
+    """
+    w = JobWorker(ctx.jobs, ctx.bus, poll_interval=60)
+    await w.start()
+    await asyncio.sleep(0.1)  # 调度循环停在等待 wake 上
+    w.wake()
+    await asyncio.wait_for(w.stop(), 5)
+
+
 async def test_recover_resets_running_jobs_after_crash(ctx):
     job = ctx.jobs.enqueue("parse")
     with ctx.sessions.begin() as s:

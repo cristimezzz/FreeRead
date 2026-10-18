@@ -42,7 +42,7 @@ jobs:
       - name: Ruff format
         run: ruff format --check freeread tests ../scripts
       - name: Pytest
-        run: pytest -q
+        run: pytest -v -rfE --durations=10
       - name: IR JSON Schema is up to date
         if: runner.os == 'Linux'
         run: |
