@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
@@ -9,6 +9,7 @@ import { ItemList } from "./ItemList";
 
 type Item = Schemas["ItemOut"];
 const PAGE = 100;
+const MAX_PAGE = 500; // 服务端单页上限
 
 export function LibraryView() {
   const [collections, setCollections] = useState<Schemas["CollectionOut"][]>([]);
@@ -19,6 +20,10 @@ export function LibraryView() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const libraryVersion = useApp((s) => s.libraryVersion);
+  const seq = useRef(0); // 只采用最后一次请求的结果：搜索输入、切换分类时旧响应可能后到
+  const loaded = useRef(0);
+  const seenVersion = useRef(libraryVersion);
+  loaded.current = items.length;
   const { navigate, toast, bumpLibrary } = useApp.getState();
 
   useEffect(() => {
@@ -33,7 +38,8 @@ export function LibraryView() {
   }, [libraryVersion]);
 
   const load = useCallback(
-    async (offset: number) => {
+    async (offset: number, limit = PAGE) => {
+      const id = ++seq.current;
       setLoading(true);
       try {
         const page = unwrap(
@@ -43,18 +49,19 @@ export function LibraryView() {
                 collection_id: selected,
                 q: debounced || null,
                 offset,
-                limit: PAGE,
+                limit,
                 sort: "added",
               },
             },
           }),
         );
+        if (id !== seq.current) return;
         setItems((prev) => (offset === 0 ? page.items : [...prev, ...page.items]));
         setTotal(page.total);
       } catch (e) {
-        toast(`加载文献失败：${e}`);
+        if (id === seq.current) toast(`加载文献失败：${e}`);
       } finally {
-        setLoading(false);
+        if (id === seq.current) setLoading(false);
       }
     },
     [selected, debounced, toast],
@@ -62,7 +69,14 @@ export function LibraryView() {
 
   useEffect(() => {
     void load(0);
-  }, [load, libraryVersion]);
+  }, [load]);
+
+  // 同步 / 解析进度推送触发的刷新：保留已经点开的"加载更多"，不要退回第一页
+  useEffect(() => {
+    if (seenVersion.current === libraryVersion) return;
+    seenVersion.current = libraryVersion;
+    void load(0, Math.min(MAX_PAGE, Math.max(PAGE, loaded.current)));
+  }, [libraryVersion, load]);
 
   const zoteroKey = collections.find((c) => c.id === selected)?.zotero_key ?? null;
 

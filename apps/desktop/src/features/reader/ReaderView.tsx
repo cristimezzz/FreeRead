@@ -61,7 +61,13 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const s = unwrap(await api().GET("/documents/{doc_id}", { params: { path: { doc_id: docId } } }));
+      let s: DocumentStatus;
+      try {
+        s = unwrap(await api().GET("/documents/{doc_id}", { params: { path: { doc_id: docId } } }));
+      } catch (e) {
+        if (!cancelled) toast(`加载文档失败：${e}`);
+        return;
+      }
       if (cancelled) return;
       setStatus(s);
       if (s.parse_status !== "ready") return;
@@ -97,7 +103,9 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
       setLocated(id);
       setReflowScroll((k) => k + 1);
     }
-    toast(`已升级为 ${ENGINE_LABEL[doc.parser.engine] ?? doc.parser.engine} 解析结果`);
+    if (old.parser.engine !== doc.parser.engine) {
+      toast(`已升级为 ${ENGINE_LABEL[doc.parser.engine] ?? doc.parser.engine} 解析结果`);
+    }
   }, [irVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const lang = settings?.target_lang ?? "zh-CN";

@@ -252,16 +252,20 @@ class TranslateService:
             else:
                 status, text = "needs_review", block.text  # 回退原文
 
-        await asyncio.to_thread(
-            self._save,
-            doc.doc_id,
-            block.id,
-            lang,
-            f"{provider_id}/{model}",
-            prompt.ref,
-            text,
-            status,
-        )
+        try:
+            await asyncio.to_thread(
+                self._save,
+                doc.doc_id,
+                block.id,
+                lang,
+                f"{provider_id}/{model}",
+                prompt.ref,
+                text,
+                status,
+            )
+        except Exception as e:  # 写库失败只影响这一块，不能中断整批的 SSE
+            log.exception("save translation %s/%s failed", doc.doc_id, block.id)
+            return TranslationEvent(block_id=block.id, status="error", message=str(e))
         return TranslationEvent(block_id=block.id, status=status, text=text)
 
     @staticmethod

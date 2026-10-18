@@ -8,6 +8,7 @@
 
 import asyncio
 import hashlib
+import json
 import shutil
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -451,9 +452,13 @@ class LibraryService:
         if q:
             # M1 用 LIKE；FTS5 在 M2 加入
             pattern = f"%{_escape_like(q)}%"
+            # authors 列按 JSON 存储，非 ASCII 字符被转义成 \uXXXX，所以作者要用转义后的写法再匹配一次
+            json_pattern = f"%{_escape_like(json.dumps(q)[1:-1])}%"
+            authors = func.cast(ItemRow.authors, String)
             query = query.where(
                 ItemRow.title.ilike(pattern, escape="\\")
-                | func.cast(ItemRow.authors, String).ilike(pattern, escape="\\")
+                | authors.ilike(pattern, escape="\\")
+                | authors.ilike(json_pattern, escape="\\")
             )
         order = {
             "added": (ItemRow.created_at.desc(), ItemRow.id.desc()),
