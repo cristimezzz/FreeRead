@@ -27,20 +27,89 @@ export async function getCoreInfo(): Promise<CoreInfo> {
   return { baseUrl, token };
 }
 
+/** sidecar 进程退出信息，壳的 `core-terminated` 事件 / `core_status` 命令（src-tauri/src/lib.rs）。 */
+export interface CoreExit {
+  code: number | null;
+  signal: number | null;
+  stderrTail: string[];
+}
+
+/**
+ * 订阅 sidecar 退出：sidecar 已经退出时也要（尽快）回调一次。返回取消订阅函数。
+ * 浏览器模式下拿不到进程状态，为 undefined。
+ */
+export type CoreExitSource = (onExit: (exit: CoreExit) => void) => Promise<() => void>;
+
+/** Tauri 模式：先订阅事件再查状态，订阅前就已退出的情况也不会漏掉。 */
+const tauriExitSource: CoreExitSource = async (onExit) => {
+  const [{ listen }, { invoke }] = await Promise.all([import("@tauri-apps/api/event"), import("@tauri-apps/api/core")]);
+  let fired = false;
+  const once = (exit: CoreExit) => {
+    if (fired) return;
+    fired = true;
+    onExit(exit);
+  };
+  const unlisten = await listen<CoreExit>("core-terminated", (e) => once(e.payload));
+  const exited = await invoke<CoreExit | null>("core_status");
+  if (exited) once(exited);
+  return unlisten;
+};
+
+export const defaultExitSource = (): CoreExitSource | undefined => (isTauri() ? tauriExitSource : undefined);
+
+export function describeExit(exit: CoreExit): string {
+  if (exit.code !== null) return `退出码 ${exit.code}`;
+  if (exit.signal !== null) return `信号 ${exit.signal}`;
+  return "原因未知";
+}
+
+export class CoreExitedError extends Error {
+  constructor(readonly exit: CoreExit) {
+    super(`Core Service 已退出（${describeExit(exit)}）`);
+  }
+}
+
 const POLL_INTERVAL_MS = 100;
 const TIMEOUT_MS = 30_000;
 
-/** 等 sidecar 的 /health 可用。连接被拒绝说明还没监听，继续等；401 等直接报错。 */
-export async function waitForHealth(info: CoreInfo): Promise<void> {
-  const deadline = Date.now() + TIMEOUT_MS;
-  for (;;) {
+export interface WaitOptions {
+  /** 默认：Tauri 模式订阅壳的退出事件，浏览器模式不订阅。 */
+  exits?: CoreExitSource;
+  timeoutMs?: number;
+}
+
+/**
+ * 等 sidecar 的 /health 可用。连接被拒绝说明还没监听，继续等；401 等直接报错。
+ * 同时监听 sidecar 退出：进程退出就立即以 {@link CoreExitedError} 失败，不再等到超时。
+ */
+export async function waitForHealth(info: CoreInfo, opts: WaitOptions = {}): Promise<void> {
+  const { exits = defaultExitSource(), timeoutMs = TIMEOUT_MS } = opts;
+  let exited: CoreExit | undefined;
+  let rejectExit: (err: Error) => void = () => {};
+  const exitPromise = new Promise<never>((_, reject) => (rejectExit = reject));
+  const unsubscribe = exits?.((exit) => {
+    exited = exit;
+    rejectExit(new CoreExitedError(exit));
+  });
+  try {
+    // 订阅本身失败（拿不到壳的事件）时退化成只轮询。
+    await Promise.race([unsubscribe?.catch(() => undefined), exitPromise]);
+    await Promise.race([pollHealth(info, timeoutMs, () => exited !== undefined), exitPromise]);
+  } finally {
+    unsubscribe?.then((off) => off()).catch(() => {});
+  }
+}
+
+async function pollHealth(info: CoreInfo, timeoutMs: number, stopped: () => boolean): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!stopped()) {
     try {
       const resp = await fetch(`${info.baseUrl}/health`, { headers: { "X-FreeRead-Token": info.token } });
       if (resp.ok) return;
       throw new HttpStatusError(resp.status);
     } catch (err) {
       if (err instanceof HttpStatusError) throw err;
-      if (Date.now() > deadline) throw new Error(`Core Service 在 ${TIMEOUT_MS / 1000}s 内未就绪`);
+      if (Date.now() > deadline) throw new Error(`Core Service 在 ${timeoutMs / 1000}s 内未就绪`);
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
   }
