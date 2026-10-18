@@ -5,7 +5,8 @@
 .DESCRIPTION
   每次启动用一个新的空数据目录（所以每次都会跑一遍 Alembic 迁移），从 Start-Process 计时，
   每 20 ms 请求一次 GET /health，到返回 200 为止；然后检查数据库已迁移到 head、
-  /llm/providers 可用（提示词已加载，否则 sidecar 启动即失败），最后 taskkill /T /F。
+  /llm/providers 可用（提示词已加载，否则 sidecar 启动即失败），导入一个小 PDF 并等快速解析
+  （PyMuPDF）完成，最后 taskkill /T /F。解析检查不计入启动时间。
 
   -Mode warm：同一路径先预热 1 次（不计），再测 -Runs 次。
   -Mode cold：每次把整个 onedir 目录复制到新的临时目录再启动，模拟安装后首次启动
@@ -34,6 +35,46 @@ function Get-FreePort {
     $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
     $listener.Start()
     try { $listener.LocalEndpoint.Port } finally { $listener.Stop() }
+}
+
+# 一页、一行文字的最小 PDF，用来检查打包后的快速解析链路（PyMuPDF 及其包元数据）。
+function New-TinyPdf([string]$Path) {
+    $stream = "BT /F1 18 Tf 72 720 Td (FreeRead packaging smoke test.) Tj ET"
+    $objects = @(
+        "<< /Type /Catalog /Pages 2 0 R >>",
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+        "<< /Length $($stream.Length) >>`nstream`n$stream`nendstream",
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+    )
+    $sb = [Text.StringBuilder]::new("%PDF-1.4`n")
+    $offsets = @()
+    for ($i = 0; $i -lt $objects.Count; $i++) {
+        $offsets += $sb.Length
+        [void]$sb.Append("$($i + 1) 0 obj`n$($objects[$i])`nendobj`n")
+    }
+    $xref = $sb.Length
+    [void]$sb.Append("xref`n0 $($objects.Count + 1)`n0000000000 65535 f `n")
+    foreach ($o in $offsets) { [void]$sb.Append(("{0:D10} 00000 n `n" -f $o)) }
+    [void]$sb.Append("trailer`n<< /Size $($objects.Count + 1) /Root 1 0 R >>`nstartxref`n$xref`n%%EOF`n")
+    [IO.File]::WriteAllText($Path, $sb.ToString(), [Text.Encoding]::ASCII)
+}
+
+function Test-Parse($Client, [string]$Base) {
+    $pdf = Join-Path $Work "smoke.pdf"
+    if (-not (Test-Path $pdf)) { New-TinyPdf $pdf }
+    $body = [Net.Http.StringContent]::new((@{ path = $pdf } | ConvertTo-Json), [Text.Encoding]::UTF8, "application/json")
+    $resp = $Client.PostAsync("$Base/library/import-file", $body).GetAwaiter().GetResult()
+    if (-not $resp.IsSuccessStatusCode) { throw "import-file 返回 $($resp.StatusCode)" }
+    $deadline = (Get-Date).AddSeconds(30)
+    while ((Get-Date) -lt $deadline) {
+        $jobs = $Client.GetStringAsync("$Base/jobs?kind=parse").GetAwaiter().GetResult() | ConvertFrom-Json
+        $failed = @($jobs | Where-Object status -in "failed", "cancelled")
+        if ($failed) { throw "解析失败：$($failed[0].message)" }
+        if ($jobs -and @($jobs | Where-Object status -ne "done").Count -eq 0) { return }
+        Start-Sleep -Milliseconds 200
+    }
+    throw "30 s 内解析未完成"
 }
 
 function Measure-Start([string]$ExeDir, [int]$N) {
@@ -70,6 +111,7 @@ function Measure-Start([string]$ExeDir, [int]$N) {
         if (-not (Select-String -Quiet -Path (Join-Path $Work "core-$N.err") -Pattern "database upgraded")) {
             throw "日志里没有迁移记录（database upgraded）"
         }
+        Test-Parse $client $base
         return $ms
     } finally {
         $client.Dispose()

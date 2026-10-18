@@ -10,7 +10,8 @@
      安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core.exe（apps/desktop/src-tauri/src/lib.rs）。
      不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
      选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
-  3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）和 core/prompts/*.yaml。
+  3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据。
+     打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF）。
 
 .EXAMPLE
   pwsh scripts/build_sidecar.ps1
@@ -49,6 +50,7 @@ if __name__ == "__main__":
 # uvicorn 按字符串动态加载 loop / protocol 实现，需要显式收集。
 # Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上；
 # 迁移脚本里 import 的 alembic.op / sqlalchemy 方言也要收集（静态分析看不到）。
+# PyMuPDF 快速解析器用 importlib.metadata 取版本号，要带上包元数据。
 # 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Prompts = Join-Path $Core "prompts"
@@ -60,6 +62,7 @@ Write-Host "==> PyInstaller --onedir"
     --collect-submodules uvicorn `
     --collect-submodules alembic `
     --hidden-import sqlalchemy.dialects.sqlite `
+    --copy-metadata pymupdf `
     --add-data "${Migrations};freeread/infra/db/migrations" `
     --add-data "${Prompts};prompts" `
     --distpath $Dist `
