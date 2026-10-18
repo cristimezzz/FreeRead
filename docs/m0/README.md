@@ -21,7 +21,7 @@
 
 1. ~~PyMuPDF 的 AGPL 许可~~：已决定 FreeRead 采用 AGPL-3.0-or-later，PyMuPDF 可以直接分发。MinerU 仍按"用户首次使用时下载、独立进程运行"的方式提供（见 ADR-0003）。
 2. **MinerU 模型权重的许可证**：分发前逐个确认；权重改为首次使用时下载。
-3. **代码签名与 onedir 打包**：Kaspersky 等主动防御会拦截无签名的新 exe。
-4. **常驻解析 worker**：MinerU 冷启动约 40 秒，不能每篇文档新起进程。
+3. **代码签名与 onedir 打包**：Kaspersky 等主动防御会拦截无签名的新 exe。——M1-P7 已改为 onedir（见 [m1/README.md](../m1/README.md)）；代码签名仍待做。
+4. ~~**常驻解析 worker**~~：M1-P3 已实现 MinerU 常驻 worker（`core/freeread/infra/parsers/resident.py`），空闲后自动退出。
 5. **Normalizer 改进**：见 ADR-0003 的"跟进"。
-6. **Zotero 中没有父条目的独立 PDF** 是否导入。
+6. ~~**Zotero 中没有父条目的独立 PDF** 是否导入~~：M1-P2 决定导入（`item_type = attachment`，`extra.standalone = true`，见 [01-architecture.md](../01-architecture.md)）。

@@ -19,8 +19,8 @@
 
 ## M1 MVP：导入、重排、翻译（4–6 周）
 
-- [ ] Core Service 骨架：FastAPI、SQLite + Alembic、任务队列、SSE。
-- [ ] Zotero 本地 API 导入 + 手动导入 PDF。
+- [x] Core Service 骨架：FastAPI、SQLite + Alembic、任务队列、SSE。
+- [x] Zotero 本地 API 导入 + 手动导入 PDF。
 - [x] 解析任务链：import → parse；IR 入库。（Normalizer 跟进项另行处理）
 - [x] 前端：文献库列表、分类树；阅读器（pdf.js 原版视图 + 重排视图）；双向定位。
 - [x] LLM Gateway：OpenAI 兼容 provider、缓存、用量记录；钥匙串保存密钥。

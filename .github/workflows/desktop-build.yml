@@ -1,9 +1,18 @@
 name: Desktop build (Windows installer)
 
-# 手动触发：打包 sidecar（PyInstaller）+ Tauri NSIS 安装包，作为 artifact 上传。
+# 打包 sidecar（PyInstaller onedir，经 bundle.resources 安装）+ Tauri NSIS 安装包，作为 artifact 上传；
+# 然后在干净的 runner 上静默安装，复测体积、启动时间和退出残留（scripts/verify_installed.ps1）。
+# 手动触发，或在打包相关文件变更的 PR 上触发。
 # 未签名，仅供内部测试；正式发布前需要 Authenticode 签名（见 ADR-0001）。
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - scripts/build_sidecar.ps1
+      - scripts/measure_sidecar.ps1
+      - scripts/verify_installed.ps1
+      - apps/desktop/src-tauri/**
+      - .github/workflows/desktop-build.yml
 
 permissions:
   contents: read
@@ -25,7 +34,7 @@ jobs:
           workspaces: apps/desktop/src-tauri
       - name: Build sidecar
         shell: pwsh
-        run: ./scripts/build_sidecar.ps1 -SkipOnedir
+        run: ./scripts/build_sidecar.ps1
       - name: Build installer
         working-directory: apps/desktop
         run: |
@@ -36,3 +45,15 @@ jobs:
           name: freeread-windows-nsis
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error
+      - name: Install and measure
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*.exe | Select-Object -First 1
+          ./scripts/verify_installed.ps1 -Installer $installer.FullName -Out verify-installed.md
+          Get-Content verify-installed.md >> $env:GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: verify-installed
+          path: verify-installed.md
+          if-no-files-found: ignore
