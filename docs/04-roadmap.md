@@ -28,6 +28,9 @@
 
 **验收**：从 Zotero 导入一个分类，打开任意一篇论文，3 分钟内可阅读重排版并看到逐段译文；断网后已翻译内容仍可阅读。
 
+- [x] 打包：sidecar 改为 PyInstaller onedir，经 `bundle.resources` 安装；NSIS 安装包复测体积、启动时间、退出残留。
+- 验收结果（2026-10-18，[详情](m1/README.md)）：打包版 sidecar + 本机 Zotero + mock LLM 下，39 s 内看到重排版和逐段译文，离线可读 ✅。安装版的文件对话框、钥匙串保存在本机被 Kaspersky 拦截，尚未验证；未用真实 LLM 复测。
+
 ## M2 理解：总结与单篇问答（3–4 周）
 
 - [ ] 嵌入任务、sqlite-vec 检索 + FTS5 混合检索。

@@ -11,7 +11,7 @@
 | 打包后迁移、提示词、快速解析 | ✅（发现并修复：漏带 PyMuPDF 包元数据，打包版快速解析全部失败） |
 | NSIS 安装包 | 36.01 MiB（M0 onefile 时 17.56 MiB） |
 | sidecar 启动到 `/health`（本机，含空库迁移） | 冷 1555 ms / 热 1537 ms（中位数） |
-| 干净机器（GitHub `windows-latest`）安装 + 退出残留 | 见下文「CI 干净机器」 |
+| 干净机器（GitHub `windows-latest`）安装 + 退出残留 | ✅ 安装 5.6 s；壳启动到 `/health` 中位数 1485 ms；关闭 / 强杀后 5/5 无残留 |
 | 本机安装后运行（Kaspersky） | ❌ 被 Kaspersky 主动防御拦截，见下文 |
 | M1 验收（浏览器模式 + 打包版 sidecar + 本机 Zotero + mock LLM） | ✅ 同步到看到逐段译文 39 s；离线可读 |
 | 文件对话框、钥匙串、安装版重启后密钥仍在 | ⚠️ 未验证（本机 Kaspersky 拦截安装版，CI 无法操作界面） |
@@ -56,7 +56,7 @@
 | sidecar | `freeread-core/` 81.3 MB，136 个文件（未压缩） | 15.9 MB 单文件 |
 | 壳 `freeread-desktop.exe` | 7.4 MB | 5.7 MB |
 | **NSIS 安装包** | **36.01 MiB**（37,761,528 字节） | 17.56 MiB |
-| 安装后目录 / 静默安装耗时 | 见「CI 干净机器」 | 21.7 MB / 约 7.2 s |
+| 安装后目录 / 静默安装耗时（CI） | 85.7 MB / 5.6 s | 21.7 MB / 约 7.2 s |
 
 体积增长主要来自 core 依赖：PyMuPDF（约 40 MB 未压缩）、SQLAlchemy / Alembic、Jinja2、httpx 等。onedir 本身不比 onefile 大（同样的内容，onefile 只是压缩打包），安装包里 NSIS 会再压缩一次。
 
@@ -75,7 +75,24 @@
 
 ### CI 干净机器（GitHub Actions `windows-latest`，无第三方杀毒）
 
-<!-- CI-RESULTS -->
+由 `desktop-build.yml` 的 `scripts/verify_installed.ps1` 测得（[run 39113570107](https://github.com/cristimezzz/FreeRead/actions/runs/39113570107)，PR #9）。CI 上的安装包由 CI 自己构建，与本机构建差 0.08 MiB。
+
+| 项目 | 结果 |
+|---|---|
+| 静默安装 `/S` 到 `%LOCALAPPDATA%FreeRead` | ✅ 5.6 s；安装后 85.7 MB，141 个文件（sidecar 78.3 MB，壳 7.4 MB） |
+| 安装目录里有迁移脚本、提示词 | ✅ |
+| sidecar 冷启动（每次复制到新目录） | 1670 / 1602 / 1604 / 1584 / 8540 ms，中位数 **1604 ms** |
+| sidecar 热启动 | 1038 / 1034 / 1528 / 1524 / 1524 ms，中位数 **1524 ms** |
+| 每次启动后导入并快速解析一个 PDF | ✅（冷热共 10 次 + 预热 1 次） |
+| 壳启动到 sidecar `/health` 可用（10 次） | 首次 3948 ms，之后 1468–1996 ms，中位数 **1485 ms** |
+| 数据库 `%APPDATA%FreeReadreeread.db` | ✅ 已创建（迁移已执行） |
+| 正常关闭窗口后 `freeread-core` 残留 | ✅ 5/5 次为 0，117–222 ms 内清理完（M0：90–153 ms） |
+| `taskkill /F` 壳后 `freeread-core` 残留 | ✅ 5/5 次为 0，91–116 ms 内清理完（M0：326–377 ms） |
+
+- 干净机器上也出现约 1.03 s / 1.52 s 两档的启动时间，和本机一样，说明是 sidecar 自身的行为（像是某处 0.5 s 的轮询或等待），不是杀毒软件造成的；值得在 M2 查一下。
+- 冷启动 5 次里有一次 8.5 s（Defender 首次扫描新文件的典型开销），其余和热启动接近。
+- 强杀壳后清理比 M0 快（onedir 只有一个进程，Job Object 关闭即结束；M0 的 onefile 有引导进程和 Python 子进程两层）。
+- CI 只能检查到 `/health` 可用，没有操作界面（文件对话框、钥匙串、阅读器）。
 
 ## 本机安装失败：Kaspersky 主动防御
 
@@ -105,7 +122,7 @@
 | MinerU 升级后自动刷新 | ➖ 未验证：打包版不含 MinerU；开发环境链路见 P3 |
 | 文件对话框导入 PDF | ⚠️ 未验证：浏览器模式没有 Tauri 对话框，安装版被 Kaspersky 拦截。打包版的导入 + 解析链路由 `measure_sidecar.ps1` 通过 `/library/import-file` 覆盖 |
 | 设置里保存 API Key 到凭据管理器，重启后仍在 | ⚠️ 未验证：同上（`set_api_key` 是 Tauri 命令）。浏览器模式下 key 经 `PUT /llm/providers/{id}/key` 直接给 sidecar |
-| 关闭 / 强杀后无残留 | 见「CI 干净机器」 |
+| 关闭 / 强杀后无残留 | ✅ CI 干净机器上各 5/5（见上文） |
 | Playwright e2e（fake provider） | 见 P6（CI） |
 
 ## 遗留
