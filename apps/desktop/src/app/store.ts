@@ -22,11 +22,13 @@ interface AppState {
   documentVersion: Record<string, number>;
   libraryVersion: number;
   snackbar: string | null;
+  /** 常驻 snackbar 不自动消失，也不被普通提示覆盖（例如 Core Service 已退出）。 */
+  snackbarSticky: boolean;
 
   navigate: (view: View) => void;
   loadSettings: () => Promise<void>;
   saveSettings: (settings: Settings) => Promise<Settings>;
-  toast: (message: string | null) => void;
+  toast: (message: string | null, opts?: { sticky?: boolean }) => void;
   bumpLibrary: () => void;
 }
 
@@ -37,6 +39,7 @@ export const useApp = create<AppState>((set, get) => ({
   documentVersion: {},
   libraryVersion: 0,
   snackbar: null,
+  snackbarSticky: false,
 
   navigate: (view) => set({ view }),
 
@@ -55,7 +58,12 @@ export const useApp = create<AppState>((set, get) => ({
     return saved;
   },
 
-  toast: (message) => set({ snackbar: message }),
+  toast: (message, opts) =>
+    set((s) =>
+      s.snackbarSticky && message !== null && !opts?.sticky
+        ? s
+        : { snackbar: message, snackbarSticky: message !== null && !!opts?.sticky },
+    ),
   bumpLibrary: () => set({ libraryVersion: get().libraryVersion + 1 }),
 }));
 

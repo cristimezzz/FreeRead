@@ -597,3 +597,15 @@ button {
   color: var(--md-sys-color-on-surface-variant);
   text-align: center;
 }
+
+.boot-log {
+  max-width: min(720px, 90vw);
+  max-height: 40vh;
+  overflow: auto;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--md-sys-color-surface-container);
+  font-size: 0.8em;
+  text-align: left;
+  white-space: pre-wrap;
+}

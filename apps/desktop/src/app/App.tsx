@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { connect } from "../api/client";
-import { getCoreInfo, waitForHealth } from "../api/core";
+import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
 import { NavigationRail } from "../components/m3/NavigationRail";
 import { Snackbar } from "../components/m3/Snackbar";
 import { JobsBar } from "../features/jobs/JobsBar";
@@ -10,7 +10,7 @@ import { SettingsView } from "../features/settings/SettingsView";
 import { startEventStream, useApp } from "./store";
 import { applyTheme } from "./theme";
 
-type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; message: string };
+type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; message: string; stderrTail?: string[] };
 
 export default function App() {
   const [boot, setBoot] = useState<Boot>({ state: "starting" });
@@ -20,6 +20,7 @@ export default function App() {
   useEffect(() => {
     applyTheme("#6750A4", "system", "standard");
     let stop: (() => void) | undefined;
+    let unwatch: Promise<() => void> | undefined;
     let cancelled = false;
     (async () => {
       try {
@@ -29,14 +30,25 @@ export default function App() {
         await useApp.getState().loadSettings();
         if (cancelled) return;
         stop = startEventStream();
+        // 运行中 sidecar 退出：后续请求都会失败，停掉推送重连，常驻提示用户重新打开。
+        unwatch = defaultExitSource()?.((exit) => {
+          stop?.();
+          useApp
+            .getState()
+            .toast(`Core Service 已退出（${describeExit(exit)}），请重新打开 FreeRead`, { sticky: true });
+        });
+        unwatch?.catch((err) => console.warn("watch core exit failed", err));
         setBoot({ state: "ready" });
       } catch (err) {
-        if (!cancelled) setBoot({ state: "error", message: String(err) });
+        if (cancelled) return;
+        const stderrTail = err instanceof CoreExitedError ? err.exit.stderrTail : undefined;
+        setBoot({ state: "error", message: err instanceof Error ? err.message : String(err), stderrTail });
       }
     })();
     return () => {
       cancelled = true;
       stop?.();
+      unwatch?.then((off) => off()).catch(() => {});
     };
   }, []);
 
@@ -62,6 +74,9 @@ export default function App() {
           <div>
             <h2>无法连接 Core Service</h2>
             <p>{boot.message}</p>
+            {boot.stderrTail && boot.stderrTail.length > 0 && (
+              <pre className="boot-log">{boot.stderrTail.join("\n")}</pre>
+            )}
             <p>如果被杀毒软件拦截，请把 FreeRead 加入信任列表后重新打开。</p>
           </div>
         )}
