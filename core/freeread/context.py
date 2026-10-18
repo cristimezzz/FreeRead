@@ -19,6 +19,7 @@ from freeread.infra.zotero.local_api import LocalApiConnector
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.settings import SettingsService
+from freeread.services.translate import TranslateService
 
 
 @dataclass
@@ -35,6 +36,7 @@ class AppContext:
     secrets: SecretStore
     prompts: PromptRegistry
     llm: DefaultGateway
+    translate: TranslateService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -56,6 +58,8 @@ class AppContext:
         worker.register("parse", parse.run_parse_job, concurrency=2)
         worker.register("parse_hq", parse.run_parse_hq_job, concurrency=1)
         secrets = secrets if secrets is not None else SecretStore.from_env()
+        prompts = PromptRegistry()
+        llm = DefaultGateway(settings, sessions, secrets)
         return cls(
             paths=paths,
             engine=engine,
@@ -67,8 +71,9 @@ class AppContext:
             library=library,
             parse=parse,
             secrets=secrets,
-            prompts=PromptRegistry(),
-            llm=DefaultGateway(settings, sessions, secrets),
+            prompts=prompts,
+            llm=llm,
+            translate=TranslateService(sessions, settings, llm, prompts),
         )
 
     def close(self) -> None:

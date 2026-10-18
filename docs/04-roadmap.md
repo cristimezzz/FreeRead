@@ -23,7 +23,7 @@
 - [ ] Zotero 本地 API 导入 + 手动导入 PDF。
 - [x] 解析任务链：import → parse；IR 入库。（Normalizer 跟进项另行处理）
 - [ ] 前端：文献库列表、分类树；阅读器（pdf.js 原版视图 + 重排视图）；双向定位。
-- [ ] LLM Gateway：OpenAI 兼容 provider、缓存、用量记录；钥匙串保存密钥。
+- [x] LLM Gateway：OpenAI 兼容 provider、缓存、用量记录；钥匙串保存密钥。
 - [ ] 块级翻译：可视区域优先、占位保护、对照 / 交替 / 仅译文显示。
 
 **验收**：从 Zotero 导入一个分类，打开任意一篇论文，3 分钟内可阅读重排版并看到逐段译文；断网后已翻译内容仍可阅读。
