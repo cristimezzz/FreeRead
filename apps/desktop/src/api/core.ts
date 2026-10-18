@@ -58,6 +58,8 @@ const tauriExitSource: CoreExitSource = async (onExit) => {
 export const defaultExitSource = (): CoreExitSource | undefined => (isTauri() ? tauriExitSource : undefined);
 
 export function describeExit(exit: CoreExit): string {
+  // Windows 崩溃码（NTSTATUS，如 0xC0000005）以负的 i32 传来，按十六进制显示。
+  if (exit.code !== null && exit.code < 0) return `退出码 0x${(exit.code >>> 0).toString(16).toUpperCase()}`;
   if (exit.code !== null) return `退出码 ${exit.code}`;
   if (exit.signal !== null) return `信号 ${exit.signal}`;
   return "原因未知";
@@ -92,20 +94,22 @@ export async function waitForHealth(info: CoreInfo, opts: WaitOptions = {}): Pro
     rejectExit(new CoreExitedError(exit));
   });
   try {
-    // 订阅本身失败（拿不到壳的事件）时退化成只轮询。
-    await Promise.race([unsubscribe?.catch(() => undefined), exitPromise]);
-    await Promise.race([pollHealth(info, timeoutMs, () => exited !== undefined), exitPromise]);
+    // 订阅与轮询并行：订阅失败（拿不到壳的事件）或迟迟不返回时，仍按轮询和超时处理。
+    const ready = await Promise.race([pollHealth(info, timeoutMs, () => exited !== undefined), exitPromise]);
+    // 轮询因退出而停下：以退出错误失败，不能当作就绪。
+    if (!ready) await exitPromise;
   } finally {
     unsubscribe?.then((off) => off()).catch(() => {});
   }
 }
 
-async function pollHealth(info: CoreInfo, timeoutMs: number, stopped: () => boolean): Promise<void> {
+/** /health 可用时返回 true；`stopped()` 为真时停止轮询并返回 false。 */
+async function pollHealth(info: CoreInfo, timeoutMs: number, stopped: () => boolean): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (!stopped()) {
     try {
       const resp = await fetch(`${info.baseUrl}/health`, { headers: { "X-FreeRead-Token": info.token } });
-      if (resp.ok) return;
+      if (resp.ok) return true;
       throw new HttpStatusError(resp.status);
     } catch (err) {
       if (err instanceof HttpStatusError) throw err;
@@ -113,6 +117,7 @@ async function pollHealth(info: CoreInfo, timeoutMs: number, stopped: () => bool
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
   }
+  return false;
 }
 
 class HttpStatusError extends Error {

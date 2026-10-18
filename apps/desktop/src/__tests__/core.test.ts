@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CoreExitedError, waitForHealth, type CoreExit, type CoreExitSource } from "../api/core";
+import { CoreExitedError, describeExit, waitForHealth, type CoreExit, type CoreExitSource } from "../api/core";
 
 const info = { baseUrl: "http://127.0.0.1:1", token: "t" };
 const crash: CoreExit = { code: 3, signal: null, stderrTail: ["Traceback", "ImportError: boom"] };
@@ -38,15 +38,24 @@ describe("waitForHealth", () => {
     expect(exits.off).toHaveBeenCalled();
     // 退出后不再继续轮询
     const calls = fetchMock.mock.calls.length;
-    await new Promise((r) => setTimeout(r, 300));
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(calls + 1);
+    await new Promise((r) => setTimeout(r, 500));
+    expect(fetchMock.mock.calls.length).toBe(calls);
   });
 
   it("rejects immediately when the sidecar had already exited before subscribing", async () => {
-    const fetchMock = vi.fn(refused);
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", vi.fn(refused));
     await expect(waitForHealth(info, { exits: fakeExits(crash).source })).rejects.toBeInstanceOf(CoreExitedError);
-    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps polling and times out when subscribing never settles", async () => {
+    vi.stubGlobal("fetch", refused);
+    const hung: CoreExitSource = () => new Promise(() => {});
+    await expect(waitForHealth(info, { exits: hung, timeoutMs: 200 })).rejects.toThrow("未就绪");
+  });
+
+  it("shows Windows crash codes in hex", () => {
+    expect(describeExit({ code: -1073741819, signal: null, stderrTail: [] })).toBe("退出码 0xC0000005");
+    expect(describeExit({ code: 1, signal: null, stderrTail: [] })).toBe("退出码 1");
   });
 
   it("resolves once /health is ok and ignores a later exit", async () => {

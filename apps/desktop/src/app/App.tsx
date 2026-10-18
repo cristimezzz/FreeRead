@@ -30,10 +30,13 @@ export default function App() {
         await useApp.getState().loadSettings();
         if (cancelled) return;
         stop = startEventStream();
-        // 运行中 sidecar 退出：后续请求都会失败，提示用户重新打开。
-        unwatch = defaultExitSource()?.((exit) =>
-          useApp.getState().toast(`Core Service 已退出（${describeExit(exit)}），请重新打开 FreeRead`),
-        );
+        // 运行中 sidecar 退出：后续请求都会失败，停掉推送重连，常驻提示用户重新打开。
+        unwatch = defaultExitSource()?.((exit) => {
+          stop?.();
+          useApp
+            .getState()
+            .toast(`Core Service 已退出（${describeExit(exit)}），请重新打开 FreeRead`, { sticky: true });
+        });
         unwatch?.catch((err) => console.warn("watch core exit failed", err));
         setBoot({ state: "ready" });
       } catch (err) {
