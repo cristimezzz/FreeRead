@@ -8,18 +8,22 @@
 //! 1. `RunEvent::Exit` 时主动结束子进程（正常关闭）；
 //! 2. Windows 上子进程放进 KILL_ON_JOB_CLOSE 的 Job Object（壳崩溃 / 被强杀）；
 //! 3. sidecar 自身的 `--parent-pid` 看门狗（core/freeread/main.py）。
+//!
+//! sidecar 启动后崩溃或中途退出时，壳发 `core-terminated` 事件并记到 [`CoreExitState`]，
+//! 前端不必等满 /health 超时（apps/desktop/src/api/core.ts）。
 
 #[cfg(windows)]
 mod job;
 mod keys;
 
+use std::collections::VecDeque;
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
-use tauri::{Manager, RunEvent};
+use tauri::{Emitter, Manager, RunEvent};
 use tauri_plugin_shell::ShellExt;
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 
@@ -52,6 +56,31 @@ impl Sidecar {
     }
 }
 
+/// 退出事件里带的 stderr 末尾行数。
+const STDERR_TAIL_LINES: usize = 20;
+
+/// sidecar 进程退出的信息，事件 `core-terminated` 的 payload，也是 `core_status` 的返回值。
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CoreExit {
+    code: Option<i32>,
+    signal: Option<i32>,
+    stderr_tail: Vec<String>,
+}
+
+/// 记下 sidecar 是否已经退出，供晚订阅事件的前端查询。setup 一开始就 manage，
+/// 保证读 stdout/stderr 的任务收到 `Terminated` 时状态已存在。
+#[derive(Default)]
+struct CoreExitState(Mutex<Option<CoreExit>>);
+
+/// 只保留最后 `cap` 行。
+fn push_tail(tail: &mut VecDeque<String>, line: String, cap: usize) {
+    if tail.len() == cap {
+        tail.pop_front();
+    }
+    tail.push_back(line);
+}
+
 /// sidecar 启动失败时窗口照常打开，把原因显示给用户（例如被杀毒软件拦截）。
 struct SpawnError(String);
 
@@ -63,6 +92,12 @@ fn core_info(app: tauri::AppHandle) -> Result<CoreInfo, String> {
     Err(app
         .try_state::<SpawnError>()
         .map_or_else(|| "sidecar not started".into(), |e| e.0.clone()))
+}
+
+/// sidecar 已退出时返回退出信息，仍在运行（或没启动）时返回 `None`。
+#[tauri::command]
+fn core_status(state: tauri::State<'_, CoreExitState>) -> Option<CoreExit> {
+    state.0.lock().unwrap().clone()
 }
 
 fn free_port() -> std::io::Result<u16> {
@@ -124,14 +159,34 @@ fn spawn_core(app: &tauri::AppHandle) -> Result<Sidecar, Box<dyn std::error::Err
         eprintln!("[shell] assign sidecar to job failed: {e}");
     }
 
+    let handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let mut tail = VecDeque::with_capacity(STDERR_TAIL_LINES);
         while let Some(event) = rx.recv().await {
             match event {
-                CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+                CommandEvent::Stdout(line) => {
                     eprintln!("[core] {}", String::from_utf8_lossy(&line).trim_end());
                 }
+                CommandEvent::Stderr(line) => {
+                    let line = String::from_utf8_lossy(&line).trim_end().to_owned();
+                    eprintln!("[core] {line}");
+                    push_tail(&mut tail, line, STDERR_TAIL_LINES);
+                }
                 CommandEvent::Terminated(payload) => {
-                    eprintln!("[core] exited with {:?}", payload.code);
+                    eprintln!(
+                        "[core] exited with {:?} (signal {:?})",
+                        payload.code, payload.signal
+                    );
+                    let exit = CoreExit {
+                        code: payload.code,
+                        signal: payload.signal,
+                        stderr_tail: tail.drain(..).collect(),
+                    };
+                    // 先记状态再发事件：前端订阅后查 core_status，两者之间不会漏掉。
+                    *handle.state::<CoreExitState>().0.lock().unwrap() = Some(exit.clone());
+                    if let Err(e) = handle.emit("core-terminated", exit) {
+                        eprintln!("[shell] emit core-terminated failed: {e}");
+                    }
                 }
                 _ => {}
             }
@@ -156,6 +211,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            app.manage(CoreExitState::default());
             match spawn_core(app.handle()) {
                 Ok(sidecar) => {
                     app.manage(sidecar);
@@ -169,6 +225,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             core_info,
+            core_status,
             keys::set_api_key,
             keys::delete_api_key
         ])
@@ -181,4 +238,31 @@ pub fn run() {
                 sidecar.shutdown();
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn push_tail_keeps_last_lines() {
+        let mut tail = VecDeque::new();
+        for i in 0..5 {
+            push_tail(&mut tail, i.to_string(), 3);
+        }
+        assert_eq!(Vec::from(tail), ["2", "3", "4"]);
+    }
+
+    #[test]
+    fn core_exit_serializes_camel_case() {
+        let exit = CoreExit {
+            code: Some(1),
+            signal: None,
+            stderr_tail: vec!["boom".into()],
+        };
+        assert_eq!(
+            serde_json::to_value(exit).unwrap(),
+            serde_json::json!({ "code": 1, "signal": null, "stderrTail": ["boom"] })
+        );
+    }
 }

@@ -41,6 +41,7 @@ freeread-desktop.exe (Tauri 壳)
      理论上存在竞态：在 `AssignProcessToJobObject` 之前引导进程就派生了子进程。实际上引导进程要先解压约 16 MB，时间窗口远大于这个竞态，测试中没有出现，而且第 3 道保险会兜住这种情况。
   3. sidecar 的 `--parent-pid` 看门狗（`core/freeread/main.py`）：Windows 上用 `OpenProcess(SYNCHRONIZE)` + `WaitForSingleObject` 等待父进程退出（持有句柄，不受 PID 复用影响），POSIX 上每秒轮询一次。父进程消失后先让 uvicorn 优雅退出，5 秒内没退完就 `os._exit`。
 - sidecar 启动失败（例如被杀毒软件拦截）不会让壳崩溃：`core_info` 返回错误，界面上会显示原因。
+- sidecar 启动后退出（崩溃、导入失败等）：壳发 `core-terminated` 事件，`{ code, signal, stderrTail }`，同时记到状态里供 `core_status` 查询（前端订阅事件之前就退出也不会漏）。启动阶段 `waitForHealth` 立即失败并在界面上显示 stderr 末尾；运行中退出弹 snackbar。
 
 ## 测量方法
 
@@ -118,5 +119,5 @@ sidecar 目前只包含 `/health` 实际 import 到的模块（fastapi、pydanti
 - [x] 发布形态改为 onedir：整个 onedir 目录作为 `bundle.resources` 安装到 `<安装目录>/freeread-core/`，壳用 `shell().command()` 启动（`externalBin` 只能带单个 exe）。复测见 [m1/README.md](m1/README.md)。
 - [ ] 代码签名（壳、sidecar、安装包）。签名后在装有 Kaspersky 的机器上复测安装和首次启动。
 - [x] 在没有第三方杀毒软件的干净 Windows 上复测冷启动（GitHub windows-latest，见 [m1/README.md](m1/README.md)）。
-- [ ] （M2）sidecar 启动失败或中途退出时，壳应把 `Terminated` 事件推给前端，而不是让前端等满 30 s 超时。
+- [x] （M2）sidecar 启动失败或中途退出时，壳应把 `Terminated` 事件推给前端，而不是让前端等满 30 s 超时。壳发 `core-terminated` 事件（退出码、信号、stderr 最后 20 行）并记到状态里，前端可用 `core_status` 补查；`waitForHealth` 收到退出立即失败，启动后退出时弹 snackbar。
 - [x] M1 core 依赖增加后复测 sidecar 体积和启动时间：热启动中位数本机 1537 ms、CI 1524 ms，没有超过 2 s，暂不做懒加载。1.03 s / 1.52 s 两档跳变的原因留到 M2 查（见 [m1/README.md](m1/README.md)）。
