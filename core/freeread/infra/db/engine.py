@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import sqlite_vec
 from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -14,7 +15,16 @@ def _set_pragmas(dbapi_conn, _record) -> None:
     cur.execute("PRAGMA journal_mode = WAL")
     cur.execute("PRAGMA synchronous = NORMAL")
     cur.execute("PRAGMA busy_timeout = 5000")
+    # 语句日志 / 临时索引放内存，不写系统临时目录（vec0 建表、大批量 DML 都会用到）
+    cur.execute("PRAGMA temp_store = MEMORY")
     cur.close()
+    # sqlite-vec：向量索引（vec0 虚拟表，见 freeread/infra/search/vector_index.py）。
+    # 只在加载期间打开扩展加载，避免 SQL 里的 load_extension() 被滥用。
+    dbapi_conn.enable_load_extension(True)
+    try:
+        sqlite_vec.load(dbapi_conn)
+    finally:
+        dbapi_conn.enable_load_extension(False)
 
 
 def make_engine(db_path: Path) -> Engine:

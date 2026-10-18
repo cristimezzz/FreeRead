@@ -18,6 +18,14 @@ NAMING_CONVENTION = {
 }
 
 
+# 虚拟表（FTS5、sqlite-vec）及其影子表不由 ORM 描述，autogenerate / 一致性检查时忽略。
+VIRTUAL_TABLE_PREFIXES = ("blocks_fts", "vec_chunks")
+
+
+def include_name(name, type_, _parent_names) -> bool:
+    return not (type_ == "table" and name and name.startswith(VIRTUAL_TABLE_PREFIXES))
+
+
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 

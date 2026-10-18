@@ -15,4 +15,7 @@ def get_settings(ctx: Ctx) -> AppSettings:
 
 @router.put("", response_model=AppSettings)
 def put_settings(ctx: Ctx, settings: AppSettings) -> AppSettings:
-    return ctx.settings.put(settings)
+    saved = ctx.settings.put(settings)
+    # 嵌入来源 / 模型可能变了，或刚确认了嵌入用的 provider：清理过期索引并给待嵌入文档排队
+    ctx.embed.enqueue_missing()
+    return saved

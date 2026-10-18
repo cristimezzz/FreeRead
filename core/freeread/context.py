@@ -16,8 +16,10 @@ from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
 from freeread.infra.parsers.registry import ParserRegistry
 from freeread.infra.zotero.local_api import LocalApiConnector
+from freeread.services.embed import EmbedService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
+from freeread.services.search import SearchService
 from freeread.services.settings import SettingsService
 from freeread.services.translate import TranslateService
 
@@ -37,6 +39,8 @@ class AppContext:
     prompts: PromptRegistry
     llm: DefaultGateway
     translate: TranslateService
+    embed: EmbedService
+    search: SearchService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -60,6 +64,10 @@ class AppContext:
         secrets = secrets if secrets is not None else SecretStore.from_env()
         prompts = PromptRegistry()
         llm = DefaultGateway(settings, sessions, secrets)
+        embed = EmbedService(sessions, paths, jobs, bus, settings, llm, engine=engine)
+        worker.register("embed", embed.run_embed_job, concurrency=1)
+        worker.register("model_download", embed.run_model_download_job, concurrency=1)
+        parse.on_blocks_replaced = embed.enqueue_embed
         return cls(
             paths=paths,
             engine=engine,
@@ -74,6 +82,8 @@ class AppContext:
             prompts=prompts,
             llm=llm,
             translate=TranslateService(sessions, settings, llm, prompts),
+            embed=embed,
+            search=SearchService(sessions, embed),
         )
 
     def close(self) -> None:
