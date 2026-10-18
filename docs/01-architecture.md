@@ -178,6 +178,15 @@ class LLMGateway:
 
 块级 `equation`、`table`、`figure` 不翻译（表格内文本和图注作为可选项）。
 
+M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与上面的差异：
+
+- 占位符只校验**数量**（每个恰好出现一次），不校验顺序：中文语序调整后引用的先后可能合理地变化。模型写成 `⟦ CITE1 ⟧`、`[[CITE1]]`、`【CITE1】` 的会先统一回标准写法。只保护数字引用 `[1, 3–5]`；作者年份引用要翻译，不保护。
+- 不按章节分批，而是逐块调用、全局并发 3，可视区域内的块按请求顺序开始；同一块同一语言并发请求时只调用一次。前端断开（滚走）时，没有其他请求在等的块会被取消。
+- 上下文暂不含摘要和术语表（术语表在 M2）。
+- 重试一次时绕开 LLM 缓存（否则拿回同一个错误译文）；两次都失败时 `needs_review`，译文存原文。
+- 发送前检查：任务路由已配置、provider 有密钥、用户已确认向该 provider 发送内容（`settings.consented_providers`）；不满足时 SSE 发 `error` 事件（`route_not_configured` / `missing_api_key` / `consent_required`），已有译文仍先发出。
+- 文档语言与目标语言相同时不翻译。离线阅读走 `GET /documents/{id}/translations`，只读本地库。
+
 ### 5.6 AI 总结
 
 - **Map**：按一级章节分组，每组生成章节摘要，输出 JSON：`[{point, block_ids[]}]`。
