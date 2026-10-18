@@ -180,7 +180,12 @@ def merge_subfigures(blocks: list[RawBlock]) -> list[RawBlock]:
             merged.image_path = None  # 引擎导出的是单个子图，整图由解析任务按 bbox 重新截取
             drop.update(members_figs)
             cap = min(below, key=lambda c: blocks[c].bbox[1])
-            insert_before[cap] = merged  # 阅读顺序上整图紧挨在图注之前
+            if cap in insert_before:
+                # 两组子图（间距超过 SUBFIG_GAP）共用一个图注：并成同一张图，不能丢掉先到的那组
+                prev = insert_before[cap]
+                prev.bbox = _union([prev.bbox, merged.bbox])
+            else:
+                insert_before[cap] = merged  # 阅读顺序上整图紧挨在图注之前
     out: list[RawBlock] = []
     for i, b in enumerate(blocks):
         if i in insert_before:

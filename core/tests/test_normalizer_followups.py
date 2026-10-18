@@ -230,6 +230,22 @@ def test_merge_subfigures_refuses_to_swallow_body_text():
     ]
 
 
+def test_merge_subfigures_two_groups_sharing_one_caption_keep_all_panels():
+    """左右两组子图相距超过 SUBFIG_GAP、共用一个图注：合并成一张图，不丢任何一组。"""
+    from freeread.infra.parsers.mineru import merge_subfigures
+
+    blocks = [
+        RawBlock(BlockType.FIGURE, 0, (50, 50, 150, 200)),
+        RawBlock(BlockType.FIGURE, 0, (160, 50, 260, 200)),
+        RawBlock(BlockType.FIGURE, 0, (320, 50, 420, 200)),
+        RawBlock(BlockType.FIGURE, 0, (430, 50, 530, 200)),
+        RawBlock(BlockType.CAPTION, 0, (50, 205, 530, 230), text="Figure 3. Four panels."),
+    ]
+    out = merge_subfigures(blocks)
+    assert [b.type for b in out] == [BlockType.FIGURE, BlockType.CAPTION]
+    assert out[0].bbox == (50, 50, 530, 200)
+
+
 # ---- Docling：title / footnote / reference_entry 的位置与关键词规则
 
 
