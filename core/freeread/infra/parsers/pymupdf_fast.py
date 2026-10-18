@@ -165,6 +165,24 @@ def normalize_extract(data: dict, pdf_sha256: str, engine_version: str):
                 and not text.rstrip().endswith(".")
                 and len(re.findall(r"[A-Za-z一-鿿]", text)) >= 3
             )
+            prev = raw[-1] if raw else None
+            if (
+                title_done
+                and prev is not None
+                and prev.type == BlockType.TITLE
+                and prev.page == pi
+                and b["size"] == top_size
+                and 0 <= bbox[1] - prev.bbox[3] < b["size"] * 1.2
+            ):
+                # 题目折行被 PyMuPDF 拆成了两个块：并回 title，免得被当成作者行
+                prev.text = f"{prev.text} {text}"
+                prev.bbox = (
+                    min(prev.bbox[0], bbox[0]),
+                    prev.bbox[1],
+                    max(prev.bbox[2], bbox[2]),
+                    bbox[3],
+                )
+                continue
             if pi == 0 and not title_done and b["size"] == top_size and b["size"] > body * 1.3:
                 bt, level = BlockType.TITLE, None
                 title_done = True
@@ -184,7 +202,7 @@ def normalize_extract(data: dict, pdf_sha256: str, engine_version: str):
 
 class PyMuPDFFastNormalizer:
     engine = "pymupdf"
-    version = "0.1.0"
+    version = "0.2.0"
 
     def normalize(self, raw: RawLayout, pdf_sha256: str):
         data = raw.data or json.loads((raw.raw_dir / "pymupdf.json").read_text(encoding="utf-8"))

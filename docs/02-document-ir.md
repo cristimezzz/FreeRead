@@ -135,6 +135,8 @@ Document IR（Intermediate Representation，统一文档模型）是一篇论文
 - **表格 HTML** 中的行内公式统一写作 `<math>LaTeX</math>`；单元格内的其他标签只保留 `table/tr/td/th`（含 `rowspan`/`colspan`）、`math`、`sup`、`sub`、`b`、`i`。
 - **图 / 表** 一律登记一个 `Asset`（`path` 为 `assets/<asset_id>.png`，由解析任务按 bbox 截图生成），因此 `figure` 总有 `asset_id`，`table` 在没有 HTML 时也能显示截图。
 - **参考文献**：引擎直接给出的 reference 块，或"References / Bibliography / 参考文献"标题之后的段落与列表项，都视为 `reference_entry`；条目以编号开头时 `Reference.id` 为 `r_<编号>`，否则为 `r_x<序号>`。
+- **多面板图**：同一图注之上、相互紧邻的子图合并为一个 `figure`（bbox 取并集）；子图标号（a、(b)…）不成块。
+- **前置内容**：首页题目之后的作者 / 单位 / 邮箱行记为 `author_info`，摘要段落记为 `abstract`；规则见 `normalize_common.mark_front_matter` 与 docs/m1/normalizer-followups.md。
 - **图注配对**：`caption_of` 指向同页、距离最近、且与图注标签（Figure / Table / 图 / 表）类型一致的 figure / table。
 - `meta.language` 在 Zotero 元数据缺失时按正文 CJK 字符占比推断（> 20% 记为 `zh`）。
 

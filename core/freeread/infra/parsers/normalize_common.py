@@ -29,7 +29,7 @@ from freeread.domain.ir.models import (
     validate_document,
 )
 
-NORMALIZER_VERSION = "0.1.0"
+NORMALIZER_VERSION = "0.2.0"
 
 BBox = tuple[float, float, float, float]
 
@@ -45,6 +45,58 @@ REFERENCES_HEADING_RE = re.compile(
 HEADING_NUMBER_RE = re.compile(r"^\s*((?:\d+\.)*\d+)\.?\s+\S")
 REF_NUMBER_RE = re.compile(r"^\s*\[?(\d{1,4})[\].)]?\s+\S")
 CJK_RE = re.compile(r"[一-鿿]")
+
+# ---- 首页前置内容（abstract / author_info）的关键词规则
+ABSTRACT_HEAD_RE = re.compile(r"^\s*(abstract|summary|摘\s*要)\s*[:.：]?\s*$", re.IGNORECASE)
+# "Abstract. The…" / "ABSTRACT The…" / "Abstract | …" / "摘要：…"
+ABSTRACT_START_RE = re.compile(r"^\s*(abstract|摘\s*要)(\s*[:.：|—–-]\s*|\s+)(?=\S)", re.IGNORECASE)
+KEYWORDS_RE = re.compile(
+    r"^\s*(key\s*words?|index\s+terms|关键词)\b|^[^|]{2,40}(\|[^|]{2,40}){2,}$", re.IGNORECASE
+)
+# 作者区内出现但不属于作者信息、也不终止作者区的块（日期、DOI、开放获取标记等）
+FRONT_SKIP_RE = re.compile(
+    r"^\s*((received|accepted|revised|published|available\s+online|open\s+access|check\s+for\s+updates"
+    r"|full\s+article|(research\s+)?article|copyright)\b|©|doi\s*:|https?://|www\."
+    r"|收稿日期|接受日期|接收日期|修回日期|在线发布日期|全文及作者单位)",
+    re.IGNORECASE,
+)
+# 出现即说明作者区已结束
+FRONT_STOP_RE = re.compile(
+    r"^\s*(key\s*words?|index\s+terms|edited\s+by|reviewed\s+by|(academic\s+)?editor\s*:|citation"
+    r"|specialty\s+section|orcid"
+    r"|correspondence\s*:|graphical\s+abstract|highlights|in\s+brief|abstract|summary|关键词|摘\s*要)",
+    re.IGNORECASE,
+)
+AFFIL_RE = re.compile(
+    r"universit|institut|department|dept\.|college|school|laborator|hospital|cent(er|re)\b|faculty"
+    r"|academy|klinik|\binc\.|\bltd\b|gmbh|大学|学院|研究所|研究院|医院|实验室|公司|中心",
+    re.IGNORECASE,
+)
+EMAIL_RE = re.compile(
+    r"[\w.+-]+@\s?[\w-]+(\.\s?[\w-]+)+|e-?mail|电子邮[箱件]|corresponding\s+author|通[信讯]\s*作者",
+    re.IGNORECASE,
+)
+_WORD_RE = re.compile(r"[^\W\d_]{2,}")
+_NAME_CONNECTORS = frozenset(
+    {
+        "and",
+        "et",
+        "al",
+        "de",
+        "der",
+        "den",
+        "van",
+        "von",
+        "la",
+        "le",
+        "di",
+        "da",
+        "du",
+        "dos",
+        "del",
+    }
+)
+FRONT_TEXT_TYPES = (BlockType.PARAGRAPH, BlockType.OTHER)
 
 
 @dataclass
@@ -135,6 +187,155 @@ def mark_reference_section(blocks: list[RawBlock]) -> None:
             b.type = BlockType.REFERENCE_ENTRY
 
 
+def _name_like(t: str) -> bool:
+    """作者行：拉丁词多数含大写字母（人名）；纯中文时为不含句号的短行。"""
+    if not t or len(t) > 1500:
+        return False
+    latin = [
+        w for w in _WORD_RE.findall(t) if not CJK_RE.search(w) and w.lower() not in _NAME_CONNECTORS
+    ]
+    if not latin:
+        return bool(CJK_RE.search(t)) and len(t) <= 80 and "。" not in t
+    caps = sum(1 for w in latin if any(c.isupper() for c in w))
+    has_sep = bool(re.search(r",|，|、|&|\band\b|和", t))
+    return caps / len(latin) >= 0.6 and (has_sep or len(t) <= 60)
+
+
+def _long_text(t: str) -> bool:
+    return len(t) >= 400 or len(CJK_RE.findall(t)) >= 150
+
+
+def mark_front_matter(blocks: list[RawBlock], pages: list[tuple[float, float]]) -> None:
+    """识别 abstract 与 author_info（只改 paragraph / other 类块，以及被误判为 heading 的作者行）。
+
+    规则（首两页）：
+    1. 以 "Abstract" / "摘要" 开头的段落 → abstract；其后紧接的、以小写字母开头的同页段落视为续段。
+    2. "Abstract" / "Summary" / "摘要" 标题之后、下一个标题之前的段落 → abstract。
+    3. 标题（title）之后：第一个像人名列表的块 → author_info；随后连续的单位 / 邮箱行 → author_info。
+       日期、DOI、"Open access" 等跳过；关键词、"Edited by"、正文标题等终止作者区。
+    4. "Authors" 标题之后第一个像人名列表的段落 → author_info（Cell 系列的侧栏）。
+    5. 作者区之后（同页、正文标题之前）第一个足够长的段落，若较宽（≥ 0.45 页宽）
+       或紧跟关键词行 → abstract。
+    """
+    n = len(blocks)
+
+    def text(i: int) -> str:
+        return clean_text(blocks[i].plain_text())
+
+    # 规则 1、2
+    i = 0
+    while i < n:
+        b = blocks[i]
+        if b.page > 1:
+            break
+        t = text(i)
+        if b.type == BlockType.PARAGRAPH and ABSTRACT_START_RE.match(t):
+            b.type = BlockType.ABSTRACT
+            j = i + 1
+            while j < n and blocks[j].page == b.page and blocks[j].type == BlockType.PARAGRAPH:
+                if not text(j)[:1].islower():
+                    break
+                blocks[j].type = BlockType.ABSTRACT
+                j += 1
+            i = j
+            continue
+        if b.type == BlockType.HEADING and ABSTRACT_HEAD_RE.match(t):
+            j, marked = i + 1, 0
+            while (
+                j < n
+                and marked < 4
+                and blocks[j].page <= b.page + 1
+                and blocks[j].type != BlockType.HEADING
+            ):
+                bj, tj = blocks[j], text(j)
+                w = pages[bj.page][0] if bj.page < len(pages) else 0.0
+                if (
+                    bj.type == BlockType.PARAGRAPH
+                    and not (FRONT_SKIP_RE.match(tj) or FRONT_STOP_RE.match(tj))
+                    and bj.bbox[2] - bj.bbox[0] >= w * 0.3  # 侧栏不算
+                ):
+                    bj.type = BlockType.ABSTRACT
+                    marked += 1
+                j += 1
+            i = j
+            continue
+        i += 1
+
+    # 规则 4
+    for i, b in enumerate(blocks):
+        if b.page > 1:
+            break
+        if b.type == BlockType.HEADING and re.match(r"^\s*authors?\s*$", text(i), re.IGNORECASE):
+            for j in range(i + 1, n):
+                if blocks[j].type == BlockType.HEADING or blocks[j].page != b.page:
+                    break
+                if blocks[j].type in FRONT_TEXT_TYPES and _name_like(text(j)):
+                    blocks[j].type = BlockType.AUTHOR_INFO
+                    break
+
+    # 规则 3
+    ti = next((i for i, b in enumerate(blocks) if b.type == BlockType.TITLE and b.page <= 1), None)
+    if ti is None or blocks[ti].page >= len(pages):
+        return
+    page = blocks[ti].page
+    w, h = pages[page]
+    last_author = None
+    for j in range(ti + 1, n):
+        b = blocks[j]
+        if b.page != page or b.type == BlockType.ABSTRACT or b.bbox[1] > h * 0.6:
+            break
+        t = text(j)
+        if FRONT_STOP_RE.match(t):
+            break
+        if FRONT_SKIP_RE.match(t) or b.type not in (*FRONT_TEXT_TYPES, BlockType.HEADING):
+            continue
+        if last_author is None:
+            if not _name_like(t):
+                break
+            # 被判成 heading 的作者行：须带逗号、角标符号或姓名缩写，且不像编号章节标题
+            # （避免把紧跟题目的 "Materials and Methods" 当成作者）
+            if b.type == BlockType.HEADING and (
+                HEADING_NUMBER_RE.match(t) or not re.search(r"[,，、&*∗†‡§]|\b[A-Z]\.|[^\W\d]\d", t)
+            ):
+                break
+        elif b.type == BlockType.HEADING or not (
+            AFFIL_RE.search(t) or EMAIL_RE.search(t) or (_name_like(t) and len(t) < 300)
+        ):
+            break
+        b.type, b.level = BlockType.AUTHOR_INFO, None
+        last_author = j
+    if last_author is None or any(b.type == BlockType.ABSTRACT and b.page == page for b in blocks):
+        return
+
+    # 规则 5
+    for j in range(last_author + 1, n):
+        b = blocks[j]
+        if b.page != page:
+            break
+        t = text(j)
+        if b.type == BlockType.HEADING:
+            if t.endswith((":", "：")):
+                continue  # 侧栏小标题（"Citation:" 等）
+            break
+        if b.type != BlockType.PARAGRAPH or FRONT_SKIP_RE.match(t) or FRONT_STOP_RE.match(t):
+            continue
+        width = b.bbox[2] - b.bbox[0]
+        if width < w * 0.3:
+            continue  # 侧栏
+        if _long_text(t):
+            nxt = next(
+                (
+                    text(k)
+                    for k in range(j + 1, n)
+                    if blocks[k].type in FRONT_TEXT_TYPES and blocks[k].page == page
+                ),
+                "",
+            )
+            if width >= w * 0.45 or KEYWORDS_RE.match(nxt):
+                b.type = BlockType.ABSTRACT
+        break
+
+
 def merge_continuations(blocks: list[RawBlock], cont: list[bool]) -> list[RawBlock]:
     """cont[i] 为 True 表示 blocks[i] 是上一个同类块的跨栏 / 跨页续段。"""
     out: list[RawBlock] = []
@@ -218,6 +419,7 @@ def build_document(
     pages_parsed: list[int] | None = None,
 ) -> tuple[Document, list[str]]:
     """组装并校验 Document。返回 (doc, problems)；问题同时写入对应块的 flags。"""
+    mark_front_matter(raw_blocks, pages)
     mark_reference_section(raw_blocks)
     page_infos = [
         PageInfo(index=i, width=round(w, 2), height=round(h, 2)) for i, (w, h) in enumerate(pages)

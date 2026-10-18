@@ -81,7 +81,7 @@ def parse_html(html: str) -> _Segmenter:
 
 class MarkerNormalizer:
     engine = "marker"
-    version = "0.1.0"
+    version = "0.2.0"
 
     def normalize(self, raw: RawLayout, pdf_sha256: str):
         data = json.loads((raw.raw_dir / "marker.json").read_text(encoding="utf-8"))
