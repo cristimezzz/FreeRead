@@ -228,6 +228,13 @@ async def test_listing_filters_search_and_counts(ctx, zotero):
     assert page.total == 4 and len(page.items) == 2
 
 
+async def test_search_matches_non_ascii_authors(ctx, zotero):
+    zotero.items[0].creators.append({"creatorType": "author", "firstName": "三", "lastName": "张"})
+    use(ctx, zotero)
+    await ctx.library.sync_zotero()
+    assert ctx.library.list_items(q="张").total == 1
+
+
 async def test_import_file_copies_and_dedupes(ctx, tmp_path):
     src = write_pdf(tmp_path / "in" / "my-paper.pdf", "hello", title="A Study of Things")
     item_id, created = ctx.library.import_file(src)

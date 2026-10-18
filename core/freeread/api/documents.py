@@ -70,6 +70,7 @@ def get_pdf(ctx: Ctx, doc_id: str):
     responses={200: {"content": {"image/png": {}}}},
 )
 def get_asset(ctx: Ctx, doc_id: str, name: str):
+    _doc_or_404(ctx, doc_id)  # doc_id 要先确认存在，否则 ".." 之类的值会拼出数据目录之外的路径
     if not ASSET_NAME_RE.match(name):
         raise HTTPException(404, "asset not found")
     path = ctx.parse.asset_path(doc_id, name)

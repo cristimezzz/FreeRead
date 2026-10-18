@@ -91,6 +91,21 @@ class SettingsService:
             return settings
 
     def put(self, settings: AppSettings) -> AppSettings:
+        # 隐私同意是针对"某个 provider 的某个地址"给的：服务被删除或换了 base_url，
+        # 之前的同意作废，下次翻译前重新询问（否则改个地址就能把文档发到没确认过的服务）。
+        previous = self.get()
+        old_urls = {p.id: p.base_url for p in previous.providers}
+        new_urls = {p.id: p.base_url for p in settings.providers}
+        settings = settings.model_copy(
+            update={
+                "consented_providers": [
+                    c
+                    for c in settings.consented_providers
+                    if c in new_urls
+                    and (c not in previous.consented_providers or old_urls.get(c) == new_urls[c])
+                ]
+            }
+        )
         data = settings.model_dump(mode="json")
         with self._sessions.begin() as s:
             for key, value in data.items():

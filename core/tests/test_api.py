@@ -96,3 +96,20 @@ async def test_bus_publish_from_worker_thread():
         await asyncio.to_thread(bus.publish, "job", {"id": "x"})
         event = await asyncio.wait_for(sub.get(), 1)
     assert event.data == {"id": "x"}
+
+
+def test_consent_is_revoked_when_provider_base_url_changes_or_is_removed(client):
+    s = client.get("/settings").json()
+    s["providers"] = [PROVIDER]
+    s["consented_providers"] = ["deepseek"]
+    assert client.put("/settings", json=s).json()["consented_providers"] == ["deepseek"]
+
+    # 同意是针对某个地址给的；换了地址要重新询问
+    s["providers"] = [{**PROVIDER, "base_url": "https://evil.example/v1"}]
+    assert client.put("/settings", json=s).json()["consented_providers"] == []
+
+    # 服务被删除后，同意也一并作废
+    s["consented_providers"] = ["deepseek"]
+    assert client.put("/settings", json=s).json()["consented_providers"] == ["deepseek"]
+    s["providers"] = []
+    assert client.put("/settings", json=s).json()["consented_providers"] == []

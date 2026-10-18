@@ -172,6 +172,25 @@ async def test_offline_errors_per_block_and_keeps_existing(ctx, tmp_path):
         assert s.query(TranslationRow).count() == 1
 
 
+async def test_unexpected_failure_in_one_block_does_not_break_the_batch(ctx, tmp_path, monkeypatch):
+    fake = FakeProvider("p1", responder=zh)
+    configure(ctx, fake)
+    doc_id, _, ordered = await parsed_doc(ctx, tmp_path)
+    paras = [b for b, t, _ in ordered if t == "paragraph"][:2]
+
+    real_save = ctx.translate._save
+
+    def flaky_save(doc_id, block_id, *args):
+        if block_id == paras[0]:
+            raise RuntimeError("disk full")
+        return real_save(doc_id, block_id, *args)
+
+    monkeypatch.setattr(ctx.translate, "_save", flaky_save)
+    events = {e.block_id: e for e in await collect(ctx.translate.translate_blocks(doc_id, paras))}
+    assert events[paras[0]].status == "error" and "disk full" in events[paras[0]].message
+    assert events[paras[1]].status == "ok"
+
+
 async def test_same_language_documents_are_skipped(ctx, tmp_path):
     fake = FakeProvider("p1", responder=zh)
     configure(ctx, fake)

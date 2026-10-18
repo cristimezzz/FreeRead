@@ -32,6 +32,7 @@ export function ReflowView(p: Props) {
   useEffect(() => {
     const el = root.current;
     if (!el) return;
+    visible.current.clear(); // IR 重新加载后旧节点已卸载，不会再收到"离开视口"的通知
     const report = () =>
       onVisible.current([...visible.current].sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0)));
     const io = new IntersectionObserver(
