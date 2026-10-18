@@ -27,6 +27,8 @@ from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
 from freeread.infra.llm.secrets import RedactingFilter
 
+log = logging.getLogger(__name__)
+
 # Tauri WebView 的源（Windows 为 http://tauri.localhost，macOS/Linux 为 tauri://localhost）
 # 以及 `tauri dev` 的 Vite 开发服务器。前端请求带自定义头，需要通过 CORS 预检。
 ALLOWED_ORIGINS = [
@@ -50,6 +52,9 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         ctx.bus.bind_loop(asyncio.get_running_loop())
         await ctx.worker.start()
+        renorm = await asyncio.to_thread(ctx.parse.enqueue_renormalize)
+        if renorm:
+            log.info("queued %d re-normalize jobs (normalizer upgraded)", len(renorm))
         try:
             yield
         finally:

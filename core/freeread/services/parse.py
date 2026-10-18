@@ -155,6 +155,38 @@ class ParseService:
         kind = "parse_hq" if spec.heavy else "parse"
         return self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine, "force": True})
 
+    def enqueue_renormalize(self) -> list[str]:
+        """启动时调用：Normalizer 升级后，为 IR 版本过旧且有原生输出的文档建非强制解析任务。
+
+        任务按文档当前的引擎排队，`_parse` 发现 engine.json 已在时只重新规范化，不重跑引擎。
+        没有原生输出、引擎不可用、或已有排队中解析任务的文档跳过。返回新建任务的 ID。
+        """
+        with self._sessions() as s:
+            rows = s.execute(
+                select(
+                    DocumentRow.doc_id, DocumentRow.parser_engine, DocumentRow.normalizer_version
+                ).where(DocumentRow.parse_status == "ready", DocumentRow.parser_engine.is_not(None))
+            ).all()
+            active = set(
+                s.scalars(
+                    select(JobRow.payload["doc_id"].as_string()).where(
+                        JobRow.kind.in_(["parse", "parse_hq"]),
+                        JobRow.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+                    )
+                )
+            )
+        out = []
+        for doc_id, engine, version in rows:
+            spec = self.registry.engines.get(engine)
+            if spec is None or version == spec.normalizer.version or doc_id in active:
+                continue
+            marker = self._paths.document_dir(doc_id) / "raw" / engine / "engine.json"
+            if not marker.is_file() or not spec.available():
+                continue
+            kind = "parse_hq" if spec.heavy else "parse"
+            out.append(self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine}).id)
+        return out
+
     async def run_parse_job(self, ctx: JobContext) -> None:
         p = ctx.job.payload
         engine = p.get("engine") or "pymupdf"

@@ -1,7 +1,7 @@
 # 路线图
 
 - 版本：0.1（草案）
-- 更新日期：2026-10-17
+- 更新日期：2026-10-18
 
 时间为单人全职的粗略估计，随 M0 结论调整。
 
@@ -30,6 +30,16 @@
 
 - [x] 打包：sidecar 改为 PyInstaller onedir，经 `bundle.resources` 安装；NSIS 安装包复测体积、启动时间、退出残留。
 - 验收结果（2026-10-18，[详情](m1/README.md)）：打包版 sidecar + 本机 Zotero + mock LLM 下，39 s 内看到重排版和逐段译文，离线可读 ✅。本机安装版的文件对话框导入、钥匙串保存与重启后读取、翻译也已实测通过 ✅；未用真实 LLM 复测。
+- [x] 收尾：启用 Tauri CSP；合并后 figure 截图逐张检查；Normalizer 升级后启动时自动重新规范化旧 IR（补验证时发现此前不会触发，[详情](m1/normalizer-followups.md#补充验证2026-10-18)）。
+
+**M1 已完成（2026-10-18）**。需要用户操作的发布前事项：代码签名、用真实 LLM provider 复测、启用 CSP 后在安装版里点一遍（见 [m1/README.md 遗留](m1/README.md#遗留)）。
+
+转入 M2 的跟进：
+
+- [ ] sidecar 启动失败或中途退出时，壳把 `Terminated` 事件推给前端（现在前端要等满 30 s 超时）。
+- [ ] footnote 规则（`docling.mark_footnotes`）移到公共层，PyMuPDF / MinerU 共用。
+- [ ] sidecar 启动时间出现 1.03 s / 1.52 s 两档跳变，查原因。
+- [ ] 打包版的 MinerU：首次使用时下载独立环境。
 
 ## M2 理解：总结与单篇问答（3–4 周）
 

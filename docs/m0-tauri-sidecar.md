@@ -118,5 +118,5 @@ sidecar 目前只包含 `/health` 实际 import 到的模块（fastapi、pydanti
 - [x] 发布形态改为 onedir：整个 onedir 目录作为 `bundle.resources` 安装到 `<安装目录>/freeread-core/`，壳用 `shell().command()` 启动（`externalBin` 只能带单个 exe）。复测见 [m1/README.md](m1/README.md)。
 - [ ] 代码签名（壳、sidecar、安装包）。签名后在装有 Kaspersky 的机器上复测安装和首次启动。
 - [x] 在没有第三方杀毒软件的干净 Windows 上复测冷启动（GitHub windows-latest，见 [m1/README.md](m1/README.md)）。
-- [ ] sidecar 启动失败或中途退出时，壳应把 `Terminated` 事件推给前端，而不是让前端等满 30 s 超时。
-- [ ] M1 core 依赖增加后复测 sidecar 体积和启动时间；如果热启动超过 2 s，考虑懒加载重型模块。
+- [ ] （M2）sidecar 启动失败或中途退出时，壳应把 `Terminated` 事件推给前端，而不是让前端等满 30 s 超时。
+- [x] M1 core 依赖增加后复测 sidecar 体积和启动时间：热启动中位数本机 1537 ms、CI 1524 ms，没有超过 2 s，暂不做懒加载。1.03 s / 1.52 s 两档跳变的原因留到 M2 查（见 [m1/README.md](m1/README.md)）。
