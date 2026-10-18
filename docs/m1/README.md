@@ -12,9 +12,9 @@
 | NSIS 安装包 | 36.01 MiB（M0 onefile 时 17.56 MiB） |
 | sidecar 启动到 `/health`（本机，含空库迁移） | 冷 1555 ms / 热 1537 ms（中位数） |
 | 干净机器（GitHub `windows-latest`）安装 + 退出残留 | ✅ 安装 5.6 s；壳启动到 `/health` 中位数 1485 ms；关闭 / 强杀后 5/5 无残留 |
-| 本机安装后运行（Kaspersky） | ❌ 被 Kaspersky 主动防御拦截，见下文 |
+| 本机安装版（经资源管理器安装、启动） | ✅ 安装、启动、迁移、文件对话框导入、阅读器、翻译均正常 |
 | M1 验收（浏览器模式 + 打包版 sidecar + 本机 Zotero + mock LLM） | ✅ 同步到看到逐段译文 39 s；离线可读 |
-| 文件对话框、钥匙串、安装版重启后密钥仍在 | ⚠️ 未验证（本机 Kaspersky 拦截安装版，CI 无法操作界面） |
+| 文件对话框、钥匙串、安装版重启后密钥仍在 | ✅ 本机安装版实测，见「安装版交互检查」 |
 
 ## 打包形态
 
@@ -70,7 +70,7 @@
 | onedir 热 | 1537 | 1528 | 1555 | 1543 | 1522 | **1537** | 1041 |
 
 - 热启动比 M0 慢约 0.5 s：core 现在要 import SQLAlchemy / Alembic / PyMuPDF 并跑迁移。同一天较早一次测量（加 PyMuPDF 元数据前）有 1033–1552 ms 的分布，中位数 1035 ms；差别像是 0.5 s 一档的离散跳变，原因未查，量级上都在 1–1.6 s。
-- 本机冷启动和热启动几乎一样，不像 M0 那样有 7–13 s 的 Kaspersky 首次扫描开销。复制目录在仓库下的 `build/`（见下文，本机 `%TEMP%` 写不进去），可能 Kaspersky 对这个目录的扫描策略不同，不能直接当作"安装后首次启动"的结论；干净机器的数据见下文。
+- 本机冷启动和热启动几乎一样，不像 M0 那样有 7–13 s 的首次扫描开销。复制目录在仓库下的 `build/`（测量进程写不了仓库外的目录，见下文「本机受限环境」），扫描策略可能不同，不能直接当作"安装后首次启动"的结论；干净机器的数据见下文。
 - 比 onefile 热启动（M0 3061 ms）快约 1.5 s，符合 M0 选 onedir 的预期。
 
 ### CI 干净机器（GitHub Actions `windows-latest`，无第三方杀毒）
@@ -79,13 +79,13 @@
 
 | 项目 | 结果 |
 |---|---|
-| 静默安装 `/S` 到 `%LOCALAPPDATA%FreeRead` | ✅ 5.6 s；安装后 85.7 MB，141 个文件（sidecar 78.3 MB，壳 7.4 MB） |
+| 静默安装 `/S` 到 `%LOCALAPPDATA%\FreeRead` | ✅ 5.6 s；安装后 85.7 MB，141 个文件（sidecar 78.3 MB，壳 7.4 MB） |
 | 安装目录里有迁移脚本、提示词 | ✅ |
 | sidecar 冷启动（每次复制到新目录） | 1670 / 1602 / 1604 / 1584 / 8540 ms，中位数 **1604 ms** |
 | sidecar 热启动 | 1038 / 1034 / 1528 / 1524 / 1524 ms，中位数 **1524 ms** |
 | 每次启动后导入并快速解析一个 PDF | ✅（冷热共 10 次 + 预热 1 次） |
 | 壳启动到 sidecar `/health` 可用（10 次） | 首次 3948 ms，之后 1468–1996 ms，中位数 **1485 ms** |
-| 数据库 `%APPDATA%FreeReadreeread.db` | ✅ 已创建（迁移已执行） |
+| 数据库 `%APPDATA%\FreeRead\freeread.db` | ✅ 已创建（迁移已执行） |
 | 正常关闭窗口后 `freeread-core` 残留 | ✅ 5/5 次为 0，117–222 ms 内清理完（M0：90–153 ms） |
 | `taskkill /F` 壳后 `freeread-core` 残留 | ✅ 5/5 次为 0，91–116 ms 内清理完（M0：326–377 ms） |
 
@@ -94,22 +94,37 @@
 - 强杀壳后清理比 M0 快（onedir 只有一个进程，Job Object 关闭即结束；M0 的 onefile 有引导进程和 Python 子进程两层）。
 - CI 只能检查到 `/health` 可用，没有操作界面（文件对话框、钥匙串、阅读器）。
 
-## 本机安装失败：Kaspersky 主动防御
+## 安装版交互检查（本机，2026-10-18）
 
-本机 Kaspersky 21.26 当前把所有新出现的无签名 exe 都归入受限组，**比 M0 时更严**：
+用本机构建的安装包（36.03 MiB，含 PyMuPDF 元数据修复）在资源管理器里双击安装（向导，默认目录 `%LOCALAPPDATA%\FreeRead`），然后从资源管理器启动。provider 指向本机 OpenAI 兼容 mock，API Key 为测试值。
 
-- NSIS 安装包 `/S` 安装到默认目录（`%LOCALAPPDATA%\FreeRead`）或 `%LOCALAPPDATA%` 下其他目录：约 0.3–4 s 后退出码 0，但什么都没装。M0 时"复制一份安装包再运行"就能装上，这次复制后仍然不行。`/D=<仓库下目录>` 可以装上。
-- 装在仓库目录下的壳：WebView2 数据目录（`%LOCALAPPDATA%\com.freeread.desktop\EBWebView`）创建失败，`failed to create webview: WebView2 error 0x800700AA`（资源在使用中）并 panic；把 `WEBVIEW2_USER_DATA_FOLDER` 指到仓库目录后壳能起来，但 sidecar 建 `%APPDATA%\FreeRead` 时 `PermissionError: [WinError 5]`。
-- 受影响的不只是 FreeRead：uv 装的 `python.exe`、M0 时能正常运行的 onefile sidecar，现在写 `%APPDATA%` / `%TEMP%` 也被拒；签名的 `node.exe` 不受影响。
-- 只要数据目录在仓库下（`--data-dir`），打包版 sidecar 运行正常，下文的验收就是这样做的。
+| 检查 | 结果 |
+|---|---|
+| 安装向导 → 默认目录安装 → 勾选"运行 FreeRead" | ✅ 需要空间 88.7 MB；壳从 `\\?\C:\Users\…\FreeRead\freeread-core\freeread-core.exe` 启动 sidecar（`--port/--token/--parent-pid`） |
+| 迁移 | ✅ `%APPDATA%\FreeRead\freeread.db` 已创建，文献库页正常 |
+| "导入 PDF" → 系统文件对话框（PDF 过滤）→ 选评测集里一篇 | ✅ 条目出现，状态"可阅读"；打开后原版 + 重排并排显示（126 块） |
+| 未配置翻译模型时打开论文 | ✅ 只弹一条提示"无法翻译：no model configured…"，没有弹窗风暴 |
+| 设置 → 添加服务 → 填 Base URL 和 API Key → 保存 Key | ✅ 提示"API Key 已保存到系统钥匙串"；凭据管理器里出现 `LegacyGeneric:target=llm-keys.FreeRead`（用户 `llm-keys`）；"测试连接"正常 |
+| 关闭窗口后进程 | ✅ `freeread-desktop` / `freeread-core` 都已退出 |
+| 强杀壳（`Stop-Process -Force`） | ✅ `freeread-core` 随之退出 |
+| 重新启动后 | ✅ 文献库、设置都在；API Key 字段显示"已保存，输入新值可替换"——这个状态来自 sidecar 内存里的密钥（`/llm/providers` 的 `has_key`），说明密钥按 钥匙串 → `FREEREAD_SECRETS` → sidecar 的路径注入成功 |
+| 重启后翻译 | ✅ 首次翻译弹出同意框，同意后逐段出现译文 |
 
-这进一步说明 **代码签名是发布前的硬性前提**（ADR-0001、M0 遗留项）。未签名时，装了 Kaspersky 一类主动防御的用户可能"安装成功但什么都没有"，安装程序还返回 0。
+## 本机受限环境（更正：不是 Kaspersky）
+
+第一轮本机测试时，所有新编出的无签名 exe 都写不了 `%APPDATA%` / `%LOCALAPPDATA%` / `%TEMP%`：NSIS `/S` 退出码 0 但什么都没装，壳报 `WebView2 error 0x800700AA`，sidecar 建 `%APPDATA%\FreeRead` 时 `PermissionError: [WinError 5]`。当时归因于 Kaspersky 主动防御（和 M0 的现象一致），**这个归因是错的**：
+
+- 卸载 Kaspersky 并重启后，现象完全不变（Kaspersky 的驱动、服务都已不在）。
+- 受限的只是由 Claude Code 代理会话（`claude.exe`）派生的进程：同一个 `python.exe` 能写仓库目录，写不了仓库外任何目录，进程完整性级别是普通的 Medium；而经资源管理器安装、启动的同一个安装包和 `freeread-desktop.exe` 一切正常。由代理会话直接启动的 `freeread-desktop.exe` 又会复现黑窗口。
+- 所以这是开发环境（代理会话的进程沙箱）的限制，不是 FreeRead 或打包的问题。M0 记录的 Kaspersky 现象可能部分也是同一原因，没有复查。
+- CI 干净机器和本机资源管理器两条路径都验证了安装版正常。代码签名仍然是发布前要做的（ADR-0001），但"未签名就会被 Kaspersky 拦成安装失败"这个结论在本机不再成立。
+- 本机还装有火绒安全软件，这次测试没有观察到它拦截。
 
 ## M1 验收
 
 路线图验收标准："从 Zotero 导入一个分类，打开任意一篇论文，3 分钟内可阅读重排版并看到逐段译文；断网后已翻译内容仍可阅读。"
 
-由于本机安装版被拦截，验收在"浏览器模式"下做：打包版 sidecar（`binaries/freeread-core/freeread-core.exe --data-dir build/accept-data`）+ Vite 开发服务器（同源代理到 sidecar）+ 本机 Zotero 7 + 本机 OpenAI 兼容 mock（流式返回 `【译】<原文>`）。没有真实 LLM key，所以译文质量和真实 provider 的延迟不在这次验收范围内。
+第一轮验收（当时本机安装版起不来，见上文）在"浏览器模式"下做：打包版 sidecar（`binaries/freeread-core/freeread-core.exe --data-dir build/accept-data`）+ Vite 开发服务器（同源代理到 sidecar）+ 本机 Zotero 7 + 本机 OpenAI 兼容 mock（流式返回 `【译】<原文>`）。没有真实 LLM key，所以译文质量和真实 provider 的延迟不在这次验收范围内。
 
 | 检查 | 结果 |
 |---|---|
@@ -120,14 +135,14 @@
 | 离线：停掉 provider，重启 sidecar 后重新打开 | ✅ 已翻译段落照常显示；未翻译段显示原文，没有错误弹窗，控制台无错误 |
 | 重排 ⇄ 原版双向定位与高亮 | ➖ 本次没有复查（P6 已验证，P7 未改前端） |
 | MinerU 升级后自动刷新 | ➖ 未验证：打包版不含 MinerU；开发环境链路见 P3 |
-| 文件对话框导入 PDF | ⚠️ 未验证：浏览器模式没有 Tauri 对话框，安装版被 Kaspersky 拦截。打包版的导入 + 解析链路由 `measure_sidecar.ps1` 通过 `/library/import-file` 覆盖 |
-| 设置里保存 API Key 到凭据管理器，重启后仍在 | ⚠️ 未验证：同上（`set_api_key` 是 Tauri 命令）。浏览器模式下 key 经 `PUT /llm/providers/{id}/key` 直接给 sidecar |
-| 关闭 / 强杀后无残留 | ✅ CI 干净机器上各 5/5（见上文） |
+| 文件对话框导入 PDF | ✅ 安装版实测（见「安装版交互检查」） |
+| 设置里保存 API Key 到凭据管理器，重启后仍在 | ✅ 安装版实测（见「安装版交互检查」） |
+| 关闭 / 强杀后无残留 | ✅ CI 干净机器上各 5/5；本机安装版各 1 次 |
 | Playwright e2e（fake provider） | 见 P6（CI） |
 
 ## 遗留
 
-- [ ] 在装有 Kaspersky 的机器上：把构建目录加入信任后，补测文件对话框、钥匙串保存与重启后读取、安装版的完整流程。
-- [ ] 代码签名（壳、sidecar 目录内 exe、安装包），签名后复测 Kaspersky 下安装和首次启动。
+- [x] 本机安装版：文件对话框、钥匙串保存与重启后读取（见「安装版交互检查」）。
+- [ ] 代码签名（壳、sidecar 目录内 exe、安装包）。
 - [ ] 用真实 provider 复测"3 分钟内看到译文"（本次用 mock）。
 - [ ] 打包版的 MinerU：首次使用时下载独立环境（M2）。
