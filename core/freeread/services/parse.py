@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import shutil
+from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -114,6 +115,9 @@ class ParseService:
         self._bus = bus
         self._settings = settings
         self.registry = registry
+        # parse 与 parse_hq 是两种任务、可以同时运行；同一文档的解析必须串行，
+        # 否则会同时写 raw/、assets/、ir.json 和 blocks 表
+        self._doc_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     # ------------------------------------------------------------ 查询
 
@@ -187,6 +191,12 @@ class ParseService:
 
     async def run(
         self, doc_id: str, engine: str, progress: Progress, force: bool = False
+    ) -> ParseOutcome:
+        async with self._doc_locks[doc_id]:
+            return await self._run_locked(doc_id, engine, progress, force)
+
+    async def _run_locked(
+        self, doc_id: str, engine: str, progress: Progress, force: bool
     ) -> ParseOutcome:
         spec = self.registry.get(engine)
         if not spec.available():
