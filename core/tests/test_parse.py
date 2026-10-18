@@ -226,6 +226,35 @@ async def test_chain_respects_settings(ctx, tmp_path, fake_mineru):
     assert ctx.parse._chain_hq(doc_id) is None  # 已有排队中的 parse_hq
 
 
+async def test_enqueue_renormalize_after_normalizer_upgrade(ctx, tmp_path, monkeypatch):
+    _, doc_id = import_synthetic(ctx, tmp_path)
+    _, other_id = import_synthetic(ctx, tmp_path, name="other.pdf", strip_metadata=True)
+    assert other_id != doc_id
+    for d in (doc_id, other_id):
+        await ctx.parse.run(d, "pymupdf", noop)
+    for job in ctx.jobs.list(kind="parse"):  # 导入时建的任务，本测试直接调用 run
+        ctx.jobs.cancel(job.id)
+    assert ctx.parse.enqueue_renormalize() == []  # 版本一致
+
+    spec = ctx.parse.registry.get("pymupdf")
+    monkeypatch.setattr(spec.normalizer, "version", spec.normalizer.version + ".post1")
+    # 没有原生输出：不排队（否则会重跑引擎）
+    shutil.rmtree(ctx.paths.document_dir(other_id) / "raw")
+    ids = ctx.parse.enqueue_renormalize()
+    assert [ctx.jobs.get(i).payload for i in ids] == [{"doc_id": doc_id, "engine": "pymupdf"}]
+    assert ctx.parse.enqueue_renormalize() == []  # 已有排队中的任务
+
+    ctx.jobs.cancel(ids[0])
+
+    def no_parse():
+        raise AssertionError("raw output exists, should only re-normalize")
+
+    monkeypatch.setattr(spec, "make_parser", no_parse)
+    outcome = await ctx.parse.run(doc_id, "pymupdf", noop)  # 与任务 payload 相同：非强制
+    assert outcome.status == "renormalized"
+    assert ctx.parse.enqueue_renormalize() == []
+
+
 def test_render_assets_crops_figures(tmp_path):
     from freeread.domain.ir.models import BlockType
     from freeread.infra.parsers.normalize_common import RawBlock, build_document
