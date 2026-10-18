@@ -39,8 +39,8 @@
   - **PyMuPDF：AGPL-3.0 / 商业双许可**。FreeRead 本身采用 AGPL-3.0-or-later（2026-10-18 决定），因此可以直接随 sidecar 分发 PyMuPDF，不需要替换。
   - MinerU 的附加条款（规模门槛、在线服务标识）超出了 AGPL 允许的"进一步限制"。因此 MinerU 不随安装包分发，而是由用户在首次使用时下载到独立环境，作为单独的程序通过子进程调用。不要把 MinerU 代码静态打包进 FreeRead 的发行物。
 - 跟进（M1）：
-  - MinerU Normalizer 合并"同一图注之上的相邻 figure 块"，并过滤子图标号。
-  - Docling Normalizer 补充 title、reference、footnote 的位置 / 关键词规则。
-  - 所有 Normalizer 识别 abstract 和 author_info。
+  - ~~MinerU Normalizer 合并"同一图注之上的相邻 figure 块"，并过滤子图标号。~~ M1-P3b 完成（见 docs/m1/normalizer-followups.md）。
+  - ~~Docling Normalizer 补充 title、reference、footnote 的位置 / 关键词规则。~~ M1-P3b 完成。
+  - ~~所有 Normalizer 识别 abstract 和 author_info。~~ M1-P3b 完成。
   - ~~sidecar 保持一个常驻的解析 worker 进程，摊薄模型加载开销。~~ M1-P3 完成（`infra/parsers/resident.py`）。
   - 模型权重改为首次使用时下载，不打进安装包（与 ADR-0001 一致）。

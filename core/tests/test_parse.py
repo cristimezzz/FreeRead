@@ -88,14 +88,15 @@ async def test_cached_renormalized_and_forced(ctx, tmp_path, monkeypatch):
     assert (await ctx.parse.run(doc_id, "pymupdf", noop)).status == "cached"
 
     spec = ctx.parse.registry.get("pymupdf")
-    monkeypatch.setattr(spec.normalizer, "version", "0.2.0")
+    bumped = spec.normalizer.version + ".post1"
+    monkeypatch.setattr(spec.normalizer, "version", bumped)
 
     def no_parse():
         raise AssertionError("raw output exists, should only re-normalize")
 
     monkeypatch.setattr(spec, "make_parser", no_parse)
     assert (await ctx.parse.run(doc_id, "pymupdf", noop)).status == "renormalized"
-    assert ctx.parse.get(doc_id).normalizer_version == "0.2.0"
+    assert ctx.parse.get(doc_id).normalizer_version == bumped
 
     monkeypatch.setattr(spec, "make_parser", PyMuPDFFastParser)
     assert (await ctx.parse.run(doc_id, "pymupdf", noop, force=True)).status == "parsed"

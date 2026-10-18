@@ -112,7 +112,7 @@
 **MinerU**
 
 - 原生区分 doc_title、paragraph_title（带层级）、ref_text、page_footnote，页眉页脚和页码会自动丢弃，因此类型准确率最高（84.1%，粗粒度 93.8%）。
-- 会把多子图的 figure 按子图拆开，并把子图标号（A、B…）识别为 image_caption，所以 figure F1（0.35）和 caption F1（0.58）偏低。这可以在 Normalizer 中合并"同一图注之上的相邻 figure 块"来改进（M1 跟进）。
+- 会把多子图的 figure 按子图拆开，并把子图标号（A、B…）识别为 image_caption，所以 figure F1（0.35）和 caption F1（0.58）偏低。这可以在 Normalizer 中合并"同一图注之上的相邻 figure 块"来改进（M1 跟进），M1-P3b 已实现：figure F1 0.35 → 0.70，caption F1 0.58 → 0.85，见 [docs/m1/normalizer-followups.md](../m1/normalizer-followups.md)。
 - 扫描页自动走 OCR，两篇合成扫描件的检测 F1 为 0.98。
 - 跨页 / 跨栏续段有 `continues_prev` 标记，Normalizer 会据此合并成带多个 anchor 的单块。
 - 对 PDFMathTranslate 生成的中文译本（文字重叠、行距异常），检测 F1 下降到 0.76，但类型判断仍然稳定（94.6%）。
