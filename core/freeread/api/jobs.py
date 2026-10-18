@@ -28,8 +28,9 @@ def list_jobs(
     responses={200: {"content": {"text/event-stream": {}}}},
 )
 async def stream_jobs(ctx: Ctx, request: Request):
-    """SSE：`ready` → 之后每次任务变化发一条 `job`（数据同 JobOut）；`resync` 表示需重新拉列表。"""
-    return sse_response(bus_stream(ctx.bus, {"job"}, request.is_disconnected))
+    """SSE：`ready` 之后，任务变化发 `job`（数据同 JobOut），文档解析状态变化发 `document`
+    （数据同 DocumentOut，ready 时前端应重新拉 IR）；`resync` 表示需重新拉全量状态。"""
+    return sse_response(bus_stream(ctx.bus, {"job", "document"}, request.is_disconnected))
 
 
 @router.get("/{job_id}", response_model=JobOut)

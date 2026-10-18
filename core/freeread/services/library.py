@@ -393,10 +393,15 @@ class LibraryService:
                 shutil.copyfile(src, tmp)
                 tmp.replace(dest)
             self._ensure_document(s, sha)
+            pdf_title = _pdf_title(dest)
             item = ItemRow(
                 item_type="document",
-                title=_pdf_title(dest) or src.stem,
-                extra={"imported_from": str(src)},
+                title=pdf_title or src.stem,
+                # title_source = filename 的标题会在解析后用 IR 识别出的标题替换
+                extra={
+                    "imported_from": str(src),
+                    "title_source": "pdf_meta" if pdf_title else "filename",
+                },
             )
             s.add(item)
             s.flush()
