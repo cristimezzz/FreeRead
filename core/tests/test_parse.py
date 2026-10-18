@@ -132,6 +132,22 @@ async def test_reparse_migrates_translations_and_marks_stale(ctx, tmp_path, fake
     assert (await ctx.parse.run(doc_id, "pymupdf", noop)).status == "skipped"
 
 
+async def test_same_document_parses_are_serialized(ctx, tmp_path, fake_mineru):
+    _, doc_id = import_synthetic(ctx, tmp_path)
+    await ctx.parse.run(doc_id, "pymupdf", noop)
+    # 手动强制快速重解析与 MinerU 升级同时进行：都要成功，最终结果一致
+    fast, hq = await asyncio.gather(
+        ctx.parse.run(doc_id, "pymupdf", noop, force=True),
+        ctx.parse.run(doc_id, "mineru", noop),
+    )
+    assert fast.status == "parsed" and hq.status == "parsed"
+    out = ctx.parse.get(doc_id)
+    assert (out.parse_status, out.parser_engine) == ("ready", "mineru")
+    ir = Document.model_validate_json(ctx.parse.ir_path(doc_id).read_text(encoding="utf-8"))
+    with ctx.sessions() as s:
+        assert s.query(BlockRow).filter_by(doc_id=doc_id).count() == len(ir.blocks)
+
+
 async def test_first_failure_marks_failed_but_failed_upgrade_keeps_ready(
     ctx, tmp_path, fake_mineru
 ):
