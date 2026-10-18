@@ -119,13 +119,38 @@ Docling 的类型准确率已高于 MinerU（93.0% 对 89.2%）。不过 Docling
 - PyMuPDF 的 abstract / author_info F1 只有 0.65 / 0.68，原因多在 PyMuPDF 本身：块边界与 golden 对不上，或者 title 识别错了，作者区规则以 title 为起点。
 - Docling 的作者区：d_45a0a08492648684 中 Docling 把 "Check for updates" 与作者行合成了一块，规则跳过了它。
 - MinerU 的 figure F1 仍只有 0.70。没有图注的多块图（如 Cell 的 Graphical Abstract）不合并；上下两张独立的图贴得很近（< 20 pt）且共用下方图注时会被合成一张，例如 d_cf3224806f31b924 第 6 页，golden 为两张。59 张 golden figure 中仍有 6 张没匹配上。
-- 收稿日期、版权行等刊物小字在 PyMuPDF / MinerU 中仍是 paragraph（golden 为 footnote）。footnote 规则目前只加在 Docling 上（ADR-0003 的范围）；`docling.mark_footnotes` 可以直接搬到公共层，留作后续。
+- 收稿日期、版权行等刊物小字在 PyMuPDF / MinerU 中仍是 paragraph（golden 为 footnote）。footnote 规则目前只加在 Docling 上（ADR-0003 的范围）；`docling.mark_footnotes` 可以直接搬到公共层，转入 M2。
+- 同一图注的子图分成上下两组、上面一组离图注超过 40 pt 时，只有靠近图注的一组会被合并，另一组保持为独立的 figure 块。例：d_b11f9cbbf7d10707（Cell）第 5 页 Figure 2，C/D 合并成一张，A/B 仍是独立块。
 
-## 未验证
+## 补充验证（2026-10-18）
+
+### 合并后整图的截图
+
+对 `eval-out/mineru/*/raw` 用当前 Normalizer 重新规范化，再用解析任务的 `_render_assets` 按 bbox 截图，逐张检查全部合并 figure：25 篇、75 张。
+
+- 75 张都是完整的整图：子图没有缺失，没有截到正文，也没有多余留白。
+- 已知的误合并 d_cf3224806f31b924 第 6 页：截图是两张图连在一起，和上文「已知误判」一致。
+- 局限见上文"上下两组子图"一条。
+
+### 真实数据目录上的重新规范化
+
+做法：从源码启动 sidecar，使用新数据目录，导入 3 篇评测 PDF（英文双栏、Cell、中文），快速解析后用 mock provider 翻译各篇前 20 块。然后把 `normalizer_version` 改成 0.1.0，再让解析任务运行。
+
+- **发现缺口，已修复**：这条路径在生产中不会被触发。`_enqueue_parse` 只处理 pending / failed，手动"重新解析"（`POST /documents/{id}/parse`）总是 `force`，会重跑引擎、重写 `raw/`。所以 Normalizer 升级后，已有文献库会一直停在旧 IR。修复：sidecar 启动时调用 `ParseService.enqueue_renormalize`，为满足以下全部条件的文档建非强制解析任务（按文档当前引擎排队，重型引擎走 `parse_hq`）：
+  - 状态为 ready；
+  - `normalizer_version` 与当前引擎的 Normalizer 不一致；
+  - 有 `raw/<engine>/engine.json`；
+  - 引擎可用；
+  - 没有排队中的解析任务。
+- 修复后实测：
+  - 重启时日志出现 `queued 3 re-normalize jobs`，3 个任务都在 0.1–0.25 s 内完成。
+  - `raw/` 的修改时间不变；`ir.json` 和 `blocks` 已更新，块数不变（530 / 187 / 517）。
+  - 译文 19 + 18 条全部迁移，失效 0。中文论文翻成 zh-CN 属于同语言，按设计不翻译，所以是 0 条。
+- 重型引擎：把两篇的 M0 MinerU raw 放进数据目录，并把 `parser_engine` 设为 mineru，重启后走 `parse_hq` 重新规范化。其中一篇生成 27 张资源图，没有调用 MinerU 本身。
+
+### 仍未验证
 
 - **Marker**：Normalizer 版本一并升到 0.2.0（公共规则对它同样生效），但 Marker 已不在评测集中，没有回归数字。
-- **真实文献库上的重新规范化**：只有 `tests/test_parse.py` 的单测覆盖了"版本变化 → 只重新规范化"这条路径，没有在真实数据目录上跑过。
-- **合并后整图的截图**：figure 的 bbox 已是并集。按 IR 约定，截图由解析任务按 bbox 生成；本次没有检查生成的 PNG。
 
 ## 复现
 

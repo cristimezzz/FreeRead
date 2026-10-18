@@ -140,9 +140,18 @@
 | 关闭 / 强杀后无残留 | ✅ CI 干净机器上各 5/5；本机安装版各 1 次 |
 | Playwright e2e（fake provider） | 见 P6（CI） |
 
+## CSP（PR #11，2026-10-18）
+
+`tauri.conf.json` 的 `app.security.csp` 原为 null，现已启用：脚本只允许同源（另加 `wasm-unsafe-eval`）；连接只允许同源、IPC 和 `127.0.0.1`；`object` / `frame` / `form` 全部禁用。
+
+合并前用浏览器检查过：`vite build` 的产物经 `vite preview` 返回与生产版相同的 CSP 响应头，API 同源代理到 sidecar，在内置浏览器里依次打开文献库、pdf.js 原版视图、MinerU 重排视图（18 张 blob 图、143 个 KaTeX 公式）、流式译文、设置页。`securitypolicyviolation` 为 0，控制台没有 CSP 报错。
+
+浏览器覆盖不到 Tauri 特有的部分：`ipc:` 连接，以及壳往 `style-src` 注入 nonce 后 `'unsafe-inline'` 失效的问题（`style-src-attr` 就是为此单独声明的）。这部分需要在安装版里点一遍，见下方遗留。
+
 ## 遗留
 
 - [x] 本机安装版：文件对话框、钥匙串保存与重启后读取（见「安装版交互检查」）。
-- [ ] 代码签名（壳、sidecar 目录内 exe、安装包）。
-- [ ] 用真实 provider 复测"3 分钟内看到译文"（本次用 mock）。
+- [ ] 代码签名（壳、sidecar 目录内 exe、安装包）。**需要用户**：申请证书（EV 或 Azure Trusted Signing）。
+- [ ] 用真实 provider 复测"3 分钟内看到译文"（本次用 mock）。**需要用户**：提供真实 API Key，在安装版里实测。
+- [ ] 启用 CSP 后在安装版里点一遍（阅读器、KaTeX、图片、翻译、设置），确认 Tauri 下没有 CSP 报错。**需要用户**：代理会话启动的安装版会黑屏，见上文「本机受限环境」。
 - [ ] 打包版的 MinerU：首次使用时下载独立环境（M2）。
