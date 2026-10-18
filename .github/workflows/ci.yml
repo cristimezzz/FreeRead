@@ -96,12 +96,9 @@ jobs:
         run: |
           npm ci
           npm run build
-      - name: Placeholder sidecar for externalBin
+      - name: Placeholder sidecar for bundle.resources
         shell: pwsh
-        run: |
-          $triple = (rustc -vV | Select-String "^host: (.+)$").Matches[0].Groups[1].Value
-          New-Item -ItemType Directory -Force apps/desktop/src-tauri/binaries | Out-Null
-          New-Item -ItemType File -Force "apps/desktop/src-tauri/binaries/freeread-core-$triple.exe" | Out-Null
+        run: New-Item -ItemType File -Force apps/desktop/src-tauri/binaries/freeread-core/freeread-core.exe | Out-Null
       - name: rustfmt
         working-directory: apps/desktop/src-tauri
         run: cargo fmt --check

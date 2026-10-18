@@ -237,3 +237,20 @@ def test_prompts_render_translate():
         prompt.render(source_lang="en", target_lang="zh", title="T", section_title="S")
     with pytest.raises(PromptError):
         PromptRegistry().get("translate@99")
+
+
+def test_prompts_dir_when_frozen(monkeypatch, tmp_path):
+    """PyInstaller 打包后提示词从 sys._MEIPASS/prompts 读，不依赖仓库目录结构。"""
+    import sys
+
+    from freeread.infra.llm import prompts
+
+    assert prompts._default_prompts_dir() == prompts.DEFAULT_PROMPTS_DIR
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    assert prompts._default_prompts_dir() == tmp_path / "prompts"
+
+
+def test_prompts_dir_missing_fails_fast(tmp_path):
+    with pytest.raises(PromptError, match="not found"):
+        PromptRegistry(tmp_path / "missing")

@@ -1,5 +1,5 @@
 //! Windows Job Object：壳进程崩溃或被 `taskkill /F` 时，由系统关闭最后一个
-//! job 句柄并结束 job 内的全部进程（包括 PyInstaller onefile 引导进程派生的子进程）。
+//! job 句柄并结束 job 内的全部进程（包括 sidecar 派生的子进程，如 MinerU worker）。
 
 use std::ptr;
 

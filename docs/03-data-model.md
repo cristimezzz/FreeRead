@@ -1,9 +1,11 @@
 # 数据模型
 
-- 版本：0.1（草案）
-- 更新日期：2026-10-17
+- 版本：0.2（M1 已实现部分与代码同步）
+- 更新日期：2026-10-18
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
+
+**M1 实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings。下文标"计划"的表（block_embeddings、annotations、glossary_terms、summaries、kg_*、qa_*）和两个 FTS5 虚拟表还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -13,6 +15,7 @@ items ─┬─< attachments ──1:1── documents ─┬─< blocks ─┬�
        ├─< item_collections >─ collections│           └─< annotations
        └─< item_tags                      ├─< summaries
                                           └─< kg_relations(source)
+（计划，M2+）
 kg_entities ─< kg_entity_aliases
 kg_entities ─< kg_relations >─ kg_entities
 qa_sessions ─< qa_nodes (自引用 parent_id)
@@ -24,9 +27,11 @@ settings       sync_state
 
 约定：
 
-- 主键使用文本 ID（ULID 或文档内 ID），时间戳统一为 UTC ISO8601 文本。
+- 主键使用文本 ID（ULID 或文档内 ID），时间戳统一为 UTC ISO8601 文本。例外：`translations.id` 是自增整数。
 - JSON 字段使用 SQLite `TEXT` 存储，在应用层校验。
-- 启用 `PRAGMA foreign_keys = ON`、`journal_mode = WAL`。
+- 每个连接启用 `PRAGMA foreign_keys = ON`、`journal_mode = WAL`、`synchronous = NORMAL`、`busy_timeout = 5000`（`infra/db/engine.py`）。
+- 约束命名：`pk_<表>`、`fk_<表>_<列>_<被引用表>`、`uq_<表>_<列…>`、`ix_<表>_<列…>`（SQLAlchemy naming convention，便于 Alembic batch 迁移）。
+- 下文"FK"未注明时，删除被引用行会级联删除（`ON DELETE CASCADE`）；注明 SET NULL 的置空。
 - IR 全文以文件形式保存在 `documents/<doc_id>/ir.json`，`blocks` 表是它的可查询副本。
 
 ## 2. 文献库
@@ -38,43 +43,43 @@ settings       sync_state
 | zotero_key | TEXT UNIQUE NULL | Zotero 条目 key |
 | zotero_library_id | TEXT NULL | 用户库或群组库 |
 | zotero_version | INTEGER NULL | 用于增量同步 |
-| item_type | TEXT | journalArticle、preprint 等 |
+| item_type | TEXT | journalArticle、preprint 等；Zotero 里没有父条目的独立 PDF 为 `attachment`（`extra.standalone = true`） |
 | title | TEXT | |
-| authors | JSON | `[{"first","last"}]` |
+| authors | JSON NOT NULL | `[{"first","last"}]` |
 | year | INTEGER NULL | |
 | doi | TEXT NULL | |
 | venue | TEXT NULL | |
 | abstract | TEXT NULL | |
-| extra | JSON | 其他 Zotero 字段 |
-| status | TEXT | `active` / `archived` |
+| extra | JSON NOT NULL | 其他 Zotero 字段 |
+| status | TEXT | `active` / `archived`（Zotero 里已删除的条目同步后归档，不物理删除） |
 | created_at / updated_at | TEXT | |
 
-索引：`(doi)`、`(title)`；FTS5 虚拟表 `items_fts(title, abstract, authors)`。
+索引：`ix_items_doi`、`ix_items_title`。FTS5 虚拟表 `items_fts(title, abstract, authors)`：计划，M1 的文献库搜索直接查 items。
 
 ### collections / item_collections / item_tags
 | 表 | 列 |
 |---|---|
-| collections | id PK, zotero_key UNIQUE NULL, name, parent_id NULL |
-| item_collections | item_id, collection_id（联合主键） |
-| item_tags | item_id, tag（联合主键） |
+| collections | id PK, zotero_key UNIQUE NULL, name, parent_id NULL（FK → collections，SET NULL） |
+| item_collections | item_id FK, collection_id FK（联合主键） |
+| item_tags | item_id FK, tag（联合主键） |
 
 ### attachments
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | |
-| item_id | TEXT FK → items | |
-| zotero_key | TEXT NULL | |
+| item_id | TEXT FK → items | 索引 |
+| zotero_key | TEXT UNIQUE NULL | 手动导入的 PDF 为空 |
 | path | TEXT | 本地绝对路径 |
 | content_type | TEXT | `application/pdf` |
 | sha256 | TEXT NULL | 首次读取时计算 |
-| doc_id | TEXT NULL FK → documents | 解析后关联 |
+| doc_id | TEXT NULL FK → documents（SET NULL） | 读取文件、算出 sha256 后关联（同一 PDF 多个附件共用一个 document）；索引 |
 
 ### sync_state
 | 列 | 说明 |
 |---|---|
-| source PK | `zotero_local` / `zotero_sqlite` / `zotero_web:<library_id>` |
-| last_version | 最后同步的 Zotero library version |
-| last_synced_at | |
+| source PK | `zotero_local`（M1 只实现了这一种）；计划：`zotero_sqlite` / `zotero_web:<library_id>` |
+| last_version | INTEGER NULL，最后同步的 Zotero library version |
+| last_synced_at | TEXT NULL |
 
 ## 3. 文档与块
 
@@ -83,19 +88,19 @@ settings       sync_state
 |---|---|---|
 | doc_id | TEXT PK | `d_` + sha256 前 16 位 |
 | pdf_sha256 | TEXT UNIQUE | |
-| page_count | INTEGER | |
-| ir_path | TEXT | 相对数据目录 |
-| ir_schema_version | TEXT | |
-| parser_engine / parser_version / normalizer_version | TEXT | |
-| parse_status | TEXT | `pending` / `parsing` / `ready` / `failed` |
-| embed_status / kg_status | TEXT | 同上 |
-| language | TEXT | |
+| page_count | INTEGER NULL | 解析后填写 |
+| ir_path | TEXT NULL | 相对数据目录：`documents/<doc_id>/ir.json` |
+| ir_schema_version | TEXT NULL | |
+| parser_engine / parser_version / normalizer_version | TEXT NULL | 当前 IR 来自哪个引擎；自动流程不会用低等级引擎的结果覆盖高等级的（ADR-0003） |
+| parse_status | TEXT | `pending` / `parsing` / `ready` / `failed`；已有 IR 时重新解析失败会回到 `ready` |
+| embed_status / kg_status | TEXT | 同上；M1 不用，恒为 `pending` |
+| language | TEXT NULL | |
 | created_at / updated_at | TEXT | |
 
 ### blocks
 | 列 | 类型 | 说明 |
 |---|---|---|
-| doc_id | TEXT FK | 联合主键之一 |
+| doc_id | TEXT FK → documents | 联合主键之一 |
 | block_id | TEXT | 联合主键之一 |
 | ord | INTEGER | 阅读顺序 |
 | type | TEXT | 见 IR 块类型 |
@@ -106,9 +111,9 @@ settings       sync_state
 | anchors | JSON | |
 | content_hash | TEXT | |
 
-索引：`(doc_id, ord)`、`(content_hash)`；FTS5 `blocks_fts(text)` 用于关键词检索，与向量检索混合使用。
+索引：`ix_blocks_doc_id_ord`、`ix_blocks_content_hash`。重新解析时整篇替换（与写 ir.json 在同一事务）。FTS5 `blocks_fts(text)`：计划（M2，关键词检索与向量检索混合使用）。
 
-### block_embeddings（sqlite-vec 虚拟表）
+### block_embeddings（sqlite-vec 虚拟表，计划）
 ```sql
 CREATE VIRTUAL TABLE block_embeddings USING vec0(
   rowid INTEGER PRIMARY KEY,     -- 映射到 embedding_map.rowid
@@ -117,7 +122,7 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 ```
 `embedding_map(rowid PK, doc_id, block_id, model, chunk_text_hash)`：一个块可能被切分成多个 chunk，也可能多个短块合并为一个 chunk。
 
-### annotations
+### annotations（计划）
 | 列 | 说明 |
 |---|---|
 | id PK | |
@@ -133,15 +138,18 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | INTEGER PK | 自增 |
-| doc_id, block_id, lang | | 联合唯一（加上 model, prompt_version）；block_id 不设外键，重新解析时按 IR §8 迁移 |
+| doc_id | TEXT FK → documents | |
+| block_id, lang | TEXT | `(doc_id, block_id, lang, model, prompt_version)` 联合唯一；block_id 不设外键，重新解析时按 IR §8 迁移，迁移不了的标 `stale` |
 | model | TEXT | provider/model |
-| prompt_version | TEXT | 如 `translate@3` |
+| prompt_version | TEXT | 如 `translate@1` |
 | text | TEXT | 含占位符的译文 |
-| status | TEXT | `ok` / `needs_review` / `stale` |
-| is_active | INTEGER | 同一块同一语言当前显示的版本 |
+| status | TEXT | `ok` / `needs_review`（占位符校验失败，回退原文）/ `stale` |
+| is_active | BOOLEAN | 同一块同一语言当前显示的版本 |
 | created_at | TEXT | |
 
-### glossary_terms
+索引：`ix_translations_doc_id_lang_block_id`。
+
+### glossary_terms（计划）
 | 列 | 说明 |
 |---|---|
 | id PK | |
@@ -152,7 +160,7 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 
 ## 5. 总结
 
-### summaries
+### summaries（计划）
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | |
@@ -163,7 +171,7 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 | status | TEXT | `ok` / `stale` |
 | created_at | TEXT | |
 
-## 6. 知识图谱
+## 6. 知识图谱（计划）
 
 ### kg_entities
 | 列 | 说明 |
@@ -191,7 +199,7 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 
 索引：`(src_id, type)`、`(dst_id, type)`、`(doc_id)`。
 
-## 7. 问答
+## 7. 问答（计划）
 
 ### qa_sessions
 `id PK, title, scope(doc/collection/library 及其 ID), created_at, updated_at`
@@ -217,14 +225,16 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 | 列 | 说明 |
 |---|---|
 | id PK | |
-| kind | `sync` / `parse` / `embed` / `kg_extract` / `translate_doc` / `summarize` |
+| kind | M1：`sync`、`parse`（快速模式，并发 2）、`parse_hq`（MinerU / Docling，全局并发 1）；计划：`embed` / `kg_extract` / `translate_doc` / `summarize`。块级翻译不走任务队列，由 `POST /translate/blocks` 以 SSE 流式完成 |
 | payload | JSON |
 | status | `queued` / `running` / `done` / `failed` / `cancelled` |
 | progress | REAL 0–1 |
 | message | 当前进度说明 |
-| depends_on NULL | 前置 job id |
+| depends_on NULL | 前置 job id（FK → jobs，SET NULL） |
 | attempts, error | |
 | created_at, started_at, finished_at | |
+
+索引：`ix_jobs_status_created_at`（worker 按创建顺序取 queued 任务）。
 
 ### llm_cache
 | 列 | 说明 |
@@ -234,15 +244,15 @@ CREATE VIRTUAL TABLE block_embeddings USING vec0(
 | created_at, hit_count | |
 
 ### llm_calls
-`id, task_kind, provider, model, prompt_id, input_tokens, output_tokens, cost_estimate, latency_ms, cache_hit, doc_id NULL, created_at`
+`id (ULID), task_kind, provider, model, prompt_id NULL, input_tokens, output_tokens, cost_estimate NULL, latency_ms, cache_hit (BOOLEAN), doc_id NULL, created_at`；索引 `ix_llm_calls_doc_id`。
 
 每次成功的调用写一行；缓存命中 `cache_hit=1` 且 token 记 0。`cost_estimate` 暂不计算（NULL）。
 
 ### settings
-`key PK, value JSON`。**API Key 不存这里**，存在系统钥匙串。
+`key PK, value JSON`。每个顶层设置项一行，键即 `AppSettings` 的字段名：`appearance`、`target_lang`、`parse_engine`、`providers`、`routes`、`consented_providers`（`services/settings.py`）。读取时不认识的键忽略，单个字段不合法时回退默认值。**API Key 不存这里**，存在系统钥匙串（由壳以 `FREEREAD_SECRETS` 注入 sidecar）。
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移；应用启动时自动升级，升级前自动备份 `freeread.db`。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0001`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
 - 更换嵌入模型（维度变化）时，删除并重建 `block_embeddings`，作为后台任务执行。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。

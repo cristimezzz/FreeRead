@@ -3,6 +3,7 @@
 修改模板内容时必须提升 version，缓存键包含 `prompt_id@version`，旧缓存随之失效（ADR-0005）。
 """
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,8 +13,17 @@ from jinja2 import Environment, StrictUndefined, Template, UndefinedError
 
 from freeread.infra.llm.gateway import Message, TaskKind
 
-# core/freeread/infra/llm/prompts.py → core/prompts
-DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[3] / "prompts"
+
+def _default_prompts_dir() -> Path:
+    """开发环境：core/freeread/infra/llm/prompts.py → core/prompts。
+    PyInstaller 打包后：scripts/build_sidecar.ps1 把 core/prompts 放在 sys._MEIPASS/prompts。"""
+    bundle = getattr(sys, "_MEIPASS", None)
+    if getattr(sys, "frozen", False) and bundle:
+        return Path(bundle) / "prompts"
+    return Path(__file__).resolve().parents[3] / "prompts"
+
+
+DEFAULT_PROMPTS_DIR = _default_prompts_dir()
 
 
 class _OptionalUndefined(StrictUndefined):
@@ -77,6 +87,9 @@ def _parse(path: Path) -> Prompt:
 class PromptRegistry:
     def __init__(self, prompts_dir: Path = DEFAULT_PROMPTS_DIR) -> None:
         self._prompts: dict[str, Prompt] = {}
+        if not Path(prompts_dir).is_dir():
+            # 打包漏带 prompts/ 时启动即失败，而不是等到翻译时才报 unknown prompt
+            raise PromptError(f"prompts directory not found: {prompts_dir}")
         for path in sorted(Path(prompts_dir).glob("*.yaml")):
             prompt = _parse(path)
             if prompt.id in self._prompts:

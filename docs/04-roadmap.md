@@ -19,14 +19,17 @@
 
 ## M1 MVP：导入、重排、翻译（4–6 周）
 
-- [ ] Core Service 骨架：FastAPI、SQLite + Alembic、任务队列、SSE。
-- [ ] Zotero 本地 API 导入 + 手动导入 PDF。
+- [x] Core Service 骨架：FastAPI、SQLite + Alembic、任务队列、SSE。
+- [x] Zotero 本地 API 导入 + 手动导入 PDF。
 - [x] 解析任务链：import → parse；IR 入库。（Normalizer 跟进项另行处理）
 - [x] 前端：文献库列表、分类树；阅读器（pdf.js 原版视图 + 重排视图）；双向定位。
 - [x] LLM Gateway：OpenAI 兼容 provider、缓存、用量记录；钥匙串保存密钥。
 - [x] 块级翻译：可视区域优先、占位保护、对照 / 交替 / 仅译文显示。
 
 **验收**：从 Zotero 导入一个分类，打开任意一篇论文，3 分钟内可阅读重排版并看到逐段译文；断网后已翻译内容仍可阅读。
+
+- [x] 打包：sidecar 改为 PyInstaller onedir，经 `bundle.resources` 安装；NSIS 安装包复测体积、启动时间、退出残留。
+- 验收结果（2026-10-18，[详情](m1/README.md)）：打包版 sidecar + 本机 Zotero + mock LLM 下，39 s 内看到重排版和逐段译文，离线可读 ✅。本机安装版的文件对话框导入、钥匙串保存与重启后读取、翻译也已实测通过 ✅；未用真实 LLM 复测。
 
 ## M2 理解：总结与单篇问答（3–4 周）
 

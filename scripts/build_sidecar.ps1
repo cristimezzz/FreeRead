@@ -1,20 +1,23 @@
 <#
 .SYNOPSIS
-  用 PyInstaller 把 core 打包成 Tauri sidecar（不含 PDF 解析引擎）。
+  用 PyInstaller 把 core 打包成 Tauri sidecar（不含重型 PDF 解析引擎）。
 
 .DESCRIPTION
   1. 用 uv 在 build/sidecar/.venv 建独立的 Python 3.12 环境，安装 core 基础依赖和 PyInstaller
      （PyInstaller 只装在这个构建环境里，不写进 core/pyproject.toml）。
-  2. --onefile 打包，按 Rust target triple 命名为 freeread-core-<triple>.exe，
-     复制到 apps/desktop/src-tauri/binaries/ 供 tauri.conf.json 的 externalBin 使用。
-  3. 另打一份 --onedir 到 build/sidecar/dist-onedir/，用来对比启动时间（-SkipOnedir 跳过）。
+  2. --onedir 打包到 build/sidecar/dist/freeread-core/，再整个目录复制到
+     apps/desktop/src-tauri/binaries/freeread-core/，由 tauri.conf.json 的 bundle.resources
+     安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core.exe（apps/desktop/src-tauri/src/lib.rs）。
+     不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
+     选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
+  3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据。
+     打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF）。
 
 .EXAMPLE
   pwsh scripts/build_sidecar.ps1
 #>
 param(
-    [string]$PythonVersion = "3.12",
-    [switch]$SkipOnedir
+    [string]$PythonVersion = "3.12"
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,9 +28,9 @@ $Core = Join-Path $Root "core"
 $Build = Join-Path $Root "build/sidecar"
 $Venv = Join-Path $Build ".venv"
 $Python = Join-Path $Venv "Scripts/python.exe"
-$Binaries = Join-Path $Root "apps/desktop/src-tauri/binaries"
+$Target = Join-Path $Root "apps/desktop/src-tauri/binaries/freeread-core"
 
-New-Item -ItemType Directory -Force $Build, $Binaries | Out-Null
+New-Item -ItemType Directory -Force $Build | Out-Null
 
 Write-Host "==> Python $PythonVersion 构建环境：$Venv"
 if (-not (Test-Path $Python)) {
@@ -44,33 +47,44 @@ if __name__ == "__main__":
     run()
 "@
 
-$Triple = (rustc -vV | Select-String "^host: (.+)$").Matches[0].Groups[1].Value
-Write-Host "==> target triple: $Triple"
-
 # uvicorn 按字符串动态加载 loop / protocol 实现，需要显式收集。
-# Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上。
+# Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上；
+# 迁移脚本里 import 的 alembic.op / sqlalchemy 方言也要收集（静态分析看不到）。
+# PyMuPDF 快速解析器用 importlib.metadata 取版本号，要带上包元数据。
+# 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
-$Common = @(
-    "--noconfirm", "--clean", "--console",
-    "--name", "freeread-core",
-    "--collect-submodules", "uvicorn",
-    "--add-data", "${Migrations};freeread/infra/db/migrations",
-    "--workpath", (Join-Path $Build "work"),
-    "--specpath", $Build,
+$Prompts = Join-Path $Core "prompts"
+$Dist = Join-Path $Build "dist"
+
+Write-Host "==> PyInstaller --onedir"
+& $Python -m PyInstaller --onedir --noconfirm --clean --console `
+    --name freeread-core `
+    --collect-submodules uvicorn `
+    --collect-submodules alembic `
+    --hidden-import sqlalchemy.dialects.sqlite `
+    --copy-metadata pymupdf `
+    --add-data "${Migrations};freeread/infra/db/migrations" `
+    --add-data "${Prompts};prompts" `
+    --distpath $Dist `
+    --workpath (Join-Path $Build "work") `
+    --specpath $Build `
     $Entry
-)
 
-Write-Host "==> PyInstaller --onefile"
-& $Python -m PyInstaller --onefile --distpath (Join-Path $Build "dist-onefile") @Common
-$OneFile = Join-Path $Build "dist-onefile/freeread-core.exe"
-$Target = Join-Path $Binaries "freeread-core-$Triple.exe"
-Copy-Item -Force $OneFile $Target
-Write-Host ("    {0} ({1:N1} MB)" -f $Target, ((Get-Item $Target).Length / 1MB))
-
-if (-not $SkipOnedir) {
-    Write-Host "==> PyInstaller --onedir"
-    & $Python -m PyInstaller --onedir --distpath (Join-Path $Build "dist-onedir") @Common
-    $OneDir = Join-Path $Build "dist-onedir/freeread-core"
-    $Size = (Get-ChildItem -Recurse -File $OneDir | Measure-Object Length -Sum).Sum
-    Write-Host ("    {0} ({1:N1} MB)" -f $OneDir, ($Size / 1MB))
+$OneDir = Join-Path $Dist "freeread-core"
+foreach ($required in @(
+        "freeread-core.exe",
+        "_internal/freeread/infra/db/migrations/env.py",
+        "_internal/prompts/translate.yaml"
+    )) {
+    if (-not (Test-Path (Join-Path $OneDir $required))) {
+        throw "onedir 产物缺少 $required"
+    }
 }
+
+if (Test-Path $Target) {
+    Remove-Item -Recurse -Force $Target
+}
+New-Item -ItemType Directory -Force (Split-Path $Target) | Out-Null
+Copy-Item -Recurse $OneDir $Target
+$Files = Get-ChildItem -Recurse -File $Target
+Write-Host ("    {0}（{1} 个文件，{2:N1} MB）" -f $Target, $Files.Count, (($Files | Measure-Object Length -Sum).Sum / 1MB))
