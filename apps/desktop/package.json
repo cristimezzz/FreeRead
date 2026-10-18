@@ -8,19 +8,32 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "gen:api": "npx -y -p openapi-typescript@7.13.0 -p typescript@5.9.3 openapi-typescript ../../docs/schemas/openapi.json -o src/api/schema.d.ts",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@material/material-color-utilities": "^0.4.0",
+    "@material/web": "^2.5.0",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.8.3",
+    "dompurify": "^3.4.17",
+    "katex": "^0.19.0",
+    "openapi-fetch": "^0.17.0",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "@tauri-apps/api": "^2"
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^26.6.5",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^6.0.2",
+    "jsdom": "^30.1.3",
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
-    "@tauri-apps/cli": "^2"
+    "vitest": "^5.0.5"
   }
 }
