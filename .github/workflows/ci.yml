@@ -69,6 +69,11 @@ jobs:
           cache-dependency-path: apps/desktop/package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm test
+      - name: API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.d.ts
 
   desktop-rust:
     name: Desktop shell (Rust, Windows)

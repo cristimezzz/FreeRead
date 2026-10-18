@@ -1,35 +1,52 @@
 # FreeRead Desktop（Tauri 2 + React + TypeScript）
 
-M0 阶段已用 `npm create tauri-app@latest . -- --template react-ts` 初始化，目前只包含 sidecar 验证所需的最小实现（见 [docs/m0-tauri-sidecar.md](../../docs/m0-tauri-sidecar.md)）：
+界面采用 Material 3（官方 `@material/web` 组件，配色由 `@material/material-color-utilities` 按种子色生成），见 [ADR-0006](../../docs/adr/0006-material3-ui.md)。
 
-- `src-tauri/src/lib.rs`：绑定 `127.0.0.1:0` 取空闲端口、生成 256 位随机 token，通过 `tauri-plugin-shell` 的 `externalBin` 启动
-  `freeread-core --port <p> --token <t> --parent-pid <壳 PID>`；`RunEvent::Exit` 时结束 sidecar。
-- `src-tauri/src/job.rs`：Windows 上把 sidecar 放进 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 的 Job Object，壳崩溃 / 被强杀时由系统清理。
-- `src/App.tsx`：通过 `core_info` 命令拿到端口和 token，带 `X-FreeRead-Token` 头轮询 `/health` 并显示结果。
+## 目录
 
-## 构建
+```
+src/
+├─ app/          App（启动、布局）、store（Zustand：导航、设置、任务推送）、theme（种子色 → --md-sys-color-*）
+├─ api/          core（连接 sidecar）、client（openapi-fetch，类型由 OpenAPI 生成）、sse（fetch 读 SSE）、ir（IR 类型）
+├─ components/   md.tsx（@material/web 注册、JSX 类型、受控封装）、icons、m3/（官方缺失的组件：导航栏、snackbar）
+└─ features/
+   ├─ library/   分类树、文献列表、同步 / 导入
+   ├─ reader/    PdfView（pdf.js）、ReflowView（按 IR 渲染）、locate（双向定位）、render（KaTeX / 表格净化）
+   ├─ translate/ useTranslations（已有译文 + 可视区域按需翻译、隐私确认）
+   ├─ settings/  外观、翻译、大模型服务与 API Key、解析引擎、隐私
+   └─ jobs/      底部任务进度条
+```
+
+Rust 壳（`src-tauri/`）：启动 / 关闭 `freeread-core` sidecar（随机端口 + 会话 token，Windows Job Object 兜底清理）、
+系统钥匙串保存 API Key 并在启动 sidecar 时注入（`keys.rs`）、文件对话框（`tauri-plugin-dialog`）。
+
+## 开发
 
 ```powershell
 pwsh scripts/build_sidecar.ps1          # 在仓库根目录执行，生成 src-tauri/binaries/freeread-core-<triple>.exe
 cd apps/desktop
 npm install
-npm run tauri dev                        # 开发
+npm run tauri dev                        # 完整桌面应用
 npm run tauri build                      # 生成 src-tauri/target/release/bundle/nsis/*-setup.exe
 ```
 
-## 之后（M1）
+只调界面时可以不起 Tauri：手动启动 core，再用浏览器打开 Vite。
 
-按 [docs/01-architecture.md §7](../../docs/01-architecture.md) 组织 `src/`：
-
-```
-src/
-├─ app/          路由、布局、全局 Provider
-├─ api/          openapi-typescript 生成的类型 + fetch / SSE 客户端
-├─ features/{library,reader,translate,summary,graph}/
-├─ stores/       Zustand
-└─ components/
+```powershell
+core/.venv/Scripts/python -m freeread.main --port 8765 --token devtoken --data-dir eval-out/ui-data
+# apps/desktop/.env.development.local：
+#   VITE_CORE_URL=http://127.0.0.1:8765
+#   VITE_CORE_TOKEN=devtoken
+npm run dev                              # http://localhost:1420
 ```
 
-主要依赖：`@material/web`、`@material/material-color-utilities`（Material 3 组件与主题色，见 [ADR-0006](../../docs/adr/0006-material3-ui.md)）、`pdfjs-dist`、`katex`、`dompurify`、`zustand`、`@xyflow/react`（问答画布）、`cytoscape`（图谱浏览）。
+浏览器模式下没有钥匙串和文件对话框：API Key 只在 core 本次运行期间有效，导入 PDF 时手动输入路径。
 
-Rust 壳职责：启动 / 关闭 `freeread-core` sidecar（传入随机端口与会话 token）、从系统钥匙串读取 API Key 并注入 sidecar 环境变量、文件对话框。
+## 其他命令
+
+```powershell
+npm test                                 # Vitest 单元测试
+npm run gen:api                          # core 的 API 变化后重新生成 src/api/schema.d.ts
+```
+
+`gen:api` 通过 `npx` 临时使用 `openapi-typescript` 与 TypeScript 5（它还不支持本项目的 TypeScript 6），不写进依赖。
