@@ -54,9 +54,11 @@ export function ReflowView(p: Props) {
 
   useEffect(() => {
     if (!p.located) return;
-    root.current
-      ?.querySelector(`[data-block-id="${p.located}"]`)
-      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const el = root.current?.querySelector(`[data-block-id="${p.located}"]`);
+    if (!el) return;
+    // 远距离跳转（如搜索结果）直接定位：平滑滚动途中图片加载会改变布局，常常停在半路
+    const far = Math.abs(el.getBoundingClientRect().top) > 2 * window.innerHeight;
+    el.scrollIntoView({ behavior: far ? "auto" : "smooth", block: "center" });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.scrollKey]);
 
