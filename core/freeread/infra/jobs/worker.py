@@ -109,8 +109,11 @@ class JobWorker:
                 await self._fill()
             except Exception:
                 log.exception("job scheduling failed")
+            # 不用 asyncio.wait_for：3.11 上它会在 _wake 恰好被置位时吞掉 stop() 的取消，
+            # 调度循环就永远不退出。asyncio.timeout 不会吞取消。
             with contextlib.suppress(TimeoutError):
-                await asyncio.wait_for(self._wake.wait(), self._poll)
+                async with asyncio.timeout(self._poll):
+                    await self._wake.wait()
 
     async def _fill(self) -> None:
         while len(self._running) < self._max:

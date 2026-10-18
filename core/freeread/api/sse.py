@@ -39,7 +39,9 @@ async def bus_stream(
                 sub.overflowed = False
                 yield encode("resync", {})
             try:
-                event = await asyncio.wait_for(sub.get(), heartbeat)
+                # asyncio.timeout 而非 wait_for：后者在 3.11 上可能吞掉断开连接时的取消
+                async with asyncio.timeout(heartbeat):
+                    event = await sub.get()
             except TimeoutError:
                 yield ": ping\n\n"
                 continue

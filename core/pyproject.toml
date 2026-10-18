@@ -23,7 +23,7 @@ vector = ["sqlite-vec>=0.1"]
 graph = ["networkx>=3.2"]
 # M0 解析评测脚本（scripts/m0_*.py）
 eval = ["pymupdf>=1.24", "psutil>=5.9", "nvidia-ml-py>=12.0", "rapidfuzz>=3.0", "pyyaml>=6.0"]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.4"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "pytest-timeout>=2.3", "ruff>=0.4"]
 
 [project.scripts]
 freeread-core = "freeread.main:run"
@@ -38,6 +38,9 @@ packages = ["freeread"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# 单个测试卡住时尽快失败，并打印所有线程的调用栈（CI 上曾整整卡死 14 分钟）
+timeout = 60
+timeout_method = "thread"
 
 [tool.ruff]
 line-length = 100
