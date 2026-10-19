@@ -3,17 +3,16 @@ import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
 import { Icon } from "../../components/icons";
-import { TextField } from "../../components/md";
-import { CollectionTree } from "./CollectionTree";
-import { ItemList } from "./ItemList";
+import { Button, Progress } from "../../components/ui";
+import { formatAuthors, ItemList } from "./ItemList";
 
 type Item = Schemas["ItemOut"];
 const PAGE = 100;
 const MAX_PAGE = 500; // 服务端单页上限
 
 export function LibraryView() {
-  const [collections, setCollections] = useState<Schemas["CollectionOut"][]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const collections = useApp((s) => s.collections);
+  const selected = useApp((s) => s.collectionId);
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [items, setItems] = useState<Item[]>([]);
@@ -32,10 +31,11 @@ export function LibraryView() {
   }, [query]);
 
   useEffect(() => {
-    void api()
-      .GET("/library/collections")
-      .then((r) => setCollections(unwrap(r)));
-  }, [libraryVersion]);
+    useApp
+      .getState()
+      .loadCollections()
+      .catch((e) => toast(`加载分类失败：${e}`));
+  }, [libraryVersion, toast]);
 
   const load = useCallback(
     async (offset: number, limit = PAGE) => {
@@ -58,6 +58,7 @@ export function LibraryView() {
         if (id !== seq.current) return;
         setItems((prev) => (offset === 0 ? page.items : [...prev, ...page.items]));
         setTotal(page.total);
+        if (!selected && !debounced) useApp.setState({ libraryTotal: page.total });
       } catch (e) {
         if (id === seq.current) toast(`加载文献失败：${e}`);
       } finally {
@@ -116,47 +117,60 @@ export function LibraryView() {
       toast("这个条目没有可用的 PDF 附件");
       return;
     }
-    navigate({ name: "reader", docId: doc.doc_id, itemId: item.id, title: item.title });
+    const byline = [formatAuthors(item.authors), item.year, item.venue].filter(Boolean).join(" · ");
+    navigate({ name: "reader", docId: doc.doc_id, itemId: item.id, title: item.title, byline });
   };
 
+  const collection = collections.find((c) => c.id === selected);
+  const scope = collection ? collection.name : "全部文献";
+
   return (
-    <>
-      <header className="top-bar">
-        <h1>文献库</h1>
-        <md-outlined-button onClick={importPdf}>
-          <span slot="icon">
-            <Icon name="add" size={18} />
-          </span>
-          导入 PDF
-        </md-outlined-button>
-        <md-filled-button onClick={sync}>
-          <span slot="icon">
-            <Icon name="sync" size={18} />
-          </span>
-          {zoteroKey ? "同步此分类" : "从 Zotero 同步"}
-        </md-filled-button>
+    <div className="page library">
+      <header className="page-head">
+        <div>
+          <h1 className="display serif">文献库</h1>
+          <p className="page-sub">
+            {scope} · {total} 篇
+          </p>
+        </div>
+        <div className="page-actions">
+          <Button icon="upload" onClick={importPdf}>
+            导入 PDF
+          </Button>
+          <Button variant="primary" icon="sync" onClick={sync}>
+            {zoteroKey ? "同步此分类" : "从 Zotero 同步"}
+          </Button>
+        </div>
       </header>
-      <div className="library">
-        <CollectionTree collections={collections} selected={selected} onSelect={setSelected} />
-        <section className="items" aria-label="文献列表">
-          <div className="items-toolbar">
-            <TextField className="search" label="搜索标题或作者" value={query} onValue={setQuery} />
-            <span className="count">{total} 篇</span>
-          </div>
-          {loading && <md-linear-progress indeterminate />}
-          {items.length > 0 && <ItemList items={items} onOpen={open} />}
-          {!items.length && !loading && (
-            <div className="empty">
-              {debounced ? "没有匹配的文献" : "还没有文献。从 Zotero 同步，或导入本地 PDF。"}
-            </div>
-          )}
-          {items.length < total && (
-            <div style={{ padding: 12, textAlign: "center" }}>
-              <md-text-button onClick={() => load(items.length)}>加载更多</md-text-button>
-            </div>
-          )}
-        </section>
+      <div className="library-tools">
+        <label className="field search">
+          <Icon name="search" />
+          <input
+            type="search"
+            value={query}
+            placeholder="搜索标题或作者"
+            aria-label="搜索文献"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+        <span className="library-sort">按添加时间排序</span>
       </div>
-    </>
+      <section className="items" aria-label="文献列表" aria-busy={loading}>
+        {loading && <Progress className="items-loading" />}
+        {items.length > 0 && <ItemList items={items} onOpen={open} />}
+        {!items.length && !loading && (
+          <div className="empty">
+            {debounced ? "没有匹配的文献" : "还没有文献。从 Zotero 同步，或导入本地 PDF。"}
+          </div>
+        )}
+        {items.length < total && (
+          <div className="load-more">
+            <Button variant="ghost" onClick={() => load(items.length)}>
+              加载更多
+            </Button>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }

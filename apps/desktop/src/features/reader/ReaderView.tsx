@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, rawFetch, unwrap } from "../../api/client";
 import type { Anchor, Block, Document } from "../../api/ir";
 import { type DocumentStatus, useApp } from "../../app/store";
-import { Icon } from "../../components/icons";
-import { Dialog, Segmented } from "../../components/md";
+import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components/ui";
 import { useTranslations } from "../translate/useTranslations";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
 import { PdfView } from "./PdfView";
@@ -42,7 +41,7 @@ function blockPreview(b: Block | undefined): string | undefined {
 
 const ENGINE_LABEL: Record<string, string> = { pymupdf: "快速模式", mineru: "MinerU", docling: "Docling" };
 
-export function ReaderView({ docId, title }: { docId: string; itemId: string; title: string }) {
+export function ReaderView({ docId, title, byline }: { docId: string; itemId: string; title: string; byline?: string }) {
   const [status, setStatus] = useState<DocumentStatus | null>(null);
   const [doc, setDoc] = useState<Document | null>(null);
   const [irVersion, setIrVersion] = useState(0);
@@ -208,88 +207,97 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   const ready = status?.parse_status === "ready" && doc;
   const layout: Layout = ready ? prefs.layout : "pdf";
 
+  const statusText = parsing
+    ? parsing.kind === "parse_hq"
+      ? "正在用高质量引擎升级…"
+      : "正在解析…"
+    : status?.parse_status === "failed"
+      ? "解析失败，只能阅读原版"
+      : doc
+        ? `${ENGINE_LABEL[doc.parser.engine] ?? doc.parser.engine} · ${doc.blocks.length} 块`
+        : "";
+
   return (
-    <>
-      <header className="top-bar">
-        <md-icon-button aria-label="返回文献库" onClick={() => navigate({ name: "library" })}>
-          <Icon name="back" />
-        </md-icon-button>
-        <h1 title={title}>{doc?.meta.title || title}</h1>
+    <div className="page reader-page">
+      <header className="reader-top">
+        <IconButton icon="back" label="返回文献库" onClick={() => navigate({ name: "library" })} />
+        <div className="reader-title">
+          <h1 className="serif" title={title}>
+            {doc?.meta.title || title}
+          </h1>
+          {byline && <div className="reader-byline">{byline}</div>}
+        </div>
+        {statusText && (
+          <span className="reader-status" role="status" data-state={parsing ? "busy" : status?.parse_status}>
+            {parsing ? <Spinner size={12} /> : <span className="dot" />}
+            {statusText}
+          </span>
+        )}
       </header>
-      <div className="reader-toolbar">
-        <Segmented
-          label="视图"
-          value={layout}
-          options={[
-            { value: "pdf", label: "原版" },
-            { value: "split", label: "并排" },
-            { value: "reflow", label: "重排" },
-          ]}
-          onValue={(v) => (ready ? setPref("layout", v) : toast("解析完成后才能使用重排视图"))}
-        />
-        {layout !== "pdf" && (
+      <div className="reader-toolbar" role="toolbar" aria-label="阅读工具">
+        <div className="tool-group">
+          <span className="lbl">视图</span>
           <Segmented
-            label="翻译"
-            value={prefs.mode}
+            label="视图"
+            value={layout}
             options={[
-              { value: "off", label: "原文" },
-              { value: "side", label: "对照" },
-              { value: "alternate", label: "交替" },
-              { value: "only", label: "仅译文" },
+              { value: "pdf", label: "原版" },
+              { value: "split", label: "并排" },
+              { value: "reflow", label: "重排" },
             ]}
-            onValue={(v) => setPref("mode", v)}
+            onValue={(v) => (ready ? setPref("layout", v) : toast("解析完成后才能使用重排视图"))}
           />
+        </div>
+        {layout !== "pdf" && (
+          <div className="tool-group">
+            <span className="lbl">翻译</span>
+            <Segmented
+              label="翻译"
+              value={prefs.mode}
+              options={[
+                { value: "off", label: "原文" },
+                { value: "side", label: "对照" },
+                { value: "alternate", label: "交替" },
+                { value: "only", label: "仅译文" },
+              ]}
+              onValue={(v) => setPref("mode", v)}
+            />
+          </div>
         )}
         {layout !== "pdf" && (
-          <label className="reader-status">
-            字号
-            <md-slider
+          <label className="tool-group">
+            <span className="lbl">字号</span>
+            <input
+              type="range"
               min={14}
               max={24}
               step={1}
               value={prefs.fontSize}
-              labeled
-              ref={(el: (HTMLElement & { value: number }) | null) => {
-                if (el && !el.dataset.bound) {
-                  el.dataset.bound = "1";
-                  el.addEventListener("change", () => setPref("fontSize", Number(el.value)));
-                }
-              }}
+              title={`${prefs.fontSize}px`}
+              onChange={(e) => setPref("fontSize", Number(e.target.value))}
             />
           </label>
         )}
-        <span style={{ flex: 1 }} />
         {ready && (
-          <md-icon-button
-            aria-label="搜索本文（Ctrl+F）"
-            title="搜索本文（Ctrl+F）"
-            onClick={() => toggleSide("search")}
-          >
-            <Icon name="search" />
-          </md-icon-button>
+          <div className="tool-actions">
+            <Button
+              variant="ghost"
+              small
+              icon="search"
+              title="搜索本文（Ctrl+F）"
+              pressed={side === "search"}
+              onClick={() => toggleSide("search")}
+            >
+              搜索
+            </Button>
+            <Button variant="ghost" small icon="summary" pressed={side === "summary"} onClick={() => toggleSide("summary")}>
+              总结
+            </Button>
+            <Button variant="ghost" small icon="qa" pressed={side === "qa"} onClick={() => toggleSide("qa")}>
+              问答
+            </Button>
+          </div>
         )}
-        {ready && (
-          <md-icon-button aria-label="总结" title="总结" onClick={() => toggleSide("summary")}>
-            <Icon name="summary" />
-          </md-icon-button>
-        )}
-        {ready && (
-          <md-icon-button aria-label="问答" title="问答" onClick={() => toggleSide("qa")}>
-            <Icon name="qa" />
-          </md-icon-button>
-        )}
-        <span className="reader-status">
-          {parsing && <md-circular-progress indeterminate style={{ "--md-circular-progress-size": "20px" } as React.CSSProperties} />}
-          {parsing
-            ? parsing.kind === "parse_hq"
-              ? "正在用高质量引擎升级…"
-              : "正在解析…"
-            : status?.parse_status === "failed"
-              ? "解析失败，只能阅读原版"
-              : doc
-                ? `${ENGINE_LABEL[doc.parser.engine] ?? doc.parser.engine} · ${doc.blocks.length} 块`
-                : ""}
-        </span>
       </div>
       <div className="reader">
         {layout !== "reflow" && (
@@ -347,6 +355,6 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
           文档的其余数据都保存在本机。之后可以在 设置 › 隐私 中撤销。
         </p>
       </Dialog>
-    </>
+    </div>
   );
 }

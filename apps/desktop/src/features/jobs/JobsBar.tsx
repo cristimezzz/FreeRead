@@ -1,6 +1,7 @@
 // 底部任务条：正在同步 / 解析的任务数与当前进度。
 
 import { activeJobs, useApp } from "../../app/store";
+import { Progress } from "../../components/ui";
 
 const KIND_LABEL: Record<string, string> = {
   sync: "同步 Zotero",
@@ -19,15 +20,12 @@ export function JobsBar() {
   const label = KIND_LABEL[current.kind] ?? current.kind;
   return (
     <div className="jobs-bar" role="status" aria-live="polite">
-      <md-linear-progress
-        value={current.progress}
-        indeterminate={current.status === "queued" || current.progress === 0 || undefined}
-      />
-      <span>
+      <Progress value={current.status === "queued" || current.progress === 0 ? undefined : current.progress} />
+      <span className="jobs-label">
         {label}
         {current.message ? `：${current.message}` : ""}
       </span>
-      <span>
+      <span className="jobs-count">
         {running.length} 个进行中，{active.length - running.length} 个排队
       </span>
     </div>

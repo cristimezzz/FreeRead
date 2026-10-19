@@ -1,6 +1,6 @@
 # ADR-0006：前端采用 Material 3，使用官方 @material/web 组件
 
-- 状态：已接受
+- 状态：已被 [ADR-0007](0007-paper-ink-clay-ui.md) 取代
 - 日期：2026-10-18
 
 ## 背景

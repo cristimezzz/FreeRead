@@ -20,10 +20,15 @@ class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+DEFAULT_ACCENT = "#D97757"
+LEGACY_DEFAULT_SEED = "#6750A4"
+
+
 class Appearance(_Strict):
     theme_mode: Literal["system", "light", "dark"] = "system"
-    # 种子色：预设（紫 #6750A4、蓝、青、绿、琥珀、玫红）或自定义；见 ADR-0006
-    seed_color: str = "#6750A4"
+    # 强调色（字段名沿用 M3 时期的 seed_color）：预设陶土 #D97757、墨蓝 #4F74B8、
+    # 苔绿 #6F8546、石板 #6B6A63，或自定义；见 ADR-0007
+    seed_color: str = DEFAULT_ACCENT
     follow_system_accent: bool = False
     contrast: Literal["standard", "medium", "high"] = "standard"
 
@@ -32,7 +37,9 @@ class Appearance(_Strict):
     def _hex(cls, v: str) -> str:
         if not HEX_COLOR_RE.match(v):
             raise ValueError("seed_color must be #RRGGBB")
-        return v.upper()
+        v = v.upper()
+        # M3 时期的默认紫色不代表用户的选择，随新设计换成新默认
+        return DEFAULT_ACCENT if v == LEGACY_DEFAULT_SEED else v
 
 
 class ProviderConfig(_Strict):

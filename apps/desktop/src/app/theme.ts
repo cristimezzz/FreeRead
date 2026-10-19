@@ -1,76 +1,86 @@
-// 种子色 → M3 色彩角色（Tonal Spot），写入 :root 的 --md-sys-color-*。见 ADR-0006。
-
-import {
-  Hct,
-  MaterialDynamicColors,
-  SchemeTonalSpot,
-  argbFromHex,
-  hexFromArgb,
-} from "@material/material-color-utilities";
+// 设计令牌：固定的暖中性色阶（浅色 / 深色）+ 一个强调色，写入 :root。见 ADR-0007。
+// 强调色只用于指认（选中项、引用编号、定位高亮、焦点环、进度），主按钮用墨色。
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Contrast = "standard" | "medium" | "high";
 
-export const PRESET_SEEDS: { name: string; color: string }[] = [
-  { name: "紫", color: "#6750A4" },
-  { name: "蓝", color: "#1F5FAD" },
-  { name: "青", color: "#006A6A" },
-  { name: "绿", color: "#3B6939" },
-  { name: "琥珀", color: "#8B5000" },
-  { name: "玫红", color: "#9C4061" },
+export const DEFAULT_ACCENT = "#D97757";
+
+export const ACCENT_PRESETS: { name: string; color: string }[] = [
+  { name: "陶土", color: "#D97757" },
+  { name: "墨蓝", color: "#4F74B8" },
+  { name: "苔绿", color: "#6F8546" },
+  { name: "石板", color: "#6B6A63" },
 ];
 
-const CONTRAST_LEVEL: Record<Contrast, number> = { standard: 0, medium: 0.5, high: 1 };
+type Ramp = Record<
+  "bg" | "bg2" | "surface" | "ink" | "ink2" | "ink3" | "line" | "line2" | "hover" | "ok" | "err" | "btn" | "btn-ink" | "page" | "scrim",
+  string
+>;
 
-const ROLES = [
-  "primary",
-  "onPrimary",
-  "primaryContainer",
-  "onPrimaryContainer",
-  "secondary",
-  "onSecondary",
-  "secondaryContainer",
-  "onSecondaryContainer",
-  "tertiary",
-  "onTertiary",
-  "tertiaryContainer",
-  "onTertiaryContainer",
-  "error",
-  "onError",
-  "errorContainer",
-  "onErrorContainer",
-  "background",
-  "onBackground",
-  "surface",
-  "onSurface",
-  "surfaceVariant",
-  "onSurfaceVariant",
-  "surfaceDim",
-  "surfaceBright",
-  "surfaceContainerLowest",
-  "surfaceContainerLow",
-  "surfaceContainer",
-  "surfaceContainerHigh",
-  "surfaceContainerHighest",
-  "inverseSurface",
-  "inverseOnSurface",
-  "inversePrimary",
-  "outline",
-  "outlineVariant",
-  "shadow",
-  "scrim",
-  "surfaceTint",
-] as const;
+const LIGHT: Ramp = {
+  bg: "#FAF9F5",
+  bg2: "#F0EEE6",
+  surface: "#FFFFFF",
+  ink: "#141413",
+  ink2: "#3D3D3A",
+  ink3: "#65645E",
+  line: "#E6E3DA",
+  line2: "#D4D0C4",
+  hover: "rgba(20, 20, 19, 0.05)",
+  ok: "#3F6B45",
+  err: "#A3402F",
+  btn: "#141413",
+  "btn-ink": "#FAF9F5",
+  page: "#FFFFFF",
+  scrim: "rgba(20, 20, 19, 0.32)",
+};
 
-const kebab = (s: string) => s.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const DARK: Ramp = {
+  bg: "#1F1E1D",
+  bg2: "#262624",
+  surface: "#30302E",
+  ink: "#F3F1EA",
+  ink2: "#D6D3C8",
+  ink3: "#A6A398",
+  line: "#3B3A37",
+  line2: "#4C4A45",
+  hover: "rgba(255, 255, 255, 0.06)",
+  ok: "#9CC79C",
+  err: "#EBA08C",
+  btn: "#F3F1EA",
+  "btn-ink": "#1F1E1D",
+  page: "#ECEAE3",
+  scrim: "rgba(0, 0, 0, 0.5)",
+};
+
+// 提高对比度：次级 / 辅助文字往主文字压，分隔线加深
+const CONTRAST: Record<"light" | "dark", Record<Exclude<Contrast, "standard">, Partial<Ramp>>> = {
+  light: {
+    medium: { ink2: "#2E2E2B", ink3: "#4F4E49", line: "#D4D0C4", line2: "#B9B4A6" },
+    high: { ink2: "#1F1F1D", ink3: "#3D3D3A", line: "#B9B4A6", line2: "#8F8A7D" },
+  },
+  dark: {
+    medium: { ink2: "#E4E1D7", ink3: "#C2BFB3", line: "#4C4A45", line2: "#625F58" },
+    high: { ink2: "#F3F1EA", ink3: "#D6D3C8", line: "#625F58", line2: "#807C73" },
+  },
+};
+
+// 强调色文字：浅色向黑、深色向白混合；对比度越高混得越多
+const ACCENT_INK: Record<"light" | "dark", Record<Contrast, string>> = {
+  light: { standard: "70%", medium: "60%", high: "50%" },
+  dark: { standard: "62%", medium: "50%", high: "40%" },
+};
 
 /** 生成 CSS 变量表（纯函数，便于测试）。 */
-export function themeVars(seed: string, dark: boolean, contrast: Contrast): Record<string, string> {
-  const scheme = new SchemeTonalSpot(Hct.fromInt(argbFromHex(seed)), dark, CONTRAST_LEVEL[contrast]);
+export function themeVars(accent: string, dark: boolean, contrast: Contrast): Record<string, string> {
+  const tone = dark ? "dark" : "light";
+  const ramp: Ramp = { ...(dark ? DARK : LIGHT), ...(contrast === "standard" ? {} : CONTRAST[tone][contrast]) };
   const vars: Record<string, string> = {};
-  for (const role of ROLES) {
-    vars[`--md-sys-color-${kebab(role)}`] = hexFromArgb(MaterialDynamicColors[role].getArgb(scheme));
-  }
+  for (const [k, v] of Object.entries(ramp)) vars[`--${k}`] = v;
+  vars["--accent"] = accent;
+  vars["--accent-ink"] = `color-mix(in oklab, var(--accent) ${ACCENT_INK[tone][contrast]}, ${dark ? "#fff" : "#000"})`;
+  vars["--accent-soft"] = `color-mix(in srgb, var(--accent) ${dark ? 22 : 14}%, transparent)`;
   return vars;
 }
 
@@ -79,10 +89,10 @@ export function resolveDark(mode: ThemeMode): boolean {
   return mode === "dark";
 }
 
-export function applyTheme(seed: string, mode: ThemeMode, contrast: Contrast): void {
+export function applyTheme(accent: string, mode: ThemeMode, contrast: Contrast): void {
   const dark = resolveDark(mode);
   const root = document.documentElement;
-  for (const [k, v] of Object.entries(themeVars(seed, dark, contrast))) root.style.setProperty(k, v);
+  for (const [k, v] of Object.entries(themeVars(accent, dark, contrast))) root.style.setProperty(k, v);
   root.dataset.theme = dark ? "dark" : "light";
   root.style.colorScheme = dark ? "dark" : "light";
 }

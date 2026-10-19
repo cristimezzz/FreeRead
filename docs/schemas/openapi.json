@@ -2275,7 +2275,7 @@
             "$ref": "#/components/schemas/Appearance",
             "default": {
               "theme_mode": "system",
-              "seed_color": "#6750A4",
+              "seed_color": "#D97757",
               "follow_system_accent": false,
               "contrast": "standard"
             }
@@ -2352,7 +2352,7 @@
           "seed_color": {
             "type": "string",
             "title": "Seed Color",
-            "default": "#6750A4"
+            "default": "#D97757"
           },
           "follow_system_accent": {
             "type": "boolean",

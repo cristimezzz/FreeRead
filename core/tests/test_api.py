@@ -15,6 +15,7 @@ def test_settings_defaults(client):
     assert s["target_lang"] == "zh-CN"
     assert s["parse_engine"] == "auto"
     assert s["appearance"]["theme_mode"] == "system"
+    assert s["appearance"]["seed_color"] == "#D97757"
     assert s["providers"] == [] and s["routes"] == {}
 
 
@@ -41,6 +42,9 @@ def test_settings_validation(client):
     # 密钥不允许进设置
     with_key = s | {"providers": [PROVIDER | {"api_key": "sk-xxx"}]}
     assert client.put("/settings", json=with_key).status_code == 422
+    # M3 时期的默认紫色换成新的默认强调色（ADR-0007）
+    legacy = s | {"appearance": s["appearance"] | {"seed_color": "#6750a4"}}
+    assert client.put("/settings", json=legacy).json()["appearance"]["seed_color"] == "#D97757"
     bad_color = s | {"appearance": s["appearance"] | {"seed_color": "red"}}
     assert client.put("/settings", json=bad_color).status_code == 422
 

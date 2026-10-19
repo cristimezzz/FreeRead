@@ -1,14 +1,14 @@
 # FreeRead Desktop（Tauri 2 + React + TypeScript）
 
-界面采用 Material 3（官方 `@material/web` 组件，配色由 `@material/material-color-utilities` 按种子色生成），见 [ADR-0006](../../docs/adr/0006-material3-ui.md)。
+界面采用"纸张、墨色与陶土"设计语言：固定的暖中性色阶 + 一个可选强调色，组件是基于原生元素的小组件，见 [ADR-0007](../../docs/adr/0007-paper-ink-clay-ui.md)。
 
 ## 目录
 
 ```
 src/
-├─ app/          App（启动、布局）、store（Zustand：导航、设置、任务推送）、theme（种子色 → --md-sys-color-*）
+├─ app/          App（启动、布局）、store（Zustand：导航、设置、分类、任务推送）、theme（色阶 + 强调色 → CSS 变量）
 ├─ api/          core（连接 sidecar）、client（openapi-fetch，类型由 OpenAPI 生成）、sse（fetch 读 SSE）、ir（IR 类型）
-├─ components/   md.tsx（@material/web 注册、JSX 类型、受控封装）、icons、m3/（官方缺失的组件：导航栏、snackbar）
+├─ components/   ui.tsx（按钮、分段控件、开关、选择框、对话框、进度条）、Sidebar（248px 侧栏 / 阅读器 60px 图标栏）、Snackbar、icons
 └─ features/
    ├─ library/   分类树、文献列表、同步 / 导入
    ├─ reader/    PdfView（pdf.js）、ReflowView（按 IR 渲染）、locate（双向定位）、render（KaTeX / 表格净化）

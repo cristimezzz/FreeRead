@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { connect } from "../api/client";
 import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
-import { NavigationRail } from "../components/m3/NavigationRail";
-import { Snackbar } from "../components/m3/Snackbar";
+import { BrandMark } from "../components/icons";
+import { Sidebar } from "../components/Sidebar";
+import { Snackbar } from "../components/Snackbar";
+import { Progress } from "../components/ui";
 import { JobsBar } from "../features/jobs/JobsBar";
 import { LibraryView } from "../features/library/LibraryView";
 import { ReaderView } from "../features/reader/ReaderView";
 import { SettingsView } from "../features/settings/SettingsView";
 import { startEventStream, useApp } from "./store";
-import { applyTheme } from "./theme";
+import { applyTheme, DEFAULT_ACCENT } from "./theme";
 
 type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; message: string; stderrTail?: string[] };
 
@@ -18,7 +20,7 @@ export default function App() {
   const settings = useApp((s) => s.settings);
 
   useEffect(() => {
-    applyTheme("#6750A4", "system", "standard");
+    applyTheme(DEFAULT_ACCENT, "system", "standard");
     let stop: (() => void) | undefined;
     let unwatch: Promise<() => void> | undefined;
     let cancelled = false;
@@ -65,14 +67,16 @@ export default function App() {
   if (boot.state !== "ready") {
     return (
       <div className="boot">
+        <BrandMark size={56} />
+        <div className="boot-name serif">FreeRead</div>
         {boot.state === "starting" ? (
-          <div>
-            <md-circular-progress indeterminate />
+          <>
+            <Progress className="boot-bar" />
             <p>正在启动 FreeRead…</p>
-          </div>
+          </>
         ) : (
-          <div>
-            <h2>无法连接 Core Service</h2>
+          <div className="boot-error">
+            <h2 className="serif">无法连接 Core Service</h2>
             <p>{boot.message}</p>
             {boot.stderrTail && boot.stderrTail.length > 0 && (
               <pre className="boot-log">{boot.stderrTail.join("\n")}</pre>
@@ -86,7 +90,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <NavigationRail />
+      <Sidebar />
       <main className="main">
         {view.name === "library" && <LibraryView />}
         {view.name === "reader" && <ReaderView key={view.docId} {...view} />}

@@ -2,7 +2,7 @@
 
 - 版本：0.1（草案）
 - 更新日期：2026-10-17
-- 相关决策：[ADR-0001](adr/0001-tauri-python-sidecar.md)、[ADR-0002](adr/0002-local-first-sqlite.md)、[ADR-0003](adr/0003-pluggable-parser.md)、[ADR-0004](adr/0004-document-ir-as-core.md)、[ADR-0005](adr/0005-llm-gateway.md)、[ADR-0006](adr/0006-material3-ui.md)
+- 相关决策：[ADR-0001](adr/0001-tauri-python-sidecar.md)、[ADR-0002](adr/0002-local-first-sqlite.md)、[ADR-0003](adr/0003-pluggable-parser.md)、[ADR-0004](adr/0004-document-ir-as-core.md)、[ADR-0005](adr/0005-llm-gateway.md)、[ADR-0006](adr/0006-material3-ui.md)（已被 [ADR-0007](adr/0007-paper-ink-clay-ui.md) 取代）、[ADR-0007](adr/0007-paper-ink-clay-ui.md)
 
 ## 1. 设计原则
 
@@ -266,10 +266,10 @@ apps/desktop/src/
 │  ├─ summary/       总结面板、引用跳转
 │  └─ graph/         图谱浏览(Cytoscape.js)、问答画布(React Flow)
 ├─ stores/           Zustand
-└─ components/       通用 UI；m3/ 放官方缺失的 M3 组件（导航栏、侧边面板、表格等）
+└─ components/       通用 UI：ui.tsx（按钮、分段控件、开关、选择框、对话框等原生元素封装）、Sidebar、Snackbar、图标
 ```
 
-UI 采用 Material 3，组件使用官方 `@material/web`，配色由 `@material/material-color-utilities` 按用户选择的种子色生成，见 [ADR-0006](adr/0006-material3-ui.md)。
+UI 采用"纸张、墨色与陶土"设计语言：固定的暖中性色阶 + 一个用户可选的强调色，组件是 `src/components/` 里基于原生元素的小组件，见 [ADR-0007](adr/0007-paper-ink-clay-ui.md)（取代 ADR-0006）。
 
 ## 8. 数据目录布局
 

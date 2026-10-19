@@ -23,20 +23,17 @@ export function ItemList({ items, onOpen }: { items: Item[]; onOpen: (item: Item
       {items.map((it) => {
         const doc = it.documents.find((d) => d.parse_status === "ready") ?? it.documents[0];
         const meta = [formatAuthors(it.authors), it.year, it.venue].filter(Boolean).join(" · ");
-        const status = doc?.parse_status ?? "pending";
+        const status = doc ? (doc.parse_status ?? "pending") : "none";
         return (
-          <button key={it.id} className="item-row" role="listitem" onClick={() => onOpen(it)}>
-            <span className="item-title">{it.title || "（无标题）"}</span>
-            <span className="item-status">
-              {doc ? (
-                <span className="chip" data-status={status}>
-                  {STATUS_LABEL[status]}
-                </span>
-              ) : (
-                <span className="chip">无 PDF</span>
-              )}
+          <button key={it.id} type="button" className="item-row" role="listitem" onClick={() => onOpen(it)}>
+            <span className="item-text">
+              <span className="item-title serif">{it.title || "（无标题）"}</span>
+              {meta && <span className="item-meta">{meta}</span>}
             </span>
-            <span className="item-meta">{meta}</span>
+            <span className="tag" data-status={status}>
+              <span className="dot" />
+              {doc ? STATUS_LABEL[status] : "无 PDF"}
+            </span>
           </button>
         );
       })}
