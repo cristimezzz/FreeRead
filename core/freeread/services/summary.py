@@ -199,18 +199,27 @@ class SummaryService:
         )
         existing = {b.block_id for b in doc.blocks}
 
-        def parse_reduce(text: str) -> tuple[list[dict[str, Any]], int]:
-            # 模型偶尔把 JSON 结构写坏（如把其他小节写成第一个小节对象里的键）：
-            # 依次尝试回复里的每个对象，取第一个能整理出要点的
-            for data in json_objects(text):
-                sections, invalid = _sections_from(data, template, existing)
+        def parse_reduce(text: str) -> tuple[list[dict[str, Any]], int, bool]:
+            """严格：回复里要有结构完整的 {"sections": [...]}，且至少一个要点。"""
+            data = extract_json(text, "sections")
+            sections, invalid = _sections_from(data, template, existing)
+            if not any(sec["points"] for sec in sections):
+                raise ValueError("汇总结果里没有可用的要点")
+            return sections, invalid, False
+
+        def salvage_reduce(texts: list[str]) -> tuple[list[dict[str, Any]], int, bool]:
+            """两次都不完整时，从回复里拼回能认出的小节对象（模型偶尔多写或漏写一个 token，
+            整体不是合法 JSON，但大部分小节对象本身完整）。"""
+            for text in reversed(texts):
+                found = _salvage_sections(text, template)
+                sections, invalid = _sections_from({"sections": found}, template, existing)
                 if any(sec["points"] for sec in sections):
-                    return sections, invalid
+                    return sections, invalid, True
             raise ValueError("汇总结果里没有可用的要点")
 
         try:
-            sections, invalid = await self._complete_json(
-                doc_id, reduce_prompt, messages, parse_reduce
+            sections, invalid, salvaged = await self._complete_json(
+                doc_id, reduce_prompt, messages, parse_reduce, salvage_reduce
             )
         except LLMError as e:
             raise SummaryError("llm_error", f"汇总失败：{e}") from e
@@ -221,6 +230,8 @@ class SummaryService:
             "failed_groups": sum(1 for i in range(len(groups)) if results.get(i) is None),
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
         }
+        if salvaged:
+            stats["salvaged"] = True
         prompt_version = f"{map_prompt.ref}+{reduce_prompt.ref}+{template.id}@{template.version}"
         out = await asyncio.to_thread(
             self._save,
@@ -257,9 +268,16 @@ class SummaryService:
         return index, points, None
 
     async def _complete_json(
-        self, doc_id: str, prompt: Prompt, messages: list[Message], parse: Callable[[str], T]
+        self,
+        doc_id: str,
+        prompt: Prompt,
+        messages: list[Message],
+        parse: Callable[[str], T],
+        salvage: Callable[[list[str]], T] | None = None,
     ) -> T:
-        """parse 抛 ValueError 时不走缓存重试一次（缓存里是那条坏回复）。"""
+        """parse 抛 ValueError 时不走缓存重试一次（缓存里是那条坏回复）；
+        仍失败且给了 salvage 时，用它从两次回复里尽量取回结果。"""
+        texts: list[str] = []
         for attempt in range(2):
             result = await self._gateway.complete(
                 TaskKind.SUMMARIZE,
@@ -269,11 +287,15 @@ class SummaryService:
                 use_cache=attempt == 0,
                 **self.llm_opts,
             )
+            texts.append(result.text)
             try:
                 return parse(result.text)
             except ValueError:
                 if attempt == 1:
-                    raise
+                    if salvage is None:
+                        raise
+                    log.info("summary %s: %s invalid twice, salvaging", doc_id, prompt.ref)
+                    return salvage(texts)
                 log.info("summary %s: %s returned invalid JSON, retrying", doc_id, prompt.ref)
         raise AssertionError("unreachable")
 
@@ -358,9 +380,9 @@ def _sections_from(
     data: dict[str, Any], template: TemplateOut, existing: set[str]
 ) -> tuple[list[dict[str, Any]], int]:
     """按模板顺序整理 Reduce 的输出。认不出 key 的小节按位置对应；缺的小节为空。"""
-    raw_sections = _raw_sections(data)
     known = {t.key for t in template.sections}
     by_name = {t.name: t.key for t in template.sections}
+    raw_sections = _raw_sections(data, known | set(by_name))
     by_key: dict[str, dict[str, Any]] = {}
     for pos, sec in enumerate(raw_sections):
         key = str(sec.get("key") or "")
@@ -384,28 +406,47 @@ def _sections_from(
     return out, invalid
 
 
-def _flatten(obj: dict[str, Any]) -> list[dict[str, Any]]:
-    """{"key": k, "points": [...], "<其他 key>": [...]} → 每个 key 一个小节。"""
+def _is_points(v: Any) -> bool:
+    return isinstance(v, list) and all(isinstance(p, dict) for p in v)
+
+
+def _flatten(obj: dict[str, Any], known: set[str]) -> list[dict[str, Any]]:
+    """{"key": k, "points": [...], "<其他小节 key>": [...]} → 每个 key 一个小节。
+
+    混入的键只认模板里的小节 key / 名称，且值必须是要点对象列表：要点对象自己的
+    block_ids 等列表不能被当成小节（评测集 d_2ca951d5e87040a4 出过这种误判）。"""
     out = []
-    if "points" in obj:
+    if _is_points(obj.get("points")):
         out.append({"key": obj.get("key"), "name": obj.get("name"), "points": obj["points"]})
-    out += [
-        {"key": k, "points": v}
-        for k, v in obj.items()
-        if k not in ("key", "name", "points", "sections") and isinstance(v, list)
-    ]
+    out += [{"key": k, "points": v} for k, v in obj.items() if k in known and _is_points(v)]
     return out
 
 
-def _raw_sections(data: dict[str, Any]) -> list[dict[str, Any]]:
+def _raw_sections(data: dict[str, Any], known: set[str]) -> list[dict[str, Any]]:
     """Reduce 输出的几种形状都整理成 [{key, name?, points}]：
     标准的 sections 列表、sections 写成 {key: points}、小节对象里混入其他小节、整个对象就是一个小节。"""
     secs = data.get("sections")
     if isinstance(secs, list):
-        return [part for s in secs if isinstance(s, dict) for part in _flatten(s)]
+        return [part for s in secs if isinstance(s, dict) for part in _flatten(s, known)]
     if isinstance(secs, dict):
-        return [{"key": k, "points": v} for k, v in secs.items() if isinstance(v, list)]
-    return _flatten(data)
+        return [{"key": k, "points": v} for k, v in secs.items() if _is_points(v)]
+    return _flatten(data, known)
+
+
+def _salvage_sections(text: str, template: TemplateOut) -> list[dict[str, Any]]:
+    """从结构损坏的回复里收集完整的小节对象（按 key 去重，保留先出现的）。"""
+    known = {t.key for t in template.sections} | {t.name for t in template.sections}
+    found: dict[str, dict[str, Any]] = {}
+    for obj in json_objects(text):
+        if "sections" in obj:
+            parts = _raw_sections(obj, known)
+        elif "points" in obj or known & obj.keys():
+            parts = _flatten(obj, known)
+        else:
+            continue  # 要点对象等
+        for part in parts:
+            found.setdefault(str(part.get("key")), part)
+    return list(found.values())
 
 
 def _to_out(row: SummaryRow) -> SummaryOut:

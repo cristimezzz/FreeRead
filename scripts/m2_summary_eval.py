@@ -107,7 +107,7 @@ async def run_doc(ctx: AppContext, entry: dict, args) -> dict:
     }
 
 
-def report(rows: list[dict], args) -> str:
+def report(rows: list[dict], args, elapsed: float) -> str:
     ok = [r for r in rows if "points" in r]
     points = sum(r["points"] for r in ok)
     cited = sum(r["cited"] for r in ok)
@@ -119,7 +119,10 @@ def report(rows: list[dict], args) -> str:
         "# M2 总结评测",
         "",
         f"- 模型：{model}；模板：{args.template}；语言：{args.lang}；解析：{args.engine}",
-        f"- 文档：{len(ok)} / {len(rows)} 篇成功",
+        (
+            f"- 文档：{len(ok)} / {len(rows)} 篇成功；总耗时 {elapsed:.0f} s（--jobs {args.jobs}，"
+            "命中缓存的调用几乎不耗时）"
+        ),
         (
             f"- **引用覆盖率：{coverage:.1%}**（{cited} / {points} 个要点；"
             f"验收 ≥ {TARGET:.0%}：{'✅' if coverage >= TARGET else '❌'}）"
@@ -210,8 +213,9 @@ async def main() -> int:
             return row
 
         rows = await asyncio.gather(*(one(e) for e in entries))
-        print(f"总耗时 {time.perf_counter() - started:.0f} s（--jobs {args.jobs}）", flush=True)
-        text = report(rows, args)
+        elapsed = time.perf_counter() - started
+        print(f"总耗时 {elapsed:.0f} s（--jobs {args.jobs}）", flush=True)
+        text = report(rows, args, elapsed)
         (OUT / "report.md").write_text(text, encoding="utf-8")
         print(text)
     finally:

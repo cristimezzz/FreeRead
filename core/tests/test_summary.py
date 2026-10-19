@@ -444,3 +444,64 @@ async def test_llm_opts_pass_through_and_concurrency_setting(ctx, tmp_path):
     ctx.summary.llm_opts = {"thinking": {"type": "disabled"}}
     await collect(ctx.summary.generate(doc_id, "brief"))
     assert fake.calls and all(c[2] == {"thinking": {"type": "disabled"}} for c in fake.calls)
+
+
+# 评测集 d_2ca951d5e87040a4 的真实回复形状：每个小节结尾都多写了下一个小节的 key（"…],"key_points"}"），
+# 整体不是合法 JSON。此前兜底取到了要点对象，把它的 block_ids 当成小节，编号成了要点正文。
+STRAY = (
+    '{"sections":[{"key":"tldr","points":[{"text":"一句话","block_ids":["b_0003"]}],"key_points"},'
+    '{"key":"key_points","points":[{"text":"要点","block_ids":["b_0005"]}],"limitations"},'
+    '{"key":"limitations","points":[{"text":"局限","block_ids":["b_0007"]}]}]}'
+)
+# 修不了的坏回复：第一个小节缺了右括号
+BROKEN = (
+    '{"sections":[{"key":"tldr","points":[{"text":"一句话","block_ids":["b_0003"]}],'
+    '{"key":"key_points","points":[{"text":"要点","block_ids":["b_0005"]}]},'
+    '{"key":"limitations","points":[{"text":"局限","block_ids":["b_0007"]}]}]}'
+)
+GOOD = '{"sections":[{"key":"tldr","points":[{"text":"重试后的一句话","block_ids":["b_0003"]}]}]}'
+
+
+def test_extract_json_repairs_dangling_keys_only_when_needed():
+    data = extract_json(STRAY, "sections")
+    assert [s["key"] for s in data["sections"]] == ["tldr", "key_points", "limitations"]
+    # 结尾缺右括号（评测集 d_2d8e7b5188a46ca6）：补齐；括号交错的不修
+    assert extract_json('{"sections":[{"key":"a","points":[{"text":"t"}]}', "sections")
+    with pytest.raises(ValueError):
+        extract_json('{"sections":[{"key":"a"]', "sections")
+    valid = '{"text": "a,\\"b\\"}", "ids": ["x", "y"]}'
+    assert extract_json(valid) == {"text": 'a,"b"}', "ids": ["x", "y"]}
+
+
+def reduce_with(*replies):
+    it = iter(replies)
+    last = replies[-1]
+
+    def responder(model, messages):
+        if '"sections"' in messages[0].content:
+            return next(it, last)
+        return summary_responder(model, messages)
+
+    return FakeProvider("p1", responder=responder)
+
+
+async def test_reduce_repair_retry_and_salvage(ctx, tmp_path):
+    configure(ctx, reduce_with(STRAY))
+    doc_id = await parsed_doc(ctx, tmp_path)
+    out = (await collect(ctx.summary.generate(doc_id, "brief")))[-1][1]
+    assert [len(s.points) for s in out.sections] == [1, 1, 1]  # 修复后一次成功
+    assert "salvaged" not in out.stats
+
+    # 修不了：不走缓存重试，用重试的完整结果
+    configure(ctx, reduce_with(BROKEN, GOOD))
+    out = (await collect(ctx.summary.generate(doc_id, "brief", lang="en")))[-1][1]
+    assert out.sections[0].points[0].text == "重试后的一句话"
+    assert "salvaged" not in out.stats
+
+    # 两次都修不了：拼回完整的小节对象；绝不出现以编号为正文的要点
+    configure(ctx, reduce_with(BROKEN))
+    out = (await collect(ctx.summary.generate(doc_id, "brief", lang="ja")))[-1][1]
+    texts = [p.text for s in out.sections for p in s.points]
+    assert out.stats["salvaged"] is True
+    assert "要点" in texts and "局限" in texts
+    assert not any(t.startswith("b_") for t in texts)
