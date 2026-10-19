@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Icon } from "../../components/icons";
-import { Select } from "../../components/md";
+import { Button, IconButton, Progress, Select } from "../../components/ui";
 import type { useSummary } from "./useSummary";
 
 interface Props {
@@ -36,11 +35,8 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
   return (
     <aside className="side-panel summary-panel" aria-label="总结">
       <div className="side-panel-head">
-        <h2>总结</h2>
-        <span style={{ flex: 1 }} />
-        <md-icon-button aria-label="关闭总结" onClick={onClose}>
-          <Icon name="close" size={20} />
-        </md-icon-button>
+        <h2 className="serif">总结</h2>
+        <IconButton icon="close" label="关闭总结" onClick={onClose} />
       </div>
       <div className="summary-controls">
         <Select
@@ -53,19 +49,20 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
           onValue={setTemplateId}
         />
         {running ? (
-          <md-text-button onClick={cancel}>停止</md-text-button>
+          <Button small onClick={cancel}>
+            停止
+          </Button>
         ) : (
-          <md-filled-tonal-button onClick={() => void generate(templateId)}>
+          <Button small icon="sync" onClick={() => void generate(templateId)}>
             {summary ? "重新生成" : "生成"}
-          </md-filled-tonal-button>
+          </Button>
         )}
       </div>
 
       {running && (
         <div className="summary-progress">
-          <md-linear-progress
-            indeterminate={!progress || progress.stage === "reduce" || undefined}
-            value={progress && progress.total ? progress.done / progress.total : 0}
+          <Progress
+            value={!progress || progress.stage === "reduce" ? undefined : progress.total ? progress.done / progress.total : 0}
           />
           <span>
             {!progress
@@ -99,6 +96,7 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
                       {p.text}
                       {p.block_ids.map((id, j) => (
                         <button
+                          type="button"
                           key={id}
                           className={`cite${id === active ? " active" : ""}`}
                           title={blockText(id)?.slice(0, 200)}
@@ -116,10 +114,19 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
               )}
             </section>
           ))}
-          <p className="summary-meta">
-            {summary.model} · {fmtTime(summary.created_at)}
-            {coverage != null && ` · 引用覆盖率 ${Math.round(coverage * 100)}%`}
-          </p>
+        </div>
+      )}
+      {summary && (
+        <div className="panel-foot">
+          <span>{summary.model}</span>
+          <span aria-hidden="true">·</span>
+          <span>{fmtTime(summary.created_at)}</span>
+          {coverage != null && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>引用覆盖率 {Math.round(coverage * 100)}%</span>
+            </>
+          )}
         </div>
       )}
     </aside>

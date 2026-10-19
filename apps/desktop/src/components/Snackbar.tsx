@@ -1,7 +1,7 @@
-// M3 snackbar（官方组件库没有）：底部居中，几秒后自动消失。
+// 提示条：底部居中的墨色小卡片，几秒后自动消失（常驻提示除外）。
 
 import { useEffect } from "react";
-import { useApp } from "../../app/store";
+import { useApp } from "../app/store";
 
 export function Snackbar() {
   const message = useApp((s) => s.snackbar);
@@ -16,7 +16,9 @@ export function Snackbar() {
   return (
     <div className="snackbar" role="status">
       <span>{message}</span>
-      <button onClick={() => toast(null)}>关闭</button>
+      <button type="button" onClick={() => toast(null)}>
+        关闭
+      </button>
     </div>
   );
 }

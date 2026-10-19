@@ -616,7 +616,7 @@ export interface components {
             /**
              * @default {
              *       "theme_mode": "system",
-             *       "seed_color": "#6750A4",
+             *       "seed_color": "#D97757",
              *       "follow_system_accent": false,
              *       "contrast": "standard"
              *     }
@@ -670,7 +670,7 @@ export interface components {
             theme_mode: "system" | "light" | "dark";
             /**
              * Seed Color
-             * @default #6750A4
+             * @default #D97757
              */
             seed_color: string;
             /**

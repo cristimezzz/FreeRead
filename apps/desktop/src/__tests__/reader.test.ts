@@ -96,12 +96,18 @@ describe("library helpers", () => {
 });
 
 describe("theme", () => {
-  it("generates M3 color roles that differ between light and dark", () => {
-    const light = themeVars("#6750A4", false, "standard");
-    const dark = themeVars("#6750A4", true, "standard");
-    expect(light["--md-sys-color-primary"]).toMatch(/^#[0-9a-f]{6}$/);
-    expect(light["--md-sys-color-surface"]).not.toBe(dark["--md-sys-color-surface"]);
-    expect(Object.keys(light)).toContain("--md-sys-color-tertiary-container");
-    expect(themeVars("#6750A4", false, "high")["--md-sys-color-primary"]).not.toBe(light["--md-sys-color-primary"]);
+  it("uses a fixed warm ramp and only varies the accent", () => {
+    const light = themeVars("#D97757", false, "standard");
+    const dark = themeVars("#D97757", true, "standard");
+    expect(light["--bg"]).toBe("#FAF9F5");
+    expect(dark["--bg"]).toBe("#1F1E1D");
+    expect(light["--accent"]).toBe("#D97757");
+    // 换强调色不影响中性色阶
+    expect(themeVars("#4F74B8", false, "standard")["--ink"]).toBe(light["--ink"]);
+    // 提高对比度：辅助文字与分隔线加深
+    const high = themeVars("#D97757", false, "high");
+    expect(high["--ink3"]).not.toBe(light["--ink3"]);
+    expect(high["--line"]).not.toBe(light["--line"]);
+    expect(high["--accent-ink"]).not.toBe(light["--accent-ink"]);
   });
 });

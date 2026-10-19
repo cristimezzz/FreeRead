@@ -1,4 +1,4 @@
-// 分类树（M3 没有树组件，按列表项样式自己实现）。后端返回扁平列表，这里按 parent_id 组装。
+// 分类树（显示在侧栏里，样式同侧栏导航项）。后端返回扁平列表，这里按 parent_id 组装。
 
 import { useMemo, useState } from "react";
 import type { Schemas } from "../../api/client";
@@ -29,10 +29,12 @@ export function buildTree(collections: Collection[]): TreeNode[] {
 interface Props {
   collections: Collection[];
   selected: string | null;
+  /** 全部文献的总数；未知时不显示 */
+  total?: number | null;
   onSelect: (id: string | null) => void;
 }
 
-export function CollectionTree({ collections, selected, onSelect }: Props) {
+export function CollectionTree({ collections, selected, total, onSelect }: Props) {
   const roots = useMemo(() => buildTree(collections), [collections]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const toggle = (id: string) =>
@@ -44,49 +46,48 @@ export function CollectionTree({ collections, selected, onSelect }: Props) {
     });
 
   const render = (nodes: TreeNode[], depth: number) =>
-    nodes.map((n) => (
-      <div
-        key={n.c.id}
-        role="treeitem"
-        aria-expanded={n.children.length ? !collapsed.has(n.c.id) : undefined}
-      >
-        <button
-          className="tree-node"
-          style={{ "--depth": depth } as React.CSSProperties}
-          aria-selected={selected === n.c.id}
-          onClick={() => onSelect(n.c.id)}
-        >
-          <span
-            className="tree-toggle"
-            onClick={(e) => {
-              if (!n.children.length) return;
-              e.stopPropagation();
-              toggle(n.c.id);
-            }}
+    nodes.map((n) => {
+      const open = !collapsed.has(n.c.id);
+      return (
+        <div key={n.c.id} role="treeitem" aria-expanded={n.children.length ? open : undefined} aria-selected={selected === n.c.id}>
+          <button
+            type="button"
+            className={`nav tree-node${selected === n.c.id ? " on" : ""}`}
+            style={{ "--depth": depth } as React.CSSProperties}
+            onClick={() => onSelect(n.c.id)}
           >
             {n.children.length ? (
-              <Icon name={collapsed.has(n.c.id) ? "chevronRight" : "expandMore"} size={20} />
+              <span
+                className="tree-toggle"
+                role="button"
+                aria-label={open ? "收起" : "展开"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggle(n.c.id);
+                }}
+              >
+                <Icon name={open ? "expandMore" : "chevronRight"} size={14} strokeWidth={2} />
+              </span>
             ) : (
-              <Icon name="folder" size={18} />
+              <Icon name="folder" />
             )}
-          </span>
-          <span className="label">{n.c.name}</span>
-          <span className="count">{n.c.item_count || ""}</span>
-        </button>
-        {n.children.length > 0 && !collapsed.has(n.c.id) && (
-          <div role="group">{render(n.children, depth + 1)}</div>
-        )}
-      </div>
-    ));
+            <span className="label">{n.c.name}</span>
+            {n.c.item_count > 0 && <span className="count">{n.c.item_count}</span>}
+          </button>
+          {n.children.length > 0 && open && <div role="group">{render(n.children, depth + 1)}</div>}
+        </div>
+      );
+    });
 
   return (
     <div className="tree" role="tree" aria-label="分类">
-      <button className="tree-node" aria-selected={selected === null} onClick={() => onSelect(null)}>
-        <span className="tree-toggle">
-          <Icon name="library" size={18} />
-        </span>
-        <span className="label">全部文献</span>
-      </button>
+      <div role="treeitem" aria-selected={selected === null}>
+        <button type="button" className={`nav tree-node${selected === null ? " on" : ""}`} onClick={() => onSelect(null)}>
+          <Icon name="all" />
+          <span className="label">全部文献</span>
+          {total != null && <span className="count">{total}</span>}
+        </button>
+      </div>
       {render(roots, 0)}
     </div>
   );

@@ -9,8 +9,8 @@ import type { Anchor } from "../../api/ir";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
-const PAGE_GAP = 16;
-const PADDING = 16;
+const PAGE_GAP = 20;
+const PADDING = 28; // 与 global.css 里 .pdf-view 的 padding 一致
 
 interface Props {
   docId: string;

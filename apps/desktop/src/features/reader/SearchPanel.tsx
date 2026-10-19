@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { Icon } from "../../components/icons";
+import { IconButton } from "../../components/ui";
 
 type Hit = Schemas["SearchHit"];
 type Response = Schemas["SearchResponse"];
@@ -76,9 +77,13 @@ export function SearchPanel({ docId, embedStatus, onPick, onClose }: Props) {
       : null;
 
   return (
-    <aside className="search-panel" aria-label="文内搜索">
-      <div className="search-box">
-        <Icon name="search" size={20} />
+    <aside className="side-panel search-panel" aria-label="文内搜索">
+      <div className="side-panel-head">
+        <h2 className="serif">搜索</h2>
+        <IconButton icon="close" label="关闭搜索" onClick={onClose} />
+      </div>
+      <label className="field search-box">
+        <Icon name="search" />
         <input
           ref={input}
           type="search"
@@ -91,17 +96,14 @@ export function SearchPanel({ docId, embedStatus, onPick, onClose }: Props) {
             if (e.key === "Enter" && result?.hits[0]) pick(result.hits[0]);
           }}
         />
-        <md-icon-button aria-label="关闭搜索" onClick={onClose}>
-          <Icon name="close" size={20} />
-        </md-icon-button>
-      </div>
+      </label>
       {note && <p className="search-note">{note}</p>}
       {error && <p className="search-note error">搜索失败：{error}</p>}
       {result && !result.hits.length && <p className="search-note">没有找到相关内容</p>}
       <ol className="search-hits">
         {result?.hits.map((h) => (
           <li key={h.block_id}>
-            <button className={h.block_id === active ? "active" : undefined} onClick={() => pick(h)}>
+            <button type="button" className={h.block_id === active ? "active" : undefined} onClick={() => pick(h)}>
               <span className="search-meta">
                 {TYPE_LABEL[h.type] ?? h.type}
                 {h.page != null && ` · 第 ${h.page + 1} 页`}

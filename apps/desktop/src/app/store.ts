@@ -8,10 +8,11 @@ import { applyTheme } from "./theme";
 export type Settings = Schemas["AppSettings"];
 export type Job = Schemas["JobOut"];
 export type DocumentStatus = Schemas["DocumentOut"];
+export type Collection = Schemas["CollectionOut"];
 
 export type View =
   | { name: "library" }
-  | { name: "reader"; docId: string; itemId: string; title: string }
+  | { name: "reader"; docId: string; itemId: string; title: string; byline?: string }
   | { name: "settings" };
 
 interface AppState {
@@ -24,12 +25,23 @@ interface AppState {
   snackbar: string | null;
   /** 常驻 snackbar 不自动消失，也不被普通提示覆盖（例如 Core Service 已退出）。 */
   snackbarSticky: boolean;
+  /** 文献库的分类树显示在侧栏里，所以分类列表和当前分类放在全局 */
+  collections: Collection[];
+  collectionId: string | null;
+  /** 全部文献的总数（侧栏"全部文献"后的计数）；未知时为 null */
+  libraryTotal: number | null;
+  /** 设置页当前滚动到的分节（侧栏锚点高亮） */
+  settingsSection: string | null;
+  /** 侧栏点过的分节：滚到底时它到不了顶部，仍保持高亮 */
+  settingsPinned: string | null;
 
   navigate: (view: View) => void;
   loadSettings: () => Promise<void>;
   saveSettings: (settings: Settings) => Promise<Settings>;
   toast: (message: string | null, opts?: { sticky?: boolean }) => void;
   bumpLibrary: () => void;
+  loadCollections: () => Promise<void>;
+  setCollectionId: (id: string | null) => void;
 }
 
 export const useApp = create<AppState>((set, get) => ({
@@ -40,6 +52,11 @@ export const useApp = create<AppState>((set, get) => ({
   libraryVersion: 0,
   snackbar: null,
   snackbarSticky: false,
+  collections: [],
+  collectionId: null,
+  libraryTotal: null,
+  settingsSection: null,
+  settingsPinned: null,
 
   navigate: (view) => set({ view }),
 
@@ -65,6 +82,8 @@ export const useApp = create<AppState>((set, get) => ({
         : { snackbar: message, snackbarSticky: message !== null && !!opts?.sticky },
     ),
   bumpLibrary: () => set({ libraryVersion: get().libraryVersion + 1 }),
+  loadCollections: async () => set({ collections: unwrap(await api().GET("/library/collections")) }),
+  setCollectionId: (collectionId) => set({ collectionId }),
 }));
 
 const ACTIVE = new Set(["queued", "running"]);
