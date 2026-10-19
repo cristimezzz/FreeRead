@@ -243,3 +243,19 @@ def test_eval_answer_metrics_and_review():
     }
     md = dump_review_markdown("T", [("q1", node)], {"b_0001": "原文  一段"})
     assert "## q1：Q" in md and "`b_0001` 原文 一段" in md
+
+
+async def test_document_without_text_fails_fast_without_calling_model(ctx, tmp_path):
+    from sqlalchemy import update
+
+    from freeread.infra.db.models import BlockRow
+
+    fake = FakeProvider("p1", responder=qa_responder)
+    configure(ctx, fake)
+    doc_id = await parsed_doc(ctx, tmp_path)
+    with ctx.sessions.begin() as s:  # 模拟扫描版：没有任何正文
+        s.execute(update(BlockRow).where(BlockRow.doc_id == doc_id).values(text="", html=None))
+    session = ctx.qa.create_session(doc_id)
+    with pytest.raises(PreflightError) as e:
+        await collect(ctx.qa.ask(session.id, "Q?"))
+    assert e.value.code == "no_text" and fake.calls == []

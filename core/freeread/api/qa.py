@@ -70,7 +70,7 @@ async def ask(ctx: Ctx, session_id: str, body: AskRequest, request: Request):
     - `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；
     - `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；
     - `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /
-      consent_required / bad_output / llm_error；
+      consent_required / no_text / bad_output / llm_error；
     - `done`：结束。
     """
     try:

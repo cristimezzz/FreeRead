@@ -43,7 +43,7 @@ _MARKER_RE = re.compile(r"\[(b_\d+)\]")
 
 
 class QAError(PreflightError):
-    """问答无法完成。除 preflight 的 code 外还有 bad_output。"""
+    """问答无法完成。除 preflight 的 code 外还有 bad_request / no_text / bad_output。"""
 
 
 class QANodeOut(BaseModel):
@@ -183,6 +183,9 @@ class QAService:
             approx_tokens,
             CONTEXT_BUDGET,
         )
+        if not context.block_ids:
+            # 扫描版等没有文字层的 PDF：不必调用模型（它只会说没有原文）
+            raise QAError("no_text", "这篇论文没有可检索的正文（可能是扫描版 PDF），暂时无法问答")
         yield "context", QAContextOut(block_ids=context.block_ids, modes=found.modes)
 
         history = [

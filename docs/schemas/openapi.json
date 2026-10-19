@@ -2207,7 +2207,7 @@
           "qa"
         ],
         "summary": "Ask",
-        "description": "SSE 事件：\n- `context`：QAContextOut，送给模型的原文块与检索方式（没有 vector 表示语义索引未建）；\n- `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；\n- `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；\n- `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /\n  consent_required / bad_output / llm_error；\n- `done`：结束。",
+        "description": "SSE 事件：\n- `context`：QAContextOut，送给模型的原文块与检索方式（没有 vector 表示语义索引未建）；\n- `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；\n- `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；\n- `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /\n  consent_required / no_text / bad_output / llm_error；\n- `done`：结束。",
         "operationId": "ask_qa_sessions__session_id__ask_post",
         "parameters": [
           {
