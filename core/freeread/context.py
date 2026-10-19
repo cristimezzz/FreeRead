@@ -21,7 +21,7 @@ from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
 from freeread.services.search import SearchService
-from freeread.services.settings import SettingsService
+from freeread.services.settings import PARSER_KEY_PREFIX, SettingsService
 from freeread.services.summary import SummaryService
 from freeread.services.translate import TranslateService
 
@@ -62,10 +62,19 @@ class AppContext:
         library = LibraryService(sessions, paths, jobs, LocalApiConnector)
         worker.register("sync", library.run_sync_job)
         settings = SettingsService(sessions)
-        parse = ParseService(sessions, paths, jobs, bus, settings, ParserRegistry(paths.logs))
+        secrets = secrets if secrets is not None else SecretStore.from_env()
+
+        def remote_parser(engine: str):
+            cfg = getattr(settings.get().parsers, engine)
+            return cfg if cfg.mode == "api" else None
+
+        registry = ParserRegistry(
+            paths.logs, remote_parser, lambda engine: secrets.get(PARSER_KEY_PREFIX + engine)
+        )
+        parse = ParseService(sessions, paths, jobs, bus, settings, registry)
+        parse.has_key = lambda engine: secrets.has(PARSER_KEY_PREFIX + engine)
         worker.register("parse", parse.run_parse_job, concurrency=2)
         worker.register("parse_hq", parse.run_parse_hq_job, concurrency=1)
-        secrets = secrets if secrets is not None else SecretStore.from_env()
         prompts = PromptRegistry()
         llm = DefaultGateway(settings, sessions, secrets)
         embed = EmbedService(sessions, paths, jobs, bus, settings, llm, engine=engine)

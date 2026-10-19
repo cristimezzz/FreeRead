@@ -1393,6 +1393,204 @@
         }
       }
     },
+    "/parsers/{engine}/key": {
+      "put": {
+        "tags": [
+          "parsers"
+        ],
+        "summary": "Put Key",
+        "operationId": "put_key_parsers__engine__key_put",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "mineru",
+                "docling"
+              ],
+              "type": "string",
+              "title": "Engine"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "parsers"
+        ],
+        "summary": "Delete Key",
+        "operationId": "delete_key_parsers__engine__key_delete",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "mineru",
+                "docling"
+              ],
+              "type": "string",
+              "title": "Engine"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/parsers/{engine}/test": {
+      "post": {
+        "tags": [
+          "parsers"
+        ],
+        "summary": "Test Service",
+        "description": "只请求健康检查等接口，不上传任何文档。配置错误也以 ok=false 返回，而不是 4xx。",
+        "operationId": "test_service_parsers__engine__test_post",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "mineru",
+                "docling"
+              ],
+              "type": "string",
+              "title": "Engine"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ParserTestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParserTestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/translate/blocks": {
       "post": {
         "tags": [
@@ -2296,6 +2494,21 @@
             "title": "Parse Engine",
             "default": "auto"
           },
+          "parsers": {
+            "$ref": "#/components/schemas/ParserServices",
+            "default": {
+              "mineru": {
+                "base_url": "",
+                "mode": "local",
+                "tier": "basic"
+              },
+              "docling": {
+                "base_url": "",
+                "mode": "local",
+                "tier": "basic"
+              }
+            }
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ProviderConfig"
@@ -2781,6 +2994,31 @@
           "heavy": {
             "type": "boolean",
             "title": "Heavy"
+          },
+          "location": {
+            "type": "string",
+            "enum": [
+              "local",
+              "api"
+            ],
+            "title": "Location",
+            "default": "local"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          },
+          "has_key": {
+            "type": "boolean",
+            "title": "Has Key",
+            "default": false
           }
         },
         "type": "object",
@@ -3262,6 +3500,88 @@
         "type": "object",
         "title": "ParseRequest"
       },
+      "ParserServices": {
+        "properties": {
+          "mineru": {
+            "$ref": "#/components/schemas/RemoteParser",
+            "default": {
+              "mode": "local",
+              "base_url": "",
+              "tier": "basic"
+            }
+          },
+          "docling": {
+            "$ref": "#/components/schemas/RemoteParser",
+            "default": {
+              "mode": "local",
+              "base_url": "",
+              "tier": "basic"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ParserServices"
+      },
+      "ParserTestIn": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^https?://\\S+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ParserTestIn"
+      },
+      "ParserTestOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "latency_ms"
+        ],
+        "title": "ParserTestOut"
+      },
       "ProviderConfig": {
         "properties": {
           "id": {
@@ -3491,6 +3811,51 @@
           "updated_at"
         ],
         "title": "QASessionOut"
+      },
+      "RemoteParser": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "local",
+              "api"
+            ],
+            "title": "Mode",
+            "default": "local"
+          },
+          "base_url": {
+            "type": "string",
+            "pattern": "^(https?://\\S+)?$",
+            "title": "Base Url",
+            "default": ""
+          },
+          "tier": {
+            "type": "string",
+            "enum": [
+              "flash",
+              "basic",
+              "standard",
+              "advanced"
+            ],
+            "title": "Tier",
+            "default": "basic"
+          },
+          "consented_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Consented Url"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RemoteParser",
+        "description": "高质量引擎的运行位置（ADR-0008）。api：调用自部署或云端服务，而不是本机 .engines/。"
       },
       "SearchHit": {
         "properties": {
