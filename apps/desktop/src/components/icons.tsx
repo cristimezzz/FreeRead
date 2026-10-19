@@ -47,11 +47,15 @@ export function Icon({ name, size = 18, strokeWidth = 1.6 }: { name: IconName; s
   );
 }
 
-/** 品牌标记：强调色方块里的一本打开的书。 */
-export function BrandMark({ size = 26 }: { size?: number }) {
+/** 品牌标记：强调色方块里的一本打开的书。不传 size 时尺寸由 CSS（.mark）决定。 */
+export function BrandMark({ size }: { size?: number }) {
   return (
-    <span className="mark" style={{ width: size, height: size, borderRadius: Math.round(size * 0.27) }} aria-hidden="true">
-      <svg width={size * 0.58} height={size * 0.58} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+    <span
+      className="mark"
+      style={size ? { width: size, height: size, borderRadius: Math.round(size * 0.27) } : undefined}
+      aria-hidden="true"
+    >
+      <svg width="58%" height="58%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
         <path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5z" />
         <path d="M13 4h5.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H13z" />
       </svg>

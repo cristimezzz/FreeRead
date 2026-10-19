@@ -24,6 +24,11 @@ export function QaPanel({ state, blockText, onPick, onClose }: Props) {
   const [draft, setDraft] = useState("");
   const [active, setActive] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
+  // 刚流式写完的那一轮由 pending 换成正式节点：不再播放一次入场动画
+  const hadPending = useRef(false);
+  const settled = useRef<string | null>(null);
+  if (hadPending.current && !pending && nodes.length) settled.current = nodes[nodes.length - 1].id;
+  hadPending.current = Boolean(pending);
 
   // 新内容出现时滚到底部
   useEffect(() => {
@@ -75,13 +80,17 @@ export function QaPanel({ state, blockText, onPick, onClose }: Props) {
           </p>
         )}
         {nodes.map((n) => (
-          <Turn key={n.id} node={n} active={active} blockText={blockText} onPick={pick} />
+          <Turn key={n.id} node={n} enter={n.id !== settled.current} active={active} blockText={blockText} onPick={pick} />
         ))}
         {pending && (
-          <div className="qa-turn">
+          <div className="qa-turn enter">
             <div className="qa-question">{pending.question}</div>
             <div className="qa-answer">
-              {pending.text ? pending.text.replace(RAW_MARKER, "").replace(TRAILING_PARTIAL, "") : <span className="search-note">正在检索原文…</span>}
+              {pending.text ? (
+                <span className="fade-in">{pending.text.replace(RAW_MARKER, "").replace(TRAILING_PARTIAL, "")}</span>
+              ) : (
+                <span className="search-note fade-in">正在检索原文…</span>
+              )}
             </div>
           </div>
         )}
@@ -126,17 +135,19 @@ export function QaPanel({ state, blockText, onPick, onClose }: Props) {
 
 function Turn({
   node,
+  enter,
   active,
   blockText,
   onPick,
 }: {
   node: QaNode;
+  enter: boolean;
   active: string | null;
   blockText: (id: string) => string | undefined;
   onPick: (id: string) => void;
 }) {
   return (
-    <div className="qa-turn">
+    <div className={`qa-turn${enter ? " enter" : ""}`}>
       <div className="qa-question">{node.question}</div>
       <div className={`qa-answer${node.untraced ? " untraced" : ""}`}>
         {node.untraced && (

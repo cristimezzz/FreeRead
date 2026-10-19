@@ -1,16 +1,18 @@
 // 原版 PDF 视图（pdf.js）。页面按需渲染；点击换算成 PDF 点坐标交给定位逻辑；
-// 定位高亮用 tertiary 色（ADR-0006）。
+// 定位高亮用强调色（ADR-0007）。宽度变化（拖动分隔条、开关侧边面板）后防抖重排。
 
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { useEffect, useRef, useState } from "react";
 import { coreInfo } from "../../api/client";
+import { pulse } from "../../components/motion";
 import type { Anchor } from "../../api/ir";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const PAGE_GAP = 20;
 const PADDING = 28; // 与 global.css 里 .pdf-view 的 padding 一致
+const RESIZE_DEBOUNCE = 120;
 
 interface Props {
   docId: string;
@@ -19,6 +21,7 @@ interface Props {
   scrollKey: number;
   onPoint: (page: number, x: number, y: number) => void;
   onError: (message: string) => void;
+  style?: React.CSSProperties;
 }
 
 interface PageSize {
@@ -26,7 +29,7 @@ interface PageSize {
   height: number;
 }
 
-export function PdfView({ docId, highlight, scrollKey, onPoint, onError }: Props) {
+export function PdfView({ docId, highlight, scrollKey, onPoint, onError, style }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
@@ -61,9 +64,21 @@ export function PdfView({ docId, highlight, scrollKey, onPoint, onError }: Props
   useEffect(() => {
     const el = container.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    // 第一次立即取宽度；之后防抖：拖动分隔条时不必每一帧都重新渲染所有页
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let first = true;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(t);
+      if (first) {
+        first = false;
+        setWidth(el.clientWidth);
+      } else t = setTimeout(() => setWidth(el.clientWidth), RESIZE_DEBOUNCE);
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
   }, []);
 
   const maxPageWidth = Math.max(1, ...sizes.map((s) => s.width));
@@ -75,12 +90,13 @@ export function PdfView({ docId, highlight, scrollKey, onPoint, onError }: Props
     if (!page) return;
     const top = page.offsetTop + highlight.bbox[1] * scale - container.current.clientHeight / 3;
     container.current.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    pulse(page.querySelector(".pdf-highlight"));
     // 只在 scrollKey 变化时滚动；PDF 内点击产生的高亮不滚动
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollKey]);
 
   return (
-    <div className="reader-pane pdf-view" ref={container}>
+    <div className="reader-pane pdf-view" ref={container} style={style}>
       {pdf &&
         sizes.map((s, i) => (
           <PdfPage

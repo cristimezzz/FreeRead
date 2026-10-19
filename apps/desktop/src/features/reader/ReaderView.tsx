@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, rawFetch, unwrap } from "../../api/client";
 import type { Anchor, Block, Document } from "../../api/ir";
 import { type DocumentStatus, useApp } from "../../app/store";
+import { usePresence } from "../../components/motion";
+import { Resizer } from "../../components/Resizer";
 import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components/ui";
 import { useTranslations } from "../translate/useTranslations";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
@@ -21,14 +23,35 @@ interface Prefs {
   layout: Layout;
   mode: TranslationMode;
   fontSize: number;
+  /** 右侧面板（搜索 / 总结 / 问答）宽度，px */
+  panelWidth: number;
+  /** 并排视图里原版所占比例 */
+  split: number;
 }
+
+const DEFAULT_PREFS: Prefs = { layout: "split", mode: "alternate", fontSize: 17, panelWidth: 420, split: 0.5 };
+const PANEL_MIN = 320;
+const PANE_MIN = 240;
 
 function loadPrefs(): Prefs {
   try {
-    return { layout: "split", mode: "alternate", fontSize: 17, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
+    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") };
   } catch {
-    return { layout: "split", mode: "alternate", fontSize: 17 };
+    return DEFAULT_PREFS;
   }
+}
+
+/** 观察元素宽度（分隔条的上下限要按当前宽度算）。 */
+function useWidth(ref: React.RefObject<HTMLElement | null>): number {
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return w;
 }
 
 /** 引用悬停提示：正文取 text，表格取单元格文本，图取说明。 */
@@ -56,6 +79,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   // 右侧面板：文内搜索与总结共用一个位置
   const [side, setSide] = useState<"search" | "summary" | "qa" | null>(null);
   const toggleSide = (panel: "search" | "summary" | "qa") => setSide((cur) => (cur === panel ? null : panel));
+  // 关闭时保留最后一个面板播放退出动画
+  const lastSide = useRef(side);
+  if (side) lastSide.current = side;
+  const readerEl = useRef<HTMLDivElement>(null);
+  const panesEl = useRef<HTMLDivElement>(null);
+  const readerW = useWidth(readerEl);
+  const panesW = useWidth(panesEl);
   const version = useApp((s) => s.documentVersion[docId] ?? 0);
   const settings = useApp((s) => s.settings);
   const toast = useApp((s) => s.toast);
@@ -207,6 +237,15 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const ready = status?.parse_status === "ready" && doc;
   const layout: Layout = ready ? prefs.layout : "pdf";
 
+  const panel = usePresence(side !== null);
+  const shownSide = side ?? lastSide.current;
+  // 面板最宽占阅读区 60%；窗口变窄时自动收回到上限内
+  const panelMax = Math.max(PANEL_MIN, Math.round(readerW * 0.6));
+  const panelW = Math.min(panelMax, Math.max(PANEL_MIN, prefs.panelWidth));
+  const splitW = panesW
+    ? Math.round(Math.min(Math.max(PANE_MIN, panesW - PANE_MIN), Math.max(PANE_MIN, prefs.split * panesW)))
+    : 0;
+
   const statusText = parsing
     ? parsing.kind === "parse_hq"
       ? "正在用高质量引擎升级…"
@@ -299,45 +338,79 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           </div>
         )}
       </div>
-      <div className="reader">
-        {layout !== "reflow" && (
-          <PdfView docId={docId} highlight={pdfHighlight} scrollKey={pdfScroll} onPoint={onPoint} onError={onPdfError} />
-        )}
-        {layout !== "pdf" && doc && (
-          <ReflowView
-            doc={doc}
-            mode={prefs.mode}
-            translations={states}
-            located={located}
-            scrollKey={reflowScroll}
-            fontSize={prefs.fontSize}
-            onLocate={onLocateBlock}
-            onVisible={onVisible}
-          />
-        )}
-        {side === "search" && ready && (
-          <SearchPanel
-            docId={docId}
-            embedStatus={status?.embed_status}
-            onPick={jumpTo}
-            onClose={() => setSide(null)}
-          />
-        )}
-        {side === "summary" && ready && (
-          <SummaryPanel
-            state={summary}
-            blockText={(id) => blockPreview(byId.get(id))}
-            onPick={jumpTo}
-            onClose={() => setSide(null)}
-          />
-        )}
-        {side === "qa" && ready && (
-          <QaPanel
-            state={qa}
-            blockText={(id) => blockPreview(byId.get(id))}
-            onPick={jumpTo}
-            onClose={() => setSide(null)}
-          />
+      <div className="reader" ref={readerEl}>
+        <div className="reader-panes" ref={panesEl}>
+          {layout !== "reflow" && (
+            <PdfView
+              docId={docId}
+              highlight={pdfHighlight}
+              scrollKey={pdfScroll}
+              onPoint={onPoint}
+              onError={onPdfError}
+              style={layout === "split" && splitW ? { flex: `0 0 ${splitW}px` } : undefined}
+            />
+          )}
+          {layout === "split" && doc && panesW > 0 && (
+            <Resizer
+              label="调整原版与重排的宽度"
+              value={splitW}
+              min={PANE_MIN}
+              max={Math.max(PANE_MIN, panesW - PANE_MIN)}
+              onValue={(px) => setPref("split", px / panesW)}
+              onReset={() => setPref("split", DEFAULT_PREFS.split)}
+            />
+          )}
+          {layout !== "pdf" && doc && (
+            <ReflowView
+              doc={doc}
+              mode={prefs.mode}
+              translations={states}
+              located={located}
+              scrollKey={reflowScroll}
+              fontSize={prefs.fontSize}
+              onLocate={onLocateBlock}
+              onVisible={onVisible}
+            />
+          )}
+        </div>
+        {panel.mounted && ready && (
+          <>
+            <Resizer
+              invert
+              label="调整侧边面板宽度"
+              value={panelW}
+              min={PANEL_MIN}
+              max={panelMax}
+              onValue={(px) => setPref("panelWidth", px)}
+              onReset={() => setPref("panelWidth", DEFAULT_PREFS.panelWidth)}
+            />
+            <div className="side-slot" data-state={panel.closing ? "closing" : "open"} style={{ width: panelW }}>
+              {shownSide === "search" && (
+                <SearchPanel
+                  docId={docId}
+                  embedStatus={status?.embed_status}
+                  onPick={jumpTo}
+                  onClose={() => setSide(null)}
+                />
+              )}
+              {shownSide === "summary" && (
+                <SummaryPanel
+                  state={summary}
+                  blockText={(id) => blockPreview(byId.get(id))}
+                  onPick={jumpTo}
+                  onClose={() => setSide(null)}
+                />
+              )}
+              {shownSide === "qa" && (
+                <QaPanel
+                  state={qa}
+                  blockText={(id) => blockPreview(byId.get(id))}
+                  onPick={jumpTo}
+                  onClose={() => setSide(null)}
+                />
+              )}
+            </div>
+          </>
         )}
       </div>
       <Dialog

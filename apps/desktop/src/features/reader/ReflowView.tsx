@@ -4,6 +4,7 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import type { Block, Document } from "../../api/ir";
 import { TRANSLATABLE } from "../../api/ir";
+import { pulse } from "../../components/motion";
 import type { TranslationState } from "../translate/useTranslations";
 import { useAssetUrl } from "./useAssetUrl";
 import { renderMath, renderTableHtml, splitPlaceholders } from "./render";
@@ -59,6 +60,7 @@ export function ReflowView(p: Props) {
     // 远距离跳转（如搜索结果）直接定位：平滑滚动途中图片加载会改变布局，常常停在半路
     const far = Math.abs(el.getBoundingClientRect().top) > 2 * window.innerHeight;
     el.scrollIntoView({ behavior: far ? "auto" : "smooth", block: "center" });
+    pulse(el);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.scrollKey]);
 
