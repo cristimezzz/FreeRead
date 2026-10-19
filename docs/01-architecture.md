@@ -216,6 +216,8 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
      ─► 引用校验 ─► 返回答案 + 引用 + 涉及子图（供可视化）
 ```
 
+M2 实现了其中的单篇部分（没有图扩展）：检索词为当前问题（追问时拼上上一轮问题），混合检索 top-12 块后，加上同章节邻块和摘要，组成约 4000 token 的上下文；答案流式生成，引用规范化为 `[b_0012]`，不存在的编号直接删除。详见 [M2 问答](m2/qa.md)。
+
 **B. 问答画布（交互层）**
 
 - 问答树：`qa_nodes(id, session_id, parent_id, question, answer, citations, pinned_blocks, subgraph)`。
@@ -242,7 +244,9 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
 | POST | `/translate/blocks` | 翻译指定块（SSE 流式） |
 | GET/PUT | `/glossary` | 术语表 |
 | POST | `/documents/{doc_id}/summary` | 生成总结（SSE） |
-| POST | `/qa/sessions` / `/qa/sessions/{id}/nodes` | 创建问答会话 / 提问（可指定 parent_id，SSE） |
+| GET / POST | `/documents/{doc_id}/qa/sessions` | 单篇问答的对话列表 / 新建对话（M2） |
+| GET / DELETE | `/qa/sessions/{id}` | 对话详情（各轮）/ 删除 |
+| POST | `/qa/sessions/{id}/ask` | 提问（SSE：context / delta / answer）；M3 加 parent_id 支持分叉 |
 | GET | `/kg/subgraph` | 按实体或文档范围取子图 |
 | GET | `/jobs/stream` | 任务进度 SSE |
 | GET/PUT | `/settings` | 设置（不含密钥） |

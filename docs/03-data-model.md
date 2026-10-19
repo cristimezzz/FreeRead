@@ -5,7 +5,7 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries。下文标"计划"的表（annotations、glossary_terms、kg_*、qa_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes。下文标"计划"的表（annotations、glossary_terms、kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -229,25 +229,36 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 索引：`(src_id, type)`、`(dst_id, type)`、`(doc_id)`。
 
-## 7. 问答（计划）
+## 7. 问答
+
+M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 的问答画布会在 `qa_nodes` 上加 `pinned_blocks`、`subgraph`、`position`（设计见架构 §5.7B），`parent_id` 已经能表示分叉。
 
 ### qa_sessions
-`id PK, title, scope(doc/collection/library 及其 ID), created_at, updated_at`
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| doc_id | TEXT FK → documents ON DELETE CASCADE | M2 只有单篇；分类 / 全库问答时改为可空 |
+| scope | TEXT | `doc:<doc_id>`；以后有 `collection:<id>`、`library` |
+| title | TEXT | 首个问题的前 40 个字 |
+| created_at / updated_at | TEXT | 每问一次更新 `updated_at`，列表按它倒序 |
+
+索引 `ix_qa_sessions_doc_id_updated_at`。
 
 ### qa_nodes
-| 列 | 说明 |
-|---|---|
-| id PK | |
-| session_id | FK |
-| parent_id NULL | 自引用；根节点为空 |
-| question | |
-| answer | 含 `[d_…#b_…]` 引用标记 |
-| citations | JSON：引用列表及校验结果 |
-| pinned_blocks | JSON：用户固定的原文片段 |
-| subgraph | JSON：本次回答涉及的实体与关系 ID |
-| model / prompt_version | |
-| position | JSON：画布坐标 `{x, y}` |
-| created_at | |
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| session_id | TEXT FK → qa_sessions ON DELETE CASCADE | |
+| parent_id | TEXT FK → qa_nodes ON DELETE SET NULL | 上一轮；M2 为线性链 |
+| question | TEXT | |
+| answer | TEXT | 引用写成 `[b_0012]`，已校验都存在于该文档（块属于会话的文档，不再拼 `doc_id#`） |
+| citations | JSON | 按首次出现顺序的块 ID |
+| stats | JSON | `invalid_ids`（模型编造、已删除的编号数）/ `out_of_context` / `context_ids` / `modes` / `elapsed_ms` |
+| model / prompt_version | TEXT | `provider/model`、`qa_answer@1` |
+| status | TEXT | `ok` / `stale`（重新解析后有引用映射不上） |
+| created_at | TEXT | |
+
+索引 `ix_qa_nodes_session_id_created_at`。重新解析时与译文、总结在同一事务里改写引用（`services/qa.migrate_qa`）。
 
 ## 8. 基础设施
 
@@ -283,6 +294,6 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0003`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0004`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
 - 更换嵌入来源 / 模型时清空向量索引和 embedding_chunks，所有文档 `embed_status` 置回 `pending` 并重新排队（`EmbedService.enqueue_missing`，启动和保存设置时调用）。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。
