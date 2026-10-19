@@ -1,0 +1,40 @@
+# 总结模板。修改某个模板的小节或说明时提升它的 version（写进 summaries.prompt_version）。
+# 自定义模板是 P2（插件机制，M4），目前只有内置模板。
+templates:
+  - id: paper
+    version: 1
+    name: 论文精读
+    description: 研究问题、方法、实验、结论、局限、可复用点
+    sections:
+      - key: problem
+        name: 研究问题
+        hint: 论文要解决什么问题，动机和背景，现有方法的不足
+      - key: method
+        name: 方法
+        hint: 提出的方法、模型或流程的核心思路与关键设计
+      - key: experiments
+        name: 实验与结果
+        hint: 数据集、对比基线、评价指标和主要数值结果
+      - key: conclusions
+        name: 结论
+        hint: 作者得出的主要结论和贡献
+      - key: limitations
+        name: 局限
+        hint: 作者承认或明显存在的局限、未解决的问题
+      - key: reusable
+        name: 可复用点
+        hint: 读者可以借鉴的方法、数据、代码、实验设计或结论
+  - id: brief
+    version: 1
+    name: 速览
+    description: 一句话总结、关键要点、局限
+    sections:
+      - key: tldr
+        name: 一句话总结
+        hint: 用一个要点概括论文做了什么、结果如何
+      - key: key_points
+        name: 关键要点
+        hint: 3–6 个最重要的发现或贡献
+      - key: limitations
+        name: 局限
+        hint: 主要局限

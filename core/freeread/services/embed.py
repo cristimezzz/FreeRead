@@ -11,7 +11,6 @@
 """
 
 import asyncio
-import json
 import logging
 import threading
 from collections.abc import Awaitable, Callable
@@ -35,6 +34,7 @@ from freeread.infra.llm.errors import RouteNotConfigured
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.search.chunker import Chunk, TokenLen, approx_tokens, build_chunks
 from freeread.infra.search.vector_index import SqliteVecIndex, VectorIndex
+from freeread.services.doc_blocks import DocumentNotReady, load_doc
 from freeread.services.settings import SettingsService
 
 log = logging.getLogger(__name__)
@@ -310,23 +310,11 @@ class EmbedService:
         return len(chunks), len(todo)
 
     def _load_blocks(self, doc_id: str) -> tuple[list[BlockRow], dict[str, str]]:
-        with self._sessions() as s:
-            doc = s.get(DocumentRow, doc_id)
-            if doc is None:
-                raise LookupError(f"文档 {doc_id} 不存在")
-            if doc.parse_status != "ready":
-                raise RuntimeError(f"文档 {doc_id} 尚未解析完成")
-            blocks = s.scalars(
-                select(BlockRow).where(BlockRow.doc_id == doc_id).order_by(BlockRow.ord)
-            ).all()
-            ir_rel = doc.ir_path
-        titles: dict[str, str] = {}
-        if ir_rel:
-            ir_path = self._paths.root / ir_rel
-            if ir_path.is_file():
-                ir = json.loads(ir_path.read_text(encoding="utf-8"))
-                titles = {sec["id"]: sec.get("title", "") for sec in ir.get("sections", [])}
-        return list(blocks), titles
+        try:
+            doc = load_doc(self._sessions, self._paths, doc_id)
+        except DocumentNotReady as e:
+            raise RuntimeError(str(e)) from e
+        return doc.blocks, doc.section_titles
 
     def _reusable(self, doc_id: str, model: str, chunks: list[Chunk]) -> dict[str, list[float]]:
         hashes = {c.text_hash for c in chunks}

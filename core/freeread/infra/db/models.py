@@ -181,6 +181,32 @@ class TranslationRow(Base):
     )
 
 
+# ---------------------------------------------------------------- 总结
+
+
+class SummaryRow(Base):
+    """结构化总结。content 里的引用是本文档的块 ID，重新解析时与译文一起迁移（IR §8）。"""
+
+    __tablename__ = "summaries"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    scope: Mapped[str] = mapped_column(String)  # doc:<doc_id>；以后有 collection:<id>
+    template_id: Mapped[str] = mapped_column(String)
+    lang: Mapped[str] = mapped_column(String)
+    model: Mapped[str] = mapped_column(String)  # provider/model
+    prompt_version: Mapped[str] = mapped_column(
+        String
+    )  # summarize_map@1+summarize_reduce@1+paper@1
+    # {sections: [{key, name, points: [{text, block_ids, untraced?}]}]}
+    content: Mapped[dict[str, Any]] = mapped_column(JSON)
+    stats: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default="ok")  # ok | stale
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+
+    __table_args__ = (UniqueConstraint("doc_id", "template_id", "lang"),)
+
+
 # ---------------------------------------------------------------- 基础设施
 
 

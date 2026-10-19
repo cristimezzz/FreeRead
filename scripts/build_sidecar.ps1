@@ -80,6 +80,8 @@ foreach ($required in @(
         "freeread-core.exe",
         "_internal/freeread/infra/db/migrations/env.py",
         "_internal/prompts/translate.yaml",
+        "_internal/prompts/summarize_map.yaml",
+        "_internal/prompts/templates/summary.yaml",
         "_internal/sqlite_vec/vec0.dll"
     )) {
     if (-not (Test-Path (Join-Path $OneDir $required))) {

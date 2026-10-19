@@ -123,3 +123,35 @@ class RecordingProvider:
 
     async def embed(self, model: str, texts: list[str]) -> list[list[float]]:
         return await self._inner.embed(model, texts)
+
+
+_BLOCK_LINE_RE = re.compile(r"^\[(b_\d+)\] (.+)$", re.MULTILINE)
+_POINT_RE = re.compile(r"^- (.+?)(?: \[(b_[\d, b_]+)\])?$", re.MULTILINE)
+_SECTION_KEY_RE = re.compile(r"^- (\w+)（", re.MULTILINE)
+
+
+def summary_responder(model: str, messages: list[Message]) -> str:
+    """看得懂 summarize_map / summarize_reduce 提示词的确定性回复（测试与 --fake 评测用）。
+
+    Map：每个块一个要点，引用该块；Reduce：把输入要点轮流分到各小节，保留引用。
+    其他请求按 _echo 处理。
+    """
+    user = messages[-1].content
+    if '"sections"' in messages[0].content:
+        keys = _SECTION_KEY_RE.findall(user)
+        sections = [{"key": k, "points": []} for k in keys]
+        found = [
+            (text, re.findall(r"b_\d+", ids or ""))
+            for text, ids in _POINT_RE.findall(user.split("各部分要点：", 1)[-1])
+        ]
+        for i, (text, ids) in enumerate(found):
+            if sections:
+                sections[i % len(sections)]["points"].append({"text": text, "block_ids": ids})
+        return "```json\n" + json.dumps({"sections": sections}, ensure_ascii=False) + "\n```"
+    if '"points"' in messages[0].content and "[b_" in user:
+        points = [
+            {"text": text[:80], "block_ids": [bid]}
+            for bid, text in _BLOCK_LINE_RE.findall(user)[:8]
+        ]
+        return json.dumps({"points": points}, ensure_ascii=False)
+    return _echo(model, messages)

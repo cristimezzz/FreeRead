@@ -164,10 +164,16 @@ async def test_stream_retries_before_first_chunk(gateway):
 
 
 async def test_unconfigured_task_raises(ctx, gateway):
-    with pytest.raises(RouteNotConfigured, match="qa"):
-        await gateway.complete(TaskKind.QA, MSGS, prompt_id="qa@1")
+    with pytest.raises(RouteNotConfigured, match="kg_extract"):
+        await gateway.complete(TaskKind.KG_EXTRACT, MSGS, prompt_id="kg@1")
     with pytest.raises(RouteNotConfigured):
-        [c async for c in gateway.stream(TaskKind.SUMMARIZE, MSGS, prompt_id="s@1")]
+        [c async for c in gateway.stream(TaskKind.KG_EXTRACT, MSGS, prompt_id="kg@1")]
+
+
+def test_summarize_and_qa_fall_back_to_translate_route(gateway):
+    translate = gateway.route(TaskKind.TRANSLATE)
+    assert gateway.route(TaskKind.SUMMARIZE) == translate
+    assert gateway.route(TaskKind.QA) == translate
 
 
 async def test_missing_key_raises(ctx, fake):
