@@ -434,3 +434,13 @@ async def test_reduce_salvages_flattened_sections_and_rejects_empty(ctx, tmp_pat
     reduce_calls = [c for c in fake.calls if '"sections"' in c[1][0].content]
     assert len(reduce_calls) == 2  # 不走缓存重试了一次
     assert [s.template_id for s in ctx.summary.list_for_doc(doc_id)] == ["brief"]  # 没存空总结
+
+
+async def test_llm_opts_pass_through_and_concurrency_setting(ctx, tmp_path):
+    fake = FakeProvider("p1", responder=summary_responder)
+    configure(ctx, fake)
+    doc_id = await parsed_doc(ctx, tmp_path)
+    ctx.summary.set_concurrency(8)
+    ctx.summary.llm_opts = {"thinking": {"type": "disabled"}}
+    await collect(ctx.summary.generate(doc_id, "brief"))
+    assert fake.calls and all(c[2] == {"thinking": {"type": "disabled"}} for c in fake.calls)
