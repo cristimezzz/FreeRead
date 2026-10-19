@@ -189,10 +189,10 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
 
 ### 5.6 AI 总结
 
-- **Map**：按一级章节分组，每组生成章节摘要，输出 JSON：`[{point, block_ids[]}]`。
-- **Reduce**：把章节摘要汇总成全文结构化总结（问题 / 方法 / 实验 / 结论 / 局限 / 可复用点），每条保留 `block_ids`。
-- 校验：引用的 block_id 必须存在于该文档；无引用的结论在 UI 中标记为"未溯源"。
-- 存入 `summaries`，键为 `(doc_id, template_id, model, prompt_version)`。
+- **Map**：按一级章节分组（相邻小章节合并、过长的切开），每组生成章节要点，输出 JSON：`{"points": [{text, block_ids[]}]}`。提示词与模板无关，换模板时 Map 结果直接命中缓存。
+- **Reduce**：把章节要点按模板汇总成全文结构化总结（默认模板：问题 / 方法 / 实验 / 结论 / 局限 / 可复用点），每条保留 `block_ids`。
+- 校验：引用规范化为 `b_NNNN`，必须存在于该文档；无有效引用的结论在 UI 中标记为"未溯源"。
+- 按需生成（`POST /documents/{doc_id}/summary`，SSE 推送进度）；存入 `summaries`，每个 `(doc_id, template_id, lang)` 一份。详见 [M2 总结](m2/summary.md)。
 
 ### 5.7 图状结构问答
 

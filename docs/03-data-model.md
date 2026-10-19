@@ -5,7 +5,7 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建。下文标"计划"的表（annotations、glossary_terms、summaries、kg_*、qa_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries。下文标"计划"的表（annotations、glossary_terms、kg_*、qa_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -184,16 +184,22 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 ## 5. 总结
 
-### summaries（计划）
+### summaries
 | 列 | 类型 | 说明 |
 |---|---|---|
-| id | TEXT PK | |
-| scope | TEXT | `doc:<doc_id>` 或 `collection:<id>` |
-| template_id | TEXT | |
-| model / prompt_version / lang | TEXT | |
-| content | JSON | `{sections: [{name, points: [{text, citations: ["d_…#b_…"]}]}]}` |
-| status | TEXT | `ok` / `stale` |
+| id | TEXT PK | ULID |
+| doc_id | TEXT FK → documents ON DELETE CASCADE | |
+| scope | TEXT | `doc:<doc_id>`；以后的分类级综述为 `collection:<id>` |
+| template_id | TEXT | `paper`、`brief`（`core/prompts/templates/summary.yaml`） |
+| lang | TEXT | 总结语言 |
+| model | TEXT | `provider/model` |
+| prompt_version | TEXT | 如 `summarize_map@1+summarize_reduce@1+paper@1` |
+| content | JSON | `{sections: [{key, name, points: [{text, block_ids: ["b_0012"], untraced?}]}]}`；块属于本行的文档，API 不再拼 `doc_id#` |
+| stats | JSON | `points / cited_points / coverage / invalid_ids / groups / failed_groups / elapsed_ms` |
+| status | TEXT | `ok` / `stale`（重新解析后有引用映射不上） |
 | created_at | TEXT | |
+
+唯一约束 `(doc_id, template_id, lang)`：每种模板每种语言只保留最新一份，重新生成时替换。重新解析时与译文在同一事务里按 IR §8 的块映射改写引用（`services/summary.migrate_summaries`）。
 
 ## 6. 知识图谱（计划）
 
@@ -277,6 +283,6 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0002`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0003`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
 - 更换嵌入来源 / 模型时清空向量索引和 embedding_chunks，所有文档 `embed_status` 置回 `pending` 并重新排队（`EmbedService.enqueue_missing`，启动和保存设置时调用）。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。
