@@ -19,6 +19,7 @@ from sqlalchemy import delete, select
 
 from freeread.config import DataPaths
 from freeread.domain.summary.citations import clean_point, coverage_stats
+from freeread.domain.summary.decoration import DecorationCandidate, decoration_ids
 from freeread.domain.summary.grouping import Group, SourceBlock, group_blocks
 from freeread.domain.summary.parse_json import extract_json, json_objects
 from freeread.infra.db.engine import SessionFactory
@@ -309,13 +310,28 @@ class SummaryService:
 
 
 def _source_blocks(doc: LoadedDoc) -> list[SourceBlock]:
+    """送 Map 的块；页眉页脚等页面装饰块的文本置空（不参与，见 domain/summary/decoration.py）。"""
     out = []
     for b in doc.blocks:
         text = (
             b.text if b.type == "heading" else block_plain_text(b.type, b.text, b.inlines, b.html)
         )
         out.append(SourceBlock(b.block_id, b.type, b.section_id, text))
+    drop = decoration_ids(
+        (
+            DecorationCandidate(s.id, s.type, s.text, _anchors(b.anchors))
+            for s, b in zip(out, doc.blocks, strict=True)
+        ),
+        doc.pages,
+    )
+    for s in out:
+        if s.id in drop:
+            s.text = ""
     return out
+
+
+def _anchors(raw: list[dict[str, Any]] | None) -> list[tuple[int, tuple[float, ...]]]:
+    return [(a["page"], tuple(a["bbox"])) for a in raw or [] if "page" in a and "bbox" in a]
 
 
 def _format_map_points(groups: list[Group], results: dict[int, list | None]) -> str:
