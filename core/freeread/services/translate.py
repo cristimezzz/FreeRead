@@ -26,6 +26,7 @@ from freeread.infra.llm.default_gateway import DefaultGateway
 from freeread.infra.llm.errors import LLMError, MissingAPIKey, RouteNotConfigured
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.llm.prompts import PromptRegistry
+from freeread.services.llm_preflight import PreflightError, check_provider
 from freeread.services.settings import SettingsService
 
 log = logging.getLogger(__name__)
@@ -65,13 +66,8 @@ class TranslationEvent(BaseModel):
     message: str | None = None
 
 
-class TranslateError(Exception):
-    """整批请求无法进行（未配置模型、缺密钥、未确认隐私提示）。code 供前端区分处理。"""
-
-    def __init__(self, code: str, message: str, provider_id: str | None = None) -> None:
-        super().__init__(message)
-        self.code = code
-        self.provider_id = provider_id
+# 整批请求无法进行（未配置模型、缺密钥、未确认隐私提示）。code 供前端区分处理。
+TranslateError = PreflightError
 
 
 @dataclass
@@ -140,23 +136,8 @@ class TranslateService:
 
     def preflight(self, lang: str | None) -> tuple[str, str, str]:
         """检查路由、密钥与隐私确认，返回 (provider_id, model, lang)。不满足时抛 TranslateError。"""
-        settings = self._settings.get()
-        lang = lang or settings.target_lang
-        try:
-            provider_id, model = self._gateway.route(TaskKind.TRANSLATE)
-        except RouteNotConfigured as e:
-            raise TranslateError("route_not_configured", str(e)) from e
-        provider = next((p for p in settings.providers if p.id == provider_id), None)
-        if provider is None:
-            raise TranslateError("route_not_configured", f"provider {provider_id!r} 不存在")
-        if provider.kind != "ollama" and not self._gateway.secrets.has(provider_id):
-            raise TranslateError("missing_api_key", f"provider {provider_id!r} 没有 API Key")
-        if provider_id not in settings.consented_providers:
-            raise TranslateError(
-                "consent_required",
-                f"向 {provider.name} 发送文档内容前需要确认",
-                provider_id=provider_id,
-            )
+        lang = lang or self._settings.get().target_lang
+        provider_id, model = check_provider(self._gateway, self._settings, TaskKind.TRANSLATE)
         return provider_id, model, lang
 
     async def translate_blocks(

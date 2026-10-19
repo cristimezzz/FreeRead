@@ -21,7 +21,17 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
-from freeread.api import documents, embedding, jobs, library, llm, search, settings, translate
+from freeread.api import (
+    documents,
+    embedding,
+    jobs,
+    library,
+    llm,
+    search,
+    settings,
+    summary,
+    translate,
+)
 from freeread.config import default_data_dir
 from freeread.context import AppContext
 from freeread.domain.ir.models import IR_SCHEMA_VERSION
@@ -92,6 +102,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
     app.include_router(translate.router)
     app.include_router(search.router)
     app.include_router(embedding.router)
+    app.include_router(summary.router)
     return app
 
 

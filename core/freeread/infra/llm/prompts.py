@@ -87,6 +87,7 @@ def _parse(path: Path) -> Prompt:
 class PromptRegistry:
     def __init__(self, prompts_dir: Path = DEFAULT_PROMPTS_DIR) -> None:
         self._prompts: dict[str, Prompt] = {}
+        self._templates_dir = Path(prompts_dir) / "templates"
         if not Path(prompts_dir).is_dir():
             # 打包漏带 prompts/ 时启动即失败，而不是等到翻译时才报 unknown prompt
             raise PromptError(f"prompts directory not found: {prompts_dir}")
@@ -108,3 +109,11 @@ class PromptRegistry:
 
     def ids(self) -> list[str]:
         return [p.ref for p in self._prompts.values()]
+
+    def templates(self, kind: str) -> list[dict[str, Any]]:
+        """templates/<kind>.yaml 里的模板列表（如总结模板）。不存在时返回空列表。"""
+        path = self._templates_dir / f"{kind}.yaml"
+        if not path.is_file():
+            return []
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        return list(data.get("templates") or [])

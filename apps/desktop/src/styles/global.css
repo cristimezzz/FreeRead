@@ -598,8 +598,9 @@ button {
   text-align: center;
 }
 
-/* 文内搜索 */
-.search-panel {
+/* 文内搜索、总结：阅读器右侧面板 */
+.search-panel,
+.side-panel {
   display: flex;
   flex-direction: column;
   width: 340px;
@@ -700,4 +701,106 @@ button {
   font-size: 0.8em;
   text-align: left;
   white-space: pre-wrap;
+}
+
+/* 总结 */
+.side-panel {
+  width: 380px;
+}
+
+.side-panel-head {
+  display: flex;
+  align-items: center;
+  padding: 8px 4px 0 16px;
+}
+
+.side-panel-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.summary-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px 12px;
+}
+
+.summary-controls md-outlined-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.summary-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 16px 12px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 12px;
+}
+
+.summary-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0 16px 24px;
+}
+
+.summary-body h3 {
+  margin: 16px 0 6px;
+  color: var(--md-sys-color-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.summary-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.summary-body li {
+  margin: 6px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.summary-body li.untraced {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.cite {
+  min-width: 18px;
+  height: 18px;
+  margin-left: 3px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: 1px;
+  cursor: pointer;
+}
+
+.cite:hover,
+.cite.active {
+  background: var(--md-sys-color-tertiary);
+  color: var(--md-sys-color-on-tertiary);
+}
+
+.untraced-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.summary-meta {
+  margin-top: 20px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 11px;
 }

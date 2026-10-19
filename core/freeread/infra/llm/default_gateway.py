@@ -34,6 +34,13 @@ BACKOFF_MAX = 30.0
 DEFAULT_RATE = 5.0  # 每个 provider 每秒请求数
 DEFAULT_BURST = 5
 EMBED_PROMPT_ID = "embed@1"
+# 没有单独配置时沿用哪个任务的模型：总结 / 问答默认和翻译用同一个服务（设置里"与翻译相同"）。
+# 嵌入不回退：向量要求同一模型，不能悄悄换成聊天模型。
+ROUTE_FALLBACK: dict[TaskKind, TaskKind] = {
+    TaskKind.SUMMARIZE: TaskKind.TRANSLATE,
+    TaskKind.QA: TaskKind.SUMMARIZE,
+    TaskKind.GLOSSARY: TaskKind.TRANSLATE,
+}
 
 ProviderFactory = Callable[[ProviderConfig, str | None], Provider]
 
@@ -116,10 +123,14 @@ class DefaultGateway:
         return self._factory(config, key)
 
     def route(self, task: TaskKind) -> tuple[str, str]:
-        route = self._settings.get().routes.get(task)
-        if route is None:
-            raise RouteNotConfigured(f"no model configured for task {task.value!r}")
-        return route.provider_id, route.model
+        routes = self._settings.get().routes
+        current: TaskKind | None = task
+        while current is not None:
+            route = routes.get(current)
+            if route is not None:
+                return route.provider_id, route.model
+            current = ROUTE_FALLBACK.get(current)
+        raise RouteNotConfigured(f"no model configured for task {task.value!r}")
 
     def _bucket(self, provider_id: str) -> TokenBucket:
         if provider_id not in self._buckets:

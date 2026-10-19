@@ -21,6 +21,7 @@ from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.search import SearchService
 from freeread.services.settings import SettingsService
+from freeread.services.summary import SummaryService
 from freeread.services.translate import TranslateService
 
 
@@ -41,6 +42,7 @@ class AppContext:
     translate: TranslateService
     embed: EmbedService
     search: SearchService
+    summary: SummaryService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -84,6 +86,7 @@ class AppContext:
             translate=TranslateService(sessions, settings, llm, prompts),
             embed=embed,
             search=SearchService(sessions, embed),
+            summary=SummaryService(sessions, paths, settings, llm, prompts),
         )
 
     def close(self) -> None:
