@@ -66,7 +66,8 @@
 
 - [ ] Zotero Web API 同步与写回（总结作为笔记）。
 - [ ] 分类级综述、多篇论文对比表。
-- [ ] 更多解析引擎、云端解析选项。
+- [ ] 更多解析引擎。
+- [x] 云端 / 自部署解析服务：MinerU（mineru-api、mineru.net）与 docling-serve（ADR-0008）。
 - [ ] 导出到 Obsidian / Logseq。
 - [ ] macOS、Linux 打包；自动更新。
 - [ ] 插件机制（自定义总结模板、提示词、解析引擎）。
