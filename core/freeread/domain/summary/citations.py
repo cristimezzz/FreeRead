@@ -10,6 +10,8 @@ from typing import Any
 
 _ID_RE = re.compile(r"(?:d_[0-9a-fA-F]+#)?\bb[_-]?(\d{1,6})\b", re.IGNORECASE)
 _INLINE_RE = re.compile(r"\s*[\[【(（]\s*(?:(?:d_[0-9a-fA-F]+#)?b[_-]?\d+[\s,，、;；]*)+[\]】)）]")
+# 问答答案的就地校验也用它（domain/qa/citations.py）
+INLINE_MARKER_RE = _INLINE_RE
 
 
 def normalize_ids(raw: Any) -> list[str]:

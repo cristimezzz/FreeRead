@@ -207,6 +207,48 @@ class SummaryRow(Base):
     __table_args__ = (UniqueConstraint("doc_id", "template_id", "lang"),)
 
 
+# ---------------------------------------------------------------- 问答
+
+
+class QASessionRow(Base):
+    """一次问答对话。M2 只有单篇（scope=doc:<doc_id>）；以后有分类 / 全库。"""
+
+    __tablename__ = "qa_sessions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    scope: Mapped[str] = mapped_column(String)
+    title: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+    updated_at: Mapped[str] = mapped_column(String, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (Index("ix_qa_sessions_doc_id_updated_at", "doc_id", "updated_at"),)
+
+
+class QANodeRow(Base):
+    """对话里的一问一答。parent_id 指向上一轮（M2 是线性链；M3 问答画布会分叉）。
+
+    answer 里的引用是 [b_0012] 标记，已校验都存在于该文档；citations 是按出现顺序的块 ID。
+    """
+
+    __tablename__ = "qa_nodes"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    session_id: Mapped[str] = mapped_column(ForeignKey("qa_sessions.id", ondelete="CASCADE"))
+    parent_id: Mapped[str | None] = mapped_column(ForeignKey("qa_nodes.id", ondelete="SET NULL"))
+    question: Mapped[str] = mapped_column(Text)
+    answer: Mapped[str] = mapped_column(Text)
+    citations: Mapped[list[str]] = mapped_column(JSON, default=list)
+    # invalid_ids / out_of_context / context_ids / modes / elapsed_ms
+    stats: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    model: Mapped[str] = mapped_column(String)  # provider/model
+    prompt_version: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="ok")  # ok | stale
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+
+    __table_args__ = (Index("ix_qa_nodes_session_id_created_at", "session_id", "created_at"),)
+
+
 # ---------------------------------------------------------------- 基础设施
 
 

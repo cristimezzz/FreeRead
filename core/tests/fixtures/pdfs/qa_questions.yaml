@@ -1,0 +1,19 @@
+# M2 问答评测的问题集（scripts/m2_qa_eval.py）。
+# generic 对每篇论文都问；docs 下可以按 doc_id 追加专门的问题。
+# expect: no_answer 表示论文里多半没有答案，用来检查模型会不会编造（理想表现是说明没找到、不给引用）。
+version: 1
+generic:
+  - id: problem
+    text: 这篇论文要解决什么问题？
+  - id: data
+    text: 用了哪些数据集、样本或实验材料？
+  - id: results
+    text: 主要结果的关键数值是多少？
+  - id: limits
+    text: 作者承认了哪些局限？
+  - id: method_en
+    text: What is the main method proposed or used in this paper?
+  - id: trap
+    text: 这篇论文在哪些城市开展了问卷调查？
+    expect: no_answer
+docs: {}

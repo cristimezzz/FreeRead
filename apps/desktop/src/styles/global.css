@@ -804,3 +804,64 @@ button {
   color: var(--md-sys-color-on-surface-variant);
   font-size: 11px;
 }
+
+/* 问答 */
+.qa-messages {
+  flex: 1;
+  overflow: auto;
+  padding: 0 16px 12px;
+}
+
+.qa-turn {
+  margin: 12px 0 18px;
+}
+
+.qa-question {
+  margin-left: 32px;
+  padding: 8px 12px;
+  border-radius: var(--md-sys-shape-corner-large) var(--md-sys-shape-corner-large) 4px
+    var(--md-sys-shape-corner-large);
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.qa-answer {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.qa-answer.untraced {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.qa-input {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.qa-input textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 160px;
+  padding: 8px 12px;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: var(--md-sys-shape-corner-medium);
+  background: var(--md-sys-color-surface);
+  color: var(--md-sys-color-on-surface);
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+
+.qa-input textarea:focus {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: -1px;
+}

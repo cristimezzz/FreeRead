@@ -11,6 +11,8 @@ import { ReflowView, type TranslationMode } from "./ReflowView";
 import { SearchPanel } from "./SearchPanel";
 import { SummaryPanel } from "../summary/SummaryPanel";
 import { useSummary } from "../summary/useSummary";
+import { QaPanel } from "../qa/QaPanel";
+import { useQa } from "../qa/useQa";
 
 type Layout = "pdf" | "split" | "reflow";
 
@@ -53,8 +55,8 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   const prevDoc = useRef<Document | null>(null);
   const loadedParse = useRef<string | null>(null);
   // 右侧面板：文内搜索与总结共用一个位置
-  const [side, setSide] = useState<"search" | "summary" | null>(null);
-  const toggleSide = (panel: "search" | "summary") => setSide((cur) => (cur === panel ? null : panel));
+  const [side, setSide] = useState<"search" | "summary" | "qa" | null>(null);
+  const toggleSide = (panel: "search" | "summary" | "qa") => setSide((cur) => (cur === panel ? null : panel));
   const version = useApp((s) => s.documentVersion[docId] ?? 0);
   const settings = useApp((s) => s.settings);
   const toast = useApp((s) => s.toast);
@@ -139,10 +141,17 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   const { states, requestVisible } = translation;
   const summary = useSummary(docId, lang, side === "summary");
   // 两个功能都可能先问隐私确认：同一时间只会有一个在等
-  const consentFor = translation.consent ? "翻译" : summary.consent ? "总结" : null;
-  const consent = translation.consent ?? summary.consent;
-  const acceptConsent = translation.consent ? translation.acceptConsent : summary.acceptConsent;
-  const declineConsent = translation.consent ? translation.declineConsent : summary.declineConsent;
+  const qa = useQa(docId, lang, side === "qa");
+  // 翻译、总结、问答都可能先问隐私确认：取第一个在等的
+  const asking = [
+    { label: "翻译", ...translation },
+    { label: "总结", ...summary },
+    { label: "问答", ...qa },
+  ].find((f) => f.consent);
+  const consentFor = asking?.label ?? null;
+  const consent = asking?.consent ?? null;
+  const acceptConsent = () => asking?.acceptConsent();
+  const declineConsent = () => asking?.declineConsent();
 
   const onVisible = useCallback(
     (ids: string[]) => {
@@ -264,6 +273,11 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
             <Icon name="summary" />
           </md-icon-button>
         )}
+        {ready && (
+          <md-icon-button aria-label="问答" title="问答" onClick={() => toggleSide("qa")}>
+            <Icon name="qa" />
+          </md-icon-button>
+        )}
         <span className="reader-status">
           {parsing && <md-circular-progress indeterminate style={{ "--md-circular-progress-size": "20px" } as React.CSSProperties} />}
           {parsing
@@ -304,6 +318,14 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
         {side === "summary" && ready && (
           <SummaryPanel
             state={summary}
+            blockText={(id) => blockPreview(byId.get(id))}
+            onPick={jumpTo}
+            onClose={() => setSide(null)}
+          />
+        )}
+        {side === "qa" && ready && (
+          <QaPanel
+            state={qa}
             blockText={(id) => blockPreview(byId.get(id))}
             onPick={jumpTo}
             onClose={() => setSide(null)}

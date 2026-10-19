@@ -27,6 +27,7 @@ from freeread.api import (
     jobs,
     library,
     llm,
+    qa,
     search,
     settings,
     summary,
@@ -103,6 +104,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
     app.include_router(search.router)
     app.include_router(embedding.router)
     app.include_router(summary.router)
+    app.include_router(qa.router)
     return app
 
 
