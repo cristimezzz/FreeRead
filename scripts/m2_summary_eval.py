@@ -42,14 +42,15 @@ async def noop(*_):
 
 
 def configure(ctx: AppContext, args) -> None:
-    ctx.settings.put(
-        AppSettings(
-            target_lang=args.lang,
-            providers=[ProviderConfig(id="eval", name="评测", base_url=args.base_url)],
-            routes={TaskKind.SUMMARIZE: ModelRoute(provider_id="eval", model=args.model)},
-            consented_providers=["eval"],
-        )
+    settings = AppSettings(
+        target_lang=args.lang,
+        providers=[ProviderConfig(id="eval", name="评测", base_url=args.base_url)],
+        routes={TaskKind.SUMMARIZE: ModelRoute(provider_id="eval", model=args.model)},
     )
+    # 先保存服务地址再记同意：地址变了时 SettingsService 会作废旧的同意（隐私规则），
+    # 同一次 put 里带上同意会被当成"旧地址的同意"丢掉
+    ctx.settings.put(settings)
+    ctx.settings.put(settings.model_copy(update={"consented_providers": ["eval"]}))
     if args.fake or args.replay:
         replay = Path(args.replay) if args.replay else None
         fake = FakeProvider("eval", responder=summary_responder, replay_file=replay)

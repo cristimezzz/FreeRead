@@ -11,8 +11,8 @@
 import asyncio
 import logging
 import time
-from collections.abc import AsyncIterator
-from typing import Any, Literal
+from collections.abc import AsyncIterator, Callable
+from typing import Any, Literal, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import delete, select
@@ -20,7 +20,7 @@ from sqlalchemy import delete, select
 from freeread.config import DataPaths
 from freeread.domain.summary.citations import clean_point, coverage_stats
 from freeread.domain.summary.grouping import Group, SourceBlock, group_blocks
-from freeread.domain.summary.parse_json import extract_json
+from freeread.domain.summary.parse_json import extract_json, json_objects
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import SummaryRow
 from freeread.infra.llm.default_gateway import DefaultGateway
@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 MAP_PROMPT = "summarize_map"
 REDUCE_PROMPT = "summarize_reduce"
 MAX_CONCURRENCY = 3
+T = TypeVar("T")
 
 
 class SummaryError(PreflightError):
@@ -189,15 +190,25 @@ class SummaryService:
             sections=[s.model_dump() for s in template.sections],
             points=points_text,
         )
+        existing = {b.block_id for b in doc.blocks}
+
+        def parse_reduce(text: str) -> tuple[list[dict[str, Any]], int]:
+            # 模型偶尔把 JSON 结构写坏（如把其他小节写成第一个小节对象里的键）：
+            # 依次尝试回复里的每个对象，取第一个能整理出要点的
+            for data in json_objects(text):
+                sections, invalid = _sections_from(data, template, existing)
+                if any(sec["points"] for sec in sections):
+                    return sections, invalid
+            raise ValueError("汇总结果里没有可用的要点")
+
         try:
-            data = await self._complete_json(doc_id, reduce_prompt, messages)
+            sections, invalid = await self._complete_json(
+                doc_id, reduce_prompt, messages, parse_reduce
+            )
         except LLMError as e:
             raise SummaryError("llm_error", f"汇总失败：{e}") from e
         except ValueError as e:
-            raise SummaryError("bad_output", f"汇总结果不是有效的 JSON：{e}") from e
-
-        existing = {b.block_id for b in doc.blocks}
-        sections, invalid = _sections_from(data, template, existing)
+            raise SummaryError("bad_output", f"汇总结果无法解析：{e}") from e
         stats = coverage_stats((p for s in sections for p in s["points"]), invalid) | {
             "groups": len(groups),
             "failed_groups": sum(1 for i in range(len(groups)) if results.get(i) is None),
@@ -224,7 +235,9 @@ class SummaryService:
         )
         try:
             async with self._sem:
-                data = await self._complete_json(doc_id, prompt, messages)
+                data = await self._complete_json(
+                    doc_id, prompt, messages, lambda text: extract_json(text, "points")
+                )
         except (LLMError, ValueError) as e:
             log.warning("summary map %s / %s failed: %s", doc_id, group.title, e)
             return index, None, str(e)
@@ -237,9 +250,9 @@ class SummaryService:
         return index, points, None
 
     async def _complete_json(
-        self, doc_id: str, prompt: Prompt, messages: list[Message]
-    ) -> dict[str, Any]:
-        """解析失败时不走缓存重试一次（缓存里是那条坏回复）。"""
+        self, doc_id: str, prompt: Prompt, messages: list[Message], parse: Callable[[str], T]
+    ) -> T:
+        """parse 抛 ValueError 时不走缓存重试一次（缓存里是那条坏回复）。"""
         for attempt in range(2):
             result = await self._gateway.complete(
                 TaskKind.SUMMARIZE,
@@ -249,7 +262,7 @@ class SummaryService:
                 use_cache=attempt == 0,
             )
             try:
-                return extract_json(result.text)
+                return parse(result.text)
             except ValueError:
                 if attempt == 1:
                     raise
@@ -322,7 +335,7 @@ def _sections_from(
     data: dict[str, Any], template: TemplateOut, existing: set[str]
 ) -> tuple[list[dict[str, Any]], int]:
     """按模板顺序整理 Reduce 的输出。认不出 key 的小节按位置对应；缺的小节为空。"""
-    raw_sections = [s for s in (data.get("sections") or []) if isinstance(s, dict)]
+    raw_sections = _raw_sections(data)
     known = {t.key for t in template.sections}
     by_name = {t.name: t.key for t in template.sections}
     by_key: dict[str, dict[str, Any]] = {}
@@ -346,6 +359,30 @@ def _sections_from(
                 points.append(point)
         out.append({"key": t.key, "name": t.name, "points": points})
     return out, invalid
+
+
+def _flatten(obj: dict[str, Any]) -> list[dict[str, Any]]:
+    """{"key": k, "points": [...], "<其他 key>": [...]} → 每个 key 一个小节。"""
+    out = []
+    if "points" in obj:
+        out.append({"key": obj.get("key"), "name": obj.get("name"), "points": obj["points"]})
+    out += [
+        {"key": k, "points": v}
+        for k, v in obj.items()
+        if k not in ("key", "name", "points", "sections") and isinstance(v, list)
+    ]
+    return out
+
+
+def _raw_sections(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Reduce 输出的几种形状都整理成 [{key, name?, points}]：
+    标准的 sections 列表、sections 写成 {key: points}、小节对象里混入其他小节、整个对象就是一个小节。"""
+    secs = data.get("sections")
+    if isinstance(secs, list):
+        return [part for s in secs if isinstance(s, dict) for part in _flatten(s)]
+    if isinstance(secs, dict):
+        return [{"key": k, "points": v} for k, v in secs.items() if isinstance(v, list)]
+    return _flatten(data)
 
 
 def _to_out(row: SummaryRow) -> SummaryOut:

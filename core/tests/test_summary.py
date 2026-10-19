@@ -295,3 +295,41 @@ def test_eval_metrics_and_review_markdown():
     assert citation_validity(sections, invalid_ids=1) == (1, 2)
     md = dump_review_markdown("T", sections, {"b_0001": "原文   一段"})
     assert "`b_0001` 原文 一段" in md and "p2 **（未溯源）**" in md
+
+
+async def test_reduce_salvages_flattened_sections_and_rejects_empty(ctx, tmp_path):
+    # 真实模型（评测集 d_be31326296626169）回过这种坏结构：其他小节写成第一个小节对象里的键，
+    # 外层括号还不配对。此前取到内层对象后没有 sections，静默保存了空总结。
+    broken = (
+        '{"sections":[{"key":"tldr","points":[{"text":"一句话","block_ids":["b_0003"]}],'
+        '"key_points":[{"text":"要点","block_ids":["b_0005"]}],'
+        '"limitations":[{"text":"局限","block_ids":["b_0007"]}]}'
+    )
+
+    def responder(model, messages):
+        if '"sections"' in messages[0].content:
+            return broken
+        return summary_responder(model, messages)
+
+    configure(ctx, FakeProvider("p1", responder=responder))
+    doc_id = await parsed_doc(ctx, tmp_path)
+    out = (await collect(ctx.summary.generate(doc_id, "brief")))[-1][1]
+    assert [[p.block_ids for p in s.points] for s in out.sections] == [
+        [["b_0003"]],
+        [["b_0005"]],
+        [["b_0007"]],
+    ]
+
+    def empty(model, messages):
+        if '"sections"' in messages[0].content:
+            return '{"sections": [{"key": "tldr", "points": []}]}'
+        return summary_responder(model, messages)
+
+    fake = FakeProvider("p1", responder=empty)
+    configure(ctx, fake)
+    with pytest.raises(SummaryError) as e:
+        await collect(ctx.summary.generate(doc_id, "paper"))
+    assert e.value.code == "bad_output"
+    reduce_calls = [c for c in fake.calls if '"sections"' in c[1][0].content]
+    assert len(reduce_calls) == 2  # 不走缓存重试了一次
+    assert [s.template_id for s in ctx.summary.list_for_doc(doc_id)] == ["brief"]  # 没存空总结
