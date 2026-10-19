@@ -1,7 +1,8 @@
 // 小组件：原生元素 + global.css 里的令牌（ADR-0007）。可访问性与键盘操作交给浏览器。
 
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { Icon, type IconName } from "./icons";
+import { exitMs } from "./motion";
 
 type ButtonVariant = "primary" | "default" | "ghost";
 
@@ -54,10 +55,31 @@ interface SegmentedProps<T extends string> {
   label: string;
 }
 
-/** 分段控件：一组 aria-pressed 按钮。 */
+/** 分段控件：一组 aria-pressed 按钮；选中底块是一个单独的元素，切换时滑过去。 */
 export function Segmented<T extends string>(p: SegmentedProps<T>) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const place = () => {
+      const on = el.querySelector<HTMLElement>('button[aria-pressed="true"]');
+      if (!on || !on.offsetWidth) {
+        el.removeAttribute("data-ready");
+        return;
+      }
+      el.style.setProperty("--seg-x", `${on.offsetLeft}px`);
+      el.style.setProperty("--seg-w", `${on.offsetWidth}px`);
+      el.dataset.ready = "";
+    };
+    place();
+    // 字体加载完、窗口缩放后按钮宽度会变
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    ro?.observe(el);
+    return () => ro?.disconnect();
+  }, [p.value, p.options.length]);
   return (
-    <div className="seg" role="group" aria-label={p.label}>
+    <div className="seg" role="group" aria-label={p.label} ref={ref}>
+      <span className="seg-thumb" aria-hidden="true" />
       {p.options.map((o) => (
         <button key={o.value} type="button" aria-pressed={o.value === p.value} onClick={() => p.onValue(o.value)}>
           {o.label}
@@ -210,9 +232,22 @@ export function Dialog(p: DialogProps) {
     if (!p.open && el.open) el.close();
   }, [p.open]);
 
+  const closing = useRef(false);
+  // 先播放退出动画（data-state="closing"），再真正关闭
   const finish = (value: string) => {
-    ref.current?.close();
-    onClose.current(value);
+    const el = ref.current;
+    if (closing.current) return;
+    const done = () => {
+      closing.current = false;
+      if (el) delete el.dataset.state;
+      el?.close();
+      onClose.current(value);
+    };
+    const ms = exitMs();
+    if (!el || !ms) return done();
+    closing.current = true;
+    el.dataset.state = "closing";
+    setTimeout(done, ms);
   };
 
   return (

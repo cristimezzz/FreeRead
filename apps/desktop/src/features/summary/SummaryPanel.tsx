@@ -92,7 +92,11 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
               {sec.points.length ? (
                 <ul>
                   {sec.points.map((p, i) => (
-                    <li key={i} className={p.untraced ? "untraced" : undefined}>
+                    <li
+                      key={i}
+                      className={p.untraced ? "untraced" : undefined}
+                      style={{ "--i": Math.min(i, 8) } as React.CSSProperties}
+                    >
                       {p.text}
                       {p.block_ids.map((id, j) => (
                         <button
