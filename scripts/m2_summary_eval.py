@@ -13,10 +13,15 @@ PDF 来自 core/tests/fixtures/pdfs/files/（不入库，见 manifest.yaml）。
 - eval-out/m2-summary/<doc_id>.md：要点与引用原文对照稿，供人工抽检忠实度；
 - eval-out/m2-summary/report.md：汇总表。
 --record / --replay 把模型回复录下 / 回放（infra/llm/fake.py），便于在不花钱的情况下重跑。
+
+耗时主要在模型生成。--jobs N 同时总结 N 篇（默认 4）；服务商限流时调小。推理模型（会先"思考"）
+可以用 --extra-body 关掉思考，参数名因服务商而异，例如 '{"thinking": {"type": "disabled"}}'。
+相同输入的调用会命中数据目录里的缓存，中断后重跑只补没完成的部分。
 """
 
 import argparse
 import asyncio
+import json
 import os
 import sys
 import time
@@ -153,6 +158,18 @@ async def main() -> int:
     ap.add_argument("--fake", action="store_true", help="确定性假模型，只验证链路")
     ap.add_argument("--record", help="把真实模型的回复录进这个 JSON 文件")
     ap.add_argument("--replay", help="从 --record 录下的文件回放，不联网")
+    ap.add_argument("--jobs", type=int, default=4, help="同时总结几篇（默认 4）")
+    ap.add_argument(
+        "--map-concurrency",
+        type=int,
+        help="所有文档合计同时进行的章节调用数（默认 jobs × 3，与应用里单篇的并发一致）",
+    )
+    ap.add_argument(
+        "--extra-body",
+        type=json.loads,
+        default={},
+        help='透传给服务商的请求参数（JSON），如关闭推理模型的思考：{"thinking": {"type": "disabled"}}',
+    )
     args = ap.parse_args()
 
     key = os.environ.get(args.api_key_env)
@@ -173,14 +190,27 @@ async def main() -> int:
     ctx = AppContext.open(args.data_dir, secrets=SecretStore({"eval": key or "sk-fake"}))
     try:
         configure(ctx, args)
-        rows = []
-        for i, entry in enumerate(entries, 1):
-            row = await run_doc(ctx, entry, args)
-            rows.append(row)
+        # 瓶颈在模型生成（推理模型每次 Map 10–20 s、Reduce 30–50 s），解析很快：
+        # 多篇并行，并把总结服务的全局 Map 并发放大到 jobs × 3，免得各篇互相排队
+        ctx.summary.set_concurrency(args.map_concurrency or args.jobs * 3)
+        ctx.summary.llm_opts = args.extra_body
+        jobs = asyncio.Semaphore(max(1, args.jobs))
+        done = 0
+        started = time.perf_counter()
+
+        async def one(entry: dict) -> dict:
+            nonlocal done
+            async with jobs:
+                row = await run_doc(ctx, entry, args)
+            done += 1
             status = row.get("error") or (
                 f"{row['cited']}/{row['points']} 个要点有引用，{row['seconds']} s"
             )
-            print(f"[{i}/{len(entries)}] {entry['doc_id']} {status}", flush=True)
+            print(f"[{done}/{len(entries)}] {entry['doc_id']} {status}", flush=True)
+            return row
+
+        rows = await asyncio.gather(*(one(e) for e in entries))
+        print(f"总耗时 {time.perf_counter() - started:.0f} s（--jobs {args.jobs}）", flush=True)
         text = report(rows, args)
         (OUT / "report.md").write_text(text, encoding="utf-8")
         print(text)

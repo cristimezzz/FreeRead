@@ -113,6 +113,12 @@ class SummaryService:
         self._gateway = gateway
         self._prompts = prompts
         self._sem = asyncio.Semaphore(max_concurrency)
+        # 透传给 provider 的额外请求参数（如关闭推理模型的思考）；会进入缓存键。评测脚本用。
+        self.llm_opts: dict[str, Any] = {}
+
+    def set_concurrency(self, n: int) -> None:
+        """Map 调用的全局并发上限（所有正在生成的总结共享）。"""
+        self._sem = asyncio.Semaphore(max(1, n))
 
     # ------------------------------------------------------------ 查询
 
@@ -261,6 +267,7 @@ class SummaryService:
                 prompt_id=prompt.ref,
                 doc_id=doc_id,
                 use_cache=attempt == 0,
+                **self.llm_opts,
             )
             try:
                 return parse(result.text)
