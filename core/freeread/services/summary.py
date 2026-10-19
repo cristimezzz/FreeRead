@@ -155,7 +155,7 @@ class SummaryService:
         map_prompt = self._prompts.get(MAP_PROMPT)
         reduce_prompt = self._prompts.get(REDUCE_PROMPT)
 
-        groups = group_blocks(_source_blocks(doc), doc.sections, approx_tokens)
+        groups = group_blocks(source_blocks(doc), doc.sections, approx_tokens)
         if not groups:
             raise SummaryError("bad_output", "文档里没有可总结的正文")
         title = doc.title
@@ -338,8 +338,9 @@ class SummaryService:
 # ---------------------------------------------------------------- 辅助
 
 
-def _source_blocks(doc: LoadedDoc) -> list[SourceBlock]:
-    """送 Map 的块；页眉页脚等页面装饰块的文本置空（不参与，见 domain/summary/decoration.py）。"""
+def source_blocks(doc: LoadedDoc) -> list[SourceBlock]:
+    """送给模型的块（总结的 Map、问答的上下文共用）；页眉页脚等页面装饰块的文本置空
+    （不参与，见 domain/summary/decoration.py）。"""
     out = []
     for b in doc.blocks:
         text = (

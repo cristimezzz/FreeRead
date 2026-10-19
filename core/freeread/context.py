@@ -19,6 +19,7 @@ from freeread.infra.zotero.local_api import LocalApiConnector
 from freeread.services.embed import EmbedService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
+from freeread.services.qa import QAService
 from freeread.services.search import SearchService
 from freeread.services.settings import SettingsService
 from freeread.services.summary import SummaryService
@@ -43,6 +44,7 @@ class AppContext:
     embed: EmbedService
     search: SearchService
     summary: SummaryService
+    qa: QAService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -70,6 +72,7 @@ class AppContext:
         worker.register("embed", embed.run_embed_job, concurrency=1)
         worker.register("model_download", embed.run_model_download_job, concurrency=1)
         parse.on_blocks_replaced = embed.enqueue_embed
+        search = SearchService(sessions, embed)
         return cls(
             paths=paths,
             engine=engine,
@@ -85,8 +88,9 @@ class AppContext:
             llm=llm,
             translate=TranslateService(sessions, settings, llm, prompts),
             embed=embed,
-            search=SearchService(sessions, embed),
+            search=search,
             summary=SummaryService(sessions, paths, settings, llm, prompts),
+            qa=QAService(sessions, paths, settings, llm, prompts, search),
         )
 
     def close(self) -> None:

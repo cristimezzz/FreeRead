@@ -18,7 +18,7 @@ from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.search.chunker import approx_tokens
 from freeread.services.doc_blocks import LoadedDoc, load_doc
 from freeread.services.settings import AppSettings, ModelRoute, ProviderConfig
-from freeread.services.summary import SummaryError, _source_blocks, migrate_summaries
+from freeread.services.summary import SummaryError, migrate_summaries, source_blocks
 
 SYNTHETIC = Path(__file__).parent / "fixtures" / "raw" / "synthetic.pdf"
 
@@ -225,7 +225,7 @@ def test_source_blocks_blank_decorations_for_map():
         SECTIONS,
         {0: PAGE, 1: PAGE},
     )
-    out = _source_blocks(doc)
+    out = source_blocks(doc)
     assert [b.text for b in out] == ["A Paper", "", "Real body text about the experiment.", ""]
     groups = group_blocks(out, SECTIONS, approx_tokens)
     assert [b for g in groups for b in g.block_ids] == ["b_0000", "b_0002"]

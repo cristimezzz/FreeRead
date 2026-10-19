@@ -38,6 +38,7 @@ from freeread.infra.jobs.worker import JobContext
 from freeread.infra.parsers.base import RawLayout
 from freeread.infra.parsers.registry import EngineSpec, ParserRegistry
 from freeread.infra.search import fts
+from freeread.services.qa import migrate_qa
 from freeread.services.settings import SettingsService
 from freeread.services.summary import migrate_summaries
 
@@ -320,7 +321,7 @@ class ParseService:
     def _store(
         self, info: _DocInfo, spec: EngineSpec, raw: RawLayout, doc: Document
     ) -> tuple[int, int]:
-        """原子写 ir.json，替换 blocks（及全文索引），迁移译文和总结引用的块 ID。返回 (迁移数, 失效数)。"""
+        """原子写 ir.json，替换 blocks（及全文索引），迁移译文、总结和问答引用的块 ID。返回 (迁移数, 失效数)。"""
         ir_path = self.ir_path(info.doc_id)
         tmp = ir_path.with_suffix(".json.tmp")
         tmp.write_text(doc.model_dump_json(exclude_none=True), encoding="utf-8")
@@ -334,6 +335,7 @@ class ParseService:
             migrated, stale = _migrate_translations(s, info.doc_id, mapping) if old else (0, 0)
             if old:
                 migrate_summaries(s, info.doc_id, mapping)
+                migrate_qa(s, info.doc_id, mapping)
 
             s.execute(delete(BlockRow).where(BlockRow.doc_id == info.doc_id))
             s.add_all(

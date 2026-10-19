@@ -21,61 +21,34 @@ PDF 来自 core/tests/fixtures/pdfs/files/（不入库，见 manifest.yaml）。
 
 import argparse
 import asyncio
-import json
-import os
 import sys
 import time
-from pathlib import Path
-
-import yaml
 
 from freeread.context import AppContext
+from freeread.eval.runner import (
+    MISSING_PDF,
+    ROOT,
+    add_common_args,
+    api_key,
+    configure,
+    import_and_parse,
+    manifest_entries,
+    resolve_dirs,
+)
 from freeread.eval.summary import citation_coverage, citation_validity, dump_review_markdown
-from freeread.infra.llm.fake import FakeProvider, RecordingProvider, summary_responder
+from freeread.infra.llm.fake import summary_responder
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.llm.secrets import SecretStore
-from freeread.services.settings import AppSettings, ModelRoute, ProviderConfig
 
-ROOT = Path(__file__).resolve().parents[1]
-FIX = ROOT / "core" / "tests" / "fixtures" / "pdfs"
 OUT = ROOT / "eval-out" / "m2-summary"
 TARGET = 0.9
 
 
-async def noop(*_):
-    pass
-
-
-def configure(ctx: AppContext, args) -> None:
-    settings = AppSettings(
-        target_lang=args.lang,
-        providers=[ProviderConfig(id="eval", name="评测", base_url=args.base_url)],
-        routes={TaskKind.SUMMARIZE: ModelRoute(provider_id="eval", model=args.model)},
-    )
-    # 先保存服务地址再记同意：地址变了时 SettingsService 会作废旧的同意（隐私规则），
-    # 同一次 put 里带上同意会被当成"旧地址的同意"丢掉
-    ctx.settings.put(settings)
-    ctx.settings.put(settings.model_copy(update={"consented_providers": ["eval"]}))
-    if args.fake or args.replay:
-        replay = Path(args.replay) if args.replay else None
-        fake = FakeProvider("eval", responder=summary_responder, replay_file=replay)
-        ctx.llm._factory = lambda config, key: fake
-    elif args.record:
-        default = ctx.llm._factory
-        ctx.llm._factory = lambda config, key: RecordingProvider(
-            default(config, key), Path(args.record)
-        )
-
-
 async def run_doc(ctx: AppContext, entry: dict, args) -> dict:
-    pdf = FIX / "files" / f"{entry['doc_id']}.pdf"
     row = {"doc_id": entry["doc_id"], "title": entry.get("title", "")}
-    if not pdf.is_file():
-        return row | {"error": "PDF 不存在（files/ 不入库，先运行 scripts/m0_build_eval_set.py）"}
-    item_id, _ = ctx.library.import_file(pdf)
-    doc_id = ctx.library.get_item(item_id).documents[0].doc_id
-    if ctx.parse.get(doc_id).parse_status != "ready":
-        await ctx.parse.run(doc_id, args.engine, noop)
+    doc_id = await import_and_parse(ctx, entry, args.engine)
+    if doc_id is None:
+        return row | {"error": MISSING_PDF}
 
     started = time.perf_counter()
     summary = None
@@ -92,8 +65,8 @@ async def run_doc(ctx: AppContext, entry: dict, args) -> dict:
     valid, total_ids = citation_validity(sections, summary.stats.get("invalid_ids", 0))
     doc = ctx.summary.load(doc_id)
     block_text = {b.block_id: b.text or (b.html or "") for b in doc.blocks}
-    (OUT / f"{entry['doc_id']}.json").write_text(summary.model_dump_json(indent=2), "utf-8")
-    (OUT / f"{entry['doc_id']}.md").write_text(
+    (args.out / f"{entry['doc_id']}.json").write_text(summary.model_dump_json(indent=2), "utf-8")
+    (args.out / f"{entry['doc_id']}.md").write_text(
         dump_review_markdown(row["title"], sections, block_text), "utf-8"
     )
     return row | {
@@ -149,50 +122,23 @@ async def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("--data-dir", type=Path, default=OUT / "data")
-    ap.add_argument("--docs", nargs="*", help="只跑这些 doc_id（默认 manifest 全部）")
-    ap.add_argument("--limit", type=int)
+    add_common_args(ap, OUT)
     ap.add_argument("--template", default="paper")
-    ap.add_argument("--lang", default="zh-CN")
-    ap.add_argument("--engine", default="pymupdf")
-    ap.add_argument("--base-url", default="http://127.0.0.1:1/v1")
-    ap.add_argument("--model", default="fake")
-    ap.add_argument("--api-key-env", default="FREEREAD_EVAL_API_KEY")
-    ap.add_argument("--fake", action="store_true", help="确定性假模型，只验证链路")
-    ap.add_argument("--record", help="把真实模型的回复录进这个 JSON 文件")
-    ap.add_argument("--replay", help="从 --record 录下的文件回放，不联网")
-    ap.add_argument("--jobs", type=int, default=4, help="同时总结几篇（默认 4）")
     ap.add_argument(
         "--map-concurrency",
         type=int,
         help="所有文档合计同时进行的章节调用数（默认 jobs × 3，与应用里单篇的并发一致）",
     )
-    ap.add_argument(
-        "--extra-body",
-        type=json.loads,
-        default={},
-        help='透传给服务商的请求参数（JSON），如关闭推理模型的思考：{"thinking": {"type": "disabled"}}',
-    )
     args = ap.parse_args()
-
-    key = os.environ.get(args.api_key_env)
-    if not (args.fake or args.replay or key):
-        print(
-            f"缺少 API Key：设置环境变量 {args.api_key_env}，或用 --fake 只验证链路",
-            file=sys.stderr,
-        )
+    key = api_key(args)
+    if key is None:
         return 2
+    entries = manifest_entries(args)
+    resolve_dirs(args, OUT)
 
-    manifest = yaml.safe_load((FIX / "manifest.yaml").read_text(encoding="utf-8"))
-    entries = manifest["documents"]
-    if args.docs:
-        entries = [e for e in entries if e["doc_id"] in set(args.docs)]
-    entries = entries[: args.limit] if args.limit else entries
-
-    OUT.mkdir(parents=True, exist_ok=True)
-    ctx = AppContext.open(args.data_dir, secrets=SecretStore({"eval": key or "sk-fake"}))
+    ctx = AppContext.open(args.data_dir, secrets=SecretStore({"eval": key}))
     try:
-        configure(ctx, args)
+        configure(ctx, args, TaskKind.SUMMARIZE, summary_responder)
         # 瓶颈在模型生成（推理模型每次 Map 10–20 s、Reduce 30–50 s），解析很快：
         # 多篇并行，并把总结服务的全局 Map 并发放大到 jobs × 3，免得各篇互相排队
         ctx.summary.set_concurrency(args.map_concurrency or args.jobs * 3)
@@ -216,7 +162,7 @@ async def main() -> int:
         elapsed = time.perf_counter() - started
         print(f"总耗时 {elapsed:.0f} s（--jobs {args.jobs}）", flush=True)
         text = report(rows, args, elapsed)
-        (OUT / "report.md").write_text(text, encoding="utf-8")
+        (args.out / "report.md").write_text(text, encoding="utf-8")
         print(text)
     finally:
         await ctx.llm.aclose()
