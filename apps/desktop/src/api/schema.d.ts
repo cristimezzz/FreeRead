@@ -542,6 +542,71 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/qa/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Sessions
+         * @description 该文档的对话，最近活动的在前（只读本地库，离线可用）。
+         */
+        get: operations["list_sessions_documents__doc_id__qa_sessions_get"];
+        put?: never;
+        /** Create Session */
+        post: operations["create_session_documents__doc_id__qa_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qa/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session */
+        get: operations["get_session_qa_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Session */
+        delete: operations["delete_session_qa_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qa/sessions/{session_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask
+         * @description SSE 事件：
+         *     - `context`：QAContextOut，送给模型的原文块与检索方式（没有 vector 表示语义索引未建）；
+         *     - `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；
+         *     - `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；
+         *     - `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /
+         *       consent_required / bad_output / llm_error；
+         *     - `done`：结束。
+         */
+        post: operations["ask_qa_sessions__session_id__ask_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -619,6 +684,13 @@ export interface components {
              * @enum {string}
              */
             contrast: "standard" | "medium" | "high";
+        };
+        /** AskRequest */
+        AskRequest: {
+            /** Question */
+            question: string;
+            /** Lang */
+            lang?: string | null;
         };
         /**
          * CollectionOut
@@ -896,6 +968,14 @@ export interface components {
             /** Model */
             model: string;
         };
+        /** NewSession */
+        NewSession: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
         /** ParseRequest */
         ParseRequest: {
             /** Engine */
@@ -926,6 +1006,70 @@ export interface components {
             kind: string;
             /** Has Key */
             has_key: boolean;
+        };
+        /** QANodeOut */
+        QANodeOut: {
+            /** Id */
+            id: string;
+            /** Session Id */
+            session_id: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /** Question */
+            question: string;
+            /** Answer */
+            answer: string;
+            /** Citations */
+            citations: string[];
+            /** Untraced */
+            untraced: boolean;
+            /** Stats */
+            stats: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model: string;
+            /** Prompt Version */
+            prompt_version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "stale";
+            /** Created At */
+            created_at: string;
+        };
+        /** QASessionDetail */
+        QASessionDetail: {
+            /** Id */
+            id: string;
+            /** Doc Id */
+            doc_id: string;
+            /** Title */
+            title: string;
+            /** Turns */
+            turns: number;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+            /** Nodes */
+            nodes: components["schemas"]["QANodeOut"][];
+        };
+        /** QASessionOut */
+        QASessionOut: {
+            /** Id */
+            id: string;
+            /** Doc Id */
+            doc_id: string;
+            /** Title */
+            title: string;
+            /** Turns */
+            turns: number;
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
         };
         /** SearchHit */
         SearchHit: {
@@ -2134,6 +2278,177 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_sessions_documents__doc_id__qa_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QASessionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_documents__doc_id__qa_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NewSession"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QASessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_qa_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QASessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_session_qa_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_qa_sessions__session_id__ask_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
             };
         };
         responses: {

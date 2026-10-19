@@ -115,8 +115,21 @@ interface SelectProps<T extends string> {
 }
 
 export function Select<T extends string>(p: SelectProps<T>) {
-  const ref = useRef<HTMLElement & { value: string }>(null);
+  const ref = useRef<
+    HTMLElement & { value: string; displayText?: string; select?: (value: string) => void }
+  >(null);
   useDomEvent(ref, "change", () => p.onValue((ref.current?.value ?? "") as T));
+  // 选项异步加载（如问答的对话列表）时，md-outlined-select 先拿到 value、后出现对应选项，
+  // 显示文字不会自己更新：选项或 value 变化后按 value 重新选中一次
+  const optionKey = p.options.map((o) => o.value).join("\u0000");
+  useEffect(() => {
+    const el = ref.current;
+    const option = p.options.find((o) => o.value === p.value);
+    if (!el?.select || !option) return;
+    el.select(p.value);
+    // value 没变时 select() 不刷新显示文字（选项是后来才出现的），直接补上
+    if (el.displayText !== option.label) el.displayText = option.label;
+  }, [p.value, optionKey]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <md-outlined-select ref={ref} label={p.label} value={p.value} class={p.className}>
       {p.options.map((o) => (

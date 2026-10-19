@@ -113,6 +113,7 @@ export function SettingsView() {
 
   const route = settings.routes.translate;
   const summaryRoute = settings.routes.summarize;
+  const qaRoute = settings.routes.qa;
 
   return (
     <>
@@ -237,6 +238,39 @@ export function SettingsView() {
             )}
           </div>
           <p className="hint">总结要读全文并归纳，推荐用推理能力更强的模型；在阅读器里点“总结”按钮生成。</p>
+        </section>
+
+        <section aria-labelledby="s-qa">
+          <h2 id="s-qa">问答</h2>
+          <div className="row">
+            <Select
+              label="问答使用的服务"
+              value={qaRoute?.provider_id ?? ""}
+              options={[
+                { value: "", label: "与总结相同" },
+                ...settings.providers.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+              onValue={(provider_id) =>
+                update({
+                  routes: provider_id
+                    ? {
+                        ...settings.routes,
+                        qa: { provider_id, model: qaRoute?.model || summaryRoute?.model || route?.model || "" },
+                      }
+                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "qa")),
+                })
+              }
+            />
+            {qaRoute && (
+              <TextField
+                label="模型"
+                value={qaRoute.model}
+                commitOnChange
+                onValue={(model) => update({ routes: { ...settings.routes, qa: { ...qaRoute, model } } })}
+              />
+            )}
+          </div>
+          <p className="hint">在阅读器里点“问答”按钮就当前论文提问；回答只依据检索到的原文，并标出出处。</p>
         </section>
 
         <EmbeddingSection settings={settings} update={update} />
