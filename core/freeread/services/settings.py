@@ -42,11 +42,38 @@ class Appearance(_Strict):
         return DEFAULT_ACCENT if v == LEGACY_DEFAULT_SEED else v
 
 
+PARSER_KEY_PREFIX = "parser-"
+
+
 class ProviderConfig(_Strict):
     id: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,31}$")
     kind: Literal["openai_compatible", "anthropic", "ollama"] = "openai_compatible"
     name: str
     base_url: str
+
+    @field_validator("id")
+    @classmethod
+    def _not_reserved(cls, v: str) -> str:
+        # parser-<engine> 是远程解析服务在钥匙串里的密钥 ID（ADR-0008）
+        if v.startswith(PARSER_KEY_PREFIX):
+            raise ValueError(f"provider id must not start with {PARSER_KEY_PREFIX!r}")
+        return v
+
+
+class RemoteParser(_Strict):
+    """高质量引擎的运行位置（ADR-0008）。api：调用自部署或云端服务，而不是本机 .engines/。"""
+
+    mode: Literal["local", "api"] = "local"
+    base_url: str = Field(default="", pattern=r"^(https?://\S+)?$")
+    # 仅 MinerU 使用；basic 与本机 effort=medium 同档
+    tier: Literal["flash", "basic", "standard", "advanced"] = "basic"
+    # 用户确认过可以上传 PDF 的公网地址；与 base_url 不同即视为未确认（局域网 / 本机地址无需确认）
+    consented_url: str | None = None
+
+
+class ParserServices(_Strict):
+    mineru: RemoteParser = RemoteParser()
+    docling: RemoteParser = RemoteParser()
 
 
 class ModelRoute(_Strict):
@@ -69,6 +96,7 @@ class AppSettings(_Strict):
     target_lang: str = "zh-CN"
     # auto：先 PyMuPDF 快速模式，MinerU 可用时再升级（ADR-0003）
     parse_engine: Literal["auto", "pymupdf", "mineru", "docling"] = "auto"
+    parsers: ParserServices = ParserServices()
     providers: list[ProviderConfig] = []
     routes: dict[TaskKind, ModelRoute] = {}
     # 用户已同意向其发送文档内容的 provider（architecture §10）

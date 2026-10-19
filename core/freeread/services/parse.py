@@ -68,10 +68,29 @@ class EngineOut(BaseModel):
     label: str
     available: bool
     heavy: bool
+    # local：本机引擎；api：自部署 / 云端服务（ADR-0008）
+    location: Literal["local", "api"] = "local"
+    # 不可用时的原因：not_installed / not_configured / consent_required
+    unavailable_reason: str | None = None
+    # API 模式下是否已保存 API Key（不含密钥本身）
+    has_key: bool = False
 
 
 class EngineUnavailableError(RuntimeError):
     pass
+
+
+_UNAVAILABLE_MSG = {
+    "not_installed": "未安装",
+    "not_configured": "未填写服务地址",
+    "consent_required": "需要先在设置里确认可以把 PDF 上传到该服务",
+}
+
+
+def _ensure_available(spec: EngineSpec) -> None:
+    if not spec.available():
+        reason = _UNAVAILABLE_MSG.get(spec.unavailable_reason() or "", "不可用")
+        raise EngineUnavailableError(f"解析引擎 {spec.name} {reason}")
 
 
 @dataclass
@@ -124,6 +143,8 @@ class ParseService:
         self._doc_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
         # 块替换后调用（同步，在线程里）：由 AppContext 接到 EmbedService.enqueue_embed
         self.on_blocks_replaced: Callable[[str], object] | None = None
+        # 引擎的 API Key 是否已保存：由 AppContext 接到 SecretStore（parser-<engine>）
+        self.has_key: Callable[[str], bool] = lambda engine: False
 
     # ------------------------------------------------------------ 查询
 
@@ -134,7 +155,15 @@ class ParseService:
 
     def engines(self) -> list[EngineOut]:
         return [
-            EngineOut(name=e.name, label=e.label, available=e.available(), heavy=e.heavy)
+            EngineOut(
+                name=e.name,
+                label=e.label,
+                available=e.available(),
+                heavy=e.heavy,
+                location=e.location(),
+                unavailable_reason=e.unavailable_reason(),
+                has_key=self.has_key(e.name),
+            )
             for e in self.registry.engines.values()
         ]
 
@@ -156,8 +185,7 @@ class ParseService:
         if engine is None:
             return self._jobs.enqueue("parse", {"doc_id": doc_id, "force": True})
         spec = self.registry.get(engine)
-        if not spec.available():
-            raise EngineUnavailableError(f"解析引擎 {engine} 未安装")
+        _ensure_available(spec)
         kind = "parse_hq" if spec.heavy else "parse"
         return self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine, "force": True})
 
@@ -243,8 +271,7 @@ class ParseService:
         self, doc_id: str, engine: str, progress: Progress, force: bool
     ) -> ParseOutcome:
         spec = self.registry.get(engine)
-        if not spec.available():
-            raise EngineUnavailableError(f"解析引擎 {engine} 未安装")
+        _ensure_available(spec)
         info = await asyncio.to_thread(self._load, doc_id)
 
         if not force and info.parse_status == "ready" and info.parser_engine:

@@ -362,6 +362,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/parsers/{engine}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Key */
+        put: operations["put_key_parsers__engine__key_put"];
+        post?: never;
+        /** Delete Key */
+        delete: operations["delete_key_parsers__engine__key_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parsers/{engine}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Service
+         * @description 只请求健康检查等接口，不上传任何文档。配置错误也以 ok=false 返回，而不是 4xx。
+         */
+        post: operations["test_service_parsers__engine__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/translate/blocks": {
         parameters: {
             query?: never;
@@ -634,6 +672,21 @@ export interface components {
              */
             parse_engine: "auto" | "pymupdf" | "mineru" | "docling";
             /**
+             * @default {
+             *       "mineru": {
+             *         "base_url": "",
+             *         "mode": "local",
+             *         "tier": "basic"
+             *       },
+             *       "docling": {
+             *         "base_url": "",
+             *         "mode": "local",
+             *         "tier": "basic"
+             *       }
+             *     }
+             */
+            parsers: components["schemas"]["ParserServices"];
+            /**
              * Providers
              * @default []
              */
@@ -826,6 +879,19 @@ export interface components {
             available: boolean;
             /** Heavy */
             heavy: boolean;
+            /**
+             * Location
+             * @default local
+             * @enum {string}
+             */
+            location: "local" | "api";
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
+            /**
+             * Has Key
+             * @default false
+             */
+            has_key: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -981,6 +1047,41 @@ export interface components {
             /** Engine */
             engine?: string | null;
         };
+        /** ParserServices */
+        ParserServices: {
+            /**
+             * @default {
+             *       "mode": "local",
+             *       "base_url": "",
+             *       "tier": "basic"
+             *     }
+             */
+            mineru: components["schemas"]["RemoteParser"];
+            /**
+             * @default {
+             *       "mode": "local",
+             *       "base_url": "",
+             *       "tier": "basic"
+             *     }
+             */
+            docling: components["schemas"]["RemoteParser"];
+        };
+        /** ParserTestIn */
+        ParserTestIn: {
+            /** Base Url */
+            base_url?: string | null;
+        };
+        /** ParserTestOut */
+        ParserTestOut: {
+            /** Ok */
+            ok: boolean;
+            /** Latency Ms */
+            latency_ms: number;
+            /** Version */
+            version?: string | null;
+            /** Error */
+            error?: string | null;
+        };
         /** ProviderConfig */
         ProviderConfig: {
             /** Id */
@@ -1070,6 +1171,31 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at: string;
+        };
+        /**
+         * RemoteParser
+         * @description 高质量引擎的运行位置（ADR-0008）。api：调用自部署或云端服务，而不是本机 .engines/。
+         */
+        RemoteParser: {
+            /**
+             * Mode
+             * @default local
+             * @enum {string}
+             */
+            mode: "local" | "api";
+            /**
+             * Base Url
+             * @default
+             */
+            base_url: string;
+            /**
+             * Tier
+             * @default basic
+             * @enum {string}
+             */
+            tier: "flash" | "basic" | "standard" | "advanced";
+            /** Consented Url */
+            consented_url?: string | null;
         };
         /** SearchHit */
         SearchHit: {
@@ -1986,6 +2112,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TestOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_key_parsers__engine__key_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                engine: "mineru" | "docling";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_key_parsers__engine__key_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                engine: "mineru" | "docling";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_service_parsers__engine__test_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                engine: "mineru" | "docling";
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ParserTestIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParserTestOut"];
                 };
             };
             /** @description Validation Error */

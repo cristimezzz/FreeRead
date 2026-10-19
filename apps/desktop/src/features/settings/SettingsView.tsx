@@ -7,6 +7,33 @@ import { Button, IconButton, Progress, Segmented, Select, Switch, TextField } fr
 import { SETTINGS_SECTIONS } from "./sections";
 
 type Provider = Schemas["ProviderConfig"];
+type Engine = Schemas["EngineOut"];
+type RemoteEngine = "mineru" | "docling";
+type RemoteParser = Schemas["RemoteParser"];
+
+const REMOTE_ENGINES: RemoteEngine[] = ["mineru", "docling"];
+
+const UNAVAILABLE_LABEL: Record<string, string> = {
+  not_installed: "未安装",
+  not_configured: "未填写服务地址",
+  consent_required: "待确认上传",
+};
+
+/** 引擎下拉里的名称：API 模式加注，不可用时写明原因。 */
+export function engineOptionLabel(e: Engine): string {
+  const name = e.location === "api" ? `${e.label}（API）` : e.label;
+  if (e.available) return name;
+  return `${name}（${UNAVAILABLE_LABEL[e.unavailable_reason ?? ""] ?? "不可用"}）`;
+}
+
+/** 地址的主机名，用于隐私确认文案；解析失败时原样返回。 */
+export function urlHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
 
 const LANGS = [
   { value: "zh-CN", label: "简体中文" },
@@ -55,7 +82,7 @@ export function SettingsView() {
   const settings = useApp((s) => s.settings);
   const save = useApp((s) => s.saveSettings);
   const toast = useApp((s) => s.toast);
-  const [engines, setEngines] = useState<Schemas["EngineOut"][]>([]);
+  const [engines, setEngines] = useState<Engine[]>([]);
   const [keys, setKeys] = useState<Record<string, boolean>>({});
   const page = useRef<HTMLDivElement>(null);
 
@@ -64,12 +91,20 @@ export function SettingsView() {
     setKeys(Object.fromEntries(list.map((p) => [p.id, p.has_key])));
   };
 
-  useEffect(() => {
-    void api()
+  const refreshEngines = () =>
+    api()
       .GET("/parsers")
-      .then((r) => setEngines(unwrap(r)));
+      .then((r) => setEngines(unwrap(r)))
+      .catch(() => {});
+
+  useEffect(() => {
     void refreshKeys();
   }, []);
+
+  // 引擎可用性取决于设置（运行位置、地址、上传确认），设置变化后重新获取
+  useEffect(() => {
+    void refreshEngines();
+  }, [settings]);
 
   // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。滚到底时最后几节到不了顶部，
   // 这时保留侧栏点过的那一节（只要它在可见范围内）；用户自己滚动后取消
@@ -174,6 +209,37 @@ export function SettingsView() {
         }),
       );
       toast(r.ok ? `连接正常（${r.model}，${r.latency_ms} ms）` : `连接失败：${r.error}`);
+      return r.ok;
+    } catch (e) {
+      toast(`测试失败：${e}`);
+      return null;
+    }
+  };
+
+  const updateParser = (engine: RemoteEngine, patch: Partial<RemoteParser>) =>
+    update({ parsers: { ...settings.parsers, [engine]: { ...settings.parsers[engine], ...patch } } });
+
+  const setParserKey = async (engine: RemoteEngine, key: string | null) => {
+    try {
+      if (isTauri()) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        if (key) await invoke("set_api_key", { providerId: `parser-${engine}`, key });
+        else await invoke("delete_api_key", { providerId: `parser-${engine}` });
+      }
+      const path = { params: { path: { engine } } } as const;
+      if (key) await api().PUT("/parsers/{engine}/key", { ...path, body: { key } });
+      else await api().DELETE("/parsers/{engine}/key", path);
+      await refreshEngines();
+      if (key) toast(isTauri() ? "API Key 已保存到系统钥匙串" : "API Key 已设置（浏览器开发模式下只在本次运行有效）");
+    } catch (e) {
+      toast(`保存 API Key 失败：${e}`);
+    }
+  };
+
+  const testParser = async (engine: RemoteEngine): Promise<boolean | null> => {
+    try {
+      const r = unwrap(await api().POST("/parsers/{engine}/test", { params: { path: { engine } } }));
+      toast(r.ok ? `连接正常（${r.version ?? "版本未知"}，${r.latency_ms} ms）` : `连接失败：${r.error}`);
       return r.ok;
     } catch (e) {
       toast(`测试失败：${e}`);
@@ -383,16 +449,46 @@ export function SettingsView() {
                   .filter((e) => e.heavy)
                   .map((e) => ({
                     value: e.name as Settings["parse_engine"],
-                    label: e.available ? e.label : `${e.label}（未安装）`,
+                    label: engineOptionLabel(e),
                     disabled: !e.available,
                   })),
               ]}
               onValue={(parse_engine) => update({ parse_engine })}
             />
           </Row>
+          <p className="set-hint">
+            MinerU 和 Docling 可以在本机运行，也可以调用自部署或云端服务：MinerU 支持 mineru-api 与
+            mineru.net，Docling 支持 docling-serve。局域网地址无需确认；公网地址要先允许上传 PDF。
+          </p>
+          {REMOTE_ENGINES.map((name) => {
+            const info = engines.find((e) => e.name === name);
+            return (
+              <RemoteParserCard
+                key={name}
+                engine={name}
+                label={info?.label ?? name}
+                cfg={settings.parsers[name]}
+                info={info}
+                onChange={(patch) => updateParser(name, patch)}
+                onKey={(k) => setParserKey(name, k)}
+                onTest={() => testParser(name)}
+              />
+            );
+          })}
         </Group>
 
         <Group id="privacy" title={sectionTitle("privacy")}>
+          {REMOTE_ENGINES.filter((n) => settings.parsers[n].consented_url).map((n) => (
+            <Row
+              key={n}
+              title={`已允许把 PDF 上传到 ${urlHost(settings.parsers[n].consented_url!)}`}
+              desc={`用于 ${engines.find((e) => e.name === n)?.label ?? n} 解析`}
+            >
+              <Button small onClick={() => updateParser(n, { consented_url: null })}>
+                撤销
+              </Button>
+            </Row>
+          ))}
           {settings.consented_providers.length ? (
             settings.consented_providers.map((id) => (
               <Row
@@ -515,6 +611,127 @@ function ProviderCard({ provider, defaultOpen, hasKey, onChange, onKey, onTest, 
             )}
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+const TIERS: { value: RemoteParser["tier"]; label: string }[] = [
+  { value: "flash", label: "flash（最快）" },
+  { value: "basic", label: "basic（与本机相同，推荐）" },
+  { value: "standard", label: "standard（VLM，更准）" },
+  { value: "advanced", label: "advanced（最准，最慢）" },
+];
+
+const URL_PLACEHOLDER: Record<RemoteEngine, string> = {
+  mineru: "https://mineru.net/api 或 http://127.0.0.1:8000",
+  docling: "http://127.0.0.1:5001",
+};
+
+interface RemoteParserCardProps {
+  engine: RemoteEngine;
+  label: string;
+  cfg: RemoteParser;
+  info: Engine | undefined;
+  onChange: (patch: Partial<RemoteParser>) => void;
+  onKey: (key: string | null) => void;
+  onTest: () => Promise<boolean | null>;
+}
+
+function RemoteParserCard({ engine, label, cfg, info, onChange, onKey, onTest }: RemoteParserCardProps) {
+  const [key, setKey] = useState("");
+  const [tested, setTested] = useState<boolean | null>(null);
+  const isApi = cfg.mode === "api";
+  return (
+    <div className="card provider">
+      <div className="provider-head">
+        <b>{label}</b>
+        {isApi && tested === true && (
+          <span className="state ok">
+            <i />
+            连接正常
+          </span>
+        )}
+        {isApi && tested === false && (
+          <span className="state err">
+            <i />
+            连接失败
+          </span>
+        )}
+        <span className="provider-actions">
+          {isApi && (
+            <Button variant="ghost" small disabled={!cfg.base_url} onClick={async () => setTested(await onTest())}>
+              测试连接
+            </Button>
+          )}
+          <Segmented
+            label={`${label} 运行位置`}
+            value={cfg.mode}
+            options={[
+              { value: "local", label: "本机" },
+              { value: "api", label: "API 服务" },
+            ]}
+            onValue={(mode) => onChange({ mode })}
+          />
+        </span>
+      </div>
+      {isApi && (
+        <>
+          <div className="grid">
+            <TextField
+              label="Base URL"
+              mono
+              placeholder={URL_PLACEHOLDER[engine]}
+              value={cfg.base_url}
+              commitOnChange
+              onValue={(base_url) => {
+                setTested(null);
+                onChange({ base_url: base_url.trim() });
+              }}
+            />
+            {engine === "mineru" && (
+              <Select label="质量档位（tier）" value={cfg.tier} options={TIERS} onValue={(tier) => onChange({ tier })} />
+            )}
+            <TextField
+              label={info?.has_key ? "API Key（已保存，输入新值可替换）" : "API Key（本机服务通常不需要）"}
+              type="password"
+              mono
+              value={key}
+              onValue={setKey}
+            />
+          </div>
+          <div className="provider-keys">
+            <Button
+              variant="primary"
+              small
+              disabled={!key}
+              onClick={() => {
+                onKey(key);
+                setKey("");
+              }}
+            >
+              保存 Key
+            </Button>
+            {info?.has_key && (
+              <Button small onClick={() => onKey(null)}>
+                删除 Key
+              </Button>
+            )}
+          </div>
+          {info?.unavailable_reason === "consent_required" && (
+            <Row
+              title="需要你的允许"
+              desc={`使用这个服务时，PDF 原文会上传到 ${urlHost(cfg.base_url)}。允许后才会用它解析。`}
+            >
+              <Button small onClick={() => onChange({ consented_url: cfg.base_url })}>
+                允许上传
+              </Button>
+            </Row>
+          )}
+        </>
+      )}
+      {!isApi && info?.unavailable_reason === "not_installed" && (
+        <p className="set-hint">本机未安装 {label}，可以改用 API 服务。</p>
       )}
     </div>
   );
