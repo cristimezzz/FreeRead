@@ -41,8 +41,8 @@ def clean_point(point: Any, existing: set[str]) -> tuple[dict[str, Any] | None, 
     if not isinstance(point, dict):
         return None, 0
     text, inline = split_inline(str(point.get("text") or point.get("point") or ""))
-    if not text:
-        return None, 0
+    if not text or not _ID_RE.sub("", text).strip(" ,，、;；[]【】()（）"):
+        return None, 0  # 空的，或者只有块编号（结构错位时会把编号当成正文）
     ids = normalize_ids(point.get("block_ids") or point.get("citations"))
     ids += [i for i in inline if i not in ids]
     valid = [i for i in ids if i in existing]
