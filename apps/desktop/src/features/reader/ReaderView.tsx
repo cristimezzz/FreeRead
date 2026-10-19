@@ -9,6 +9,8 @@ import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
 import { PdfView } from "./PdfView";
 import { ReflowView, type TranslationMode } from "./ReflowView";
 import { SearchPanel } from "./SearchPanel";
+import { SummaryPanel } from "../summary/SummaryPanel";
+import { useSummary } from "../summary/useSummary";
 
 type Layout = "pdf" | "split" | "reflow";
 
@@ -28,6 +30,14 @@ function loadPrefs(): Prefs {
   }
 }
 
+/** 引用悬停提示：正文取 text，表格取单元格文本，图取说明。 */
+function blockPreview(b: Block | undefined): string | undefined {
+  if (!b) return undefined;
+  if (b.text.trim()) return b.text;
+  if (b.html) return new DOMParser().parseFromString(b.html, "text/html").body.textContent ?? undefined;
+  return b.latex ?? undefined;
+}
+
 const ENGINE_LABEL: Record<string, string> = { pymupdf: "快速模式", mineru: "MinerU", docling: "Docling" };
 
 export function ReaderView({ docId, title }: { docId: string; itemId: string; title: string }) {
@@ -42,7 +52,9 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
   const firstVisible = useRef<string | null>(null);
   const prevDoc = useRef<Document | null>(null);
   const loadedParse = useRef<string | null>(null);
-  const [searchOpen, setSearchOpen] = useState(false);
+  // 右侧面板：文内搜索与总结共用一个位置
+  const [side, setSide] = useState<"search" | "summary" | null>(null);
+  const toggleSide = (panel: "search" | "summary") => setSide((cur) => (cur === panel ? null : panel));
   const version = useApp((s) => s.documentVersion[docId] ?? 0);
   const settings = useApp((s) => s.settings);
   const toast = useApp((s) => s.toast);
@@ -117,12 +129,20 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
 
   const lang = settings?.target_lang ?? "zh-CN";
   const translationOn = prefs.mode !== "off" && prefs.layout !== "pdf";
-  const { states, requestVisible, consent, acceptConsent, declineConsent } = useTranslations(
+  const translation = useTranslations(
     doc,
     translationOn,
     lang,
     irVersion,
   );
+
+  const { states, requestVisible } = translation;
+  const summary = useSummary(docId, lang, side === "summary");
+  // 两个功能都可能先问隐私确认：同一时间只会有一个在等
+  const consentFor = translation.consent ? "翻译" : summary.consent ? "总结" : null;
+  const consent = translation.consent ?? summary.consent;
+  const acceptConsent = translation.consent ? translation.acceptConsent : summary.acceptConsent;
+  const declineConsent = translation.consent ? translation.declineConsent : summary.declineConsent;
 
   const onVisible = useCallback(
     (ids: string[]) => {
@@ -166,7 +186,7 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
-        setSearchOpen(true);
+        setSide("search");
       }
     };
     window.addEventListener("keydown", onKey);
@@ -234,9 +254,14 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
           <md-icon-button
             aria-label="搜索本文（Ctrl+F）"
             title="搜索本文（Ctrl+F）"
-            onClick={() => setSearchOpen((o) => !o)}
+            onClick={() => toggleSide("search")}
           >
             <Icon name="search" />
+          </md-icon-button>
+        )}
+        {ready && (
+          <md-icon-button aria-label="总结" title="总结" onClick={() => toggleSide("summary")}>
+            <Icon name="summary" />
           </md-icon-button>
         )}
         <span className="reader-status">
@@ -268,18 +293,26 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
             onVisible={onVisible}
           />
         )}
-        {searchOpen && ready && (
+        {side === "search" && ready && (
           <SearchPanel
             docId={docId}
             embedStatus={status?.embed_status}
             onPick={jumpTo}
-            onClose={() => setSearchOpen(false)}
+            onClose={() => setSide(null)}
+          />
+        )}
+        {side === "summary" && ready && (
+          <SummaryPanel
+            state={summary}
+            blockText={(id) => blockPreview(byId.get(id))}
+            onPick={jumpTo}
+            onClose={() => setSide(null)}
           />
         )}
       </div>
       <Dialog
         open={Boolean(consent)}
-        headline="发送文档内容进行翻译？"
+        headline={`发送文档内容进行${consentFor ?? "处理"}？`}
         onClose={(v) => (v === "ok" ? void acceptConsent() : declineConsent())}
         actions={[
           { value: "cancel", label: "暂不" },
@@ -287,7 +320,7 @@ export function ReaderView({ docId, title }: { docId: string; itemId: string; ti
         ]}
       >
         <p>
-          翻译需要把论文段落发送给
+          {consentFor}需要把论文段落发送给
           {settings?.providers.find((p) => p.id === consent?.providerId)?.name ?? consent?.providerId}。
           文档的其余数据都保存在本机。之后可以在 设置 › 隐私 中撤销。
         </p>

@@ -112,6 +112,7 @@ export function SettingsView() {
   };
 
   const route = settings.routes.translate;
+  const summaryRoute = settings.routes.summarize;
 
   return (
     <>
@@ -203,6 +204,39 @@ export function SettingsView() {
               />
             )}
           </div>
+        </section>
+
+        <section aria-labelledby="s-summary">
+          <h2 id="s-summary">总结</h2>
+          <div className="row">
+            <Select
+              label="总结使用的服务"
+              value={summaryRoute?.provider_id ?? ""}
+              options={[
+                { value: "", label: "与翻译相同" },
+                ...settings.providers.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+              onValue={(provider_id) =>
+                update({
+                  routes: provider_id
+                    ? {
+                        ...settings.routes,
+                        summarize: { provider_id, model: summaryRoute?.model || route?.model || "" },
+                      }
+                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "summarize")),
+                })
+              }
+            />
+            {summaryRoute && (
+              <TextField
+                label="模型"
+                value={summaryRoute.model}
+                commitOnChange
+                onValue={(model) => update({ routes: { ...settings.routes, summarize: { ...summaryRoute, model } } })}
+              />
+            )}
+          </div>
+          <p className="hint">总结要读全文并归纳，推荐用推理能力更强的模型；在阅读器里点“总结”按钮生成。</p>
         </section>
 
         <EmbeddingSection settings={settings} update={update} />
