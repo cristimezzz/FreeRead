@@ -8,15 +8,17 @@ import pytest
 from sqlalchemy import select
 
 from freeread.domain.summary.citations import clean_point, coverage_stats, normalize_ids
+from freeread.domain.summary.decoration import DecorationCandidate, decoration_ids
 from freeread.domain.summary.grouping import SourceBlock, group_blocks
 from freeread.domain.summary.parse_json import extract_json
-from freeread.infra.db.models import LLMCallRow, SummaryRow
+from freeread.infra.db.models import BlockRow, LLMCallRow, SummaryRow
 from freeread.infra.llm.errors import ProviderError
 from freeread.infra.llm.fake import FakeProvider, summary_responder
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.search.chunker import approx_tokens
+from freeread.services.doc_blocks import LoadedDoc, load_doc
 from freeread.services.settings import AppSettings, ModelRoute, ProviderConfig
-from freeread.services.summary import SummaryError, migrate_summaries
+from freeread.services.summary import SummaryError, _source_blocks, migrate_summaries
 
 SYNTHETIC = Path(__file__).parent / "fixtures" / "raw" / "synthetic.pdf"
 
@@ -131,6 +133,104 @@ def test_extract_json_tolerates_fences_and_prose():
         extract_json("no json here")
 
 
+PAGE = (600.0, 800.0)
+TOP = (50.0, 20.0, 550.0, 40.0)  # 上边缘带（高 10% = 80pt 以内）
+BOTTOM = (50.0, 770.0, 550.0, 790.0)
+SIDE = (5.0, 200.0, 30.0, 600.0)  # 左侧竖排水印
+BODY = (50.0, 300.0, 550.0, 400.0)
+
+
+def DC(i, text, page=0, bbox=BODY, type_="paragraph"):
+    return DecorationCandidate(f"b_{i:04d}", type_, text, [(page, bbox)])
+
+
+def test_decoration_running_headers_repeat_at_page_edges():
+    pages = {p: PAGE for p in range(4)}
+    blocks = [
+        DC(0, "Three-Color Live-Cell Imaging", 1, TOP),
+        DC(1, "Three-Color  Live-Cell Imaging", 2, TOP),  # 空白不同也算同一行
+        DC(2, "420 Current Anthropology Volume 55", 1, BOTTOM),
+        DC(3, "422 Current Anthropology Volume 55", 3, BOTTOM),  # 页码不同也算同一行
+        DC(4, "BIOPHYSICS AND", 2, SIDE),
+        DC(5, "BIOPHYSICS AND", 3, SIDE),
+        DC(6, "Only once at the top of a page", 1, TOP),  # 只出现一次：不动
+        DC(7, "Repeated sentence in the body", 1),  # 重复但不在边缘：不动
+        DC(8, "Repeated sentence in the body", 2),
+    ]
+    assert decoration_ids(blocks, pages) == {f"b_{i:04d}" for i in range(6)}
+
+
+def test_decoration_boilerplate_lines():
+    pages = {0: PAGE}
+    drop = [
+        "16121880, 2023, 2, Downloaded from https://onlinelibrary.wiley.com/doi/10.1002/x by Y",
+        "npg © 2014 Nature America, Inc. All rights reserved.",
+        (
+            "Grubert et al., 2015, Cell 162, 1051–1065 August 27, 2015 ª2015 Elsevier Inc. "
+            "http://dx.doi.org/10.1016/j.cell.2015.07.048"
+        ),
+        "Copyright © 2023 The Authors, some rights reserved; exclusive licensee AAAS.",
+        "The Journal of Nutrition, Health & Aging© Volume 18, Number 2, 2014",
+        "(legend continued on next page)",
+    ]
+    keep = [
+        "We thank the authors of Waszak et al., 2015 for sharing data.",
+        "Code is available at https://github.com/x/y.",  # 正文里的短 URL 句：不在边缘带
+        "The volume of the cell increased 2-fold, see the next page for details.",
+        "x" * 500 + " All rights reserved",  # 长块不按样板判断
+    ]
+    blocks = [DC(i, t) for i, t in enumerate(drop + keep)]
+    assert decoration_ids(blocks, pages) == {f"b_{i:04d}" for i in range(len(drop))}
+
+    # 边缘带里去掉 DOI 后几乎不剩字：装饰；剩下一句中文正文：不动
+    edge = [
+        DC(0, "doi:10.1038/nrg.2016.45 Published online 9 May 2016", 0, BOTTOM),
+        DC(1, "doi.org/10.1002/cbdv.202201221 RESEARCH ARTICLE", 0, TOP),
+        DC(2, "（https://doi.org/10.5281/zenodo.7839739），并可免费用于学术和研究用", 0, TOP),
+        DC(3, "Code is available at https://github.com/x/y.", 0, BODY),
+    ]
+    assert decoration_ids(edge, pages) == {"b_0000", "b_0001"}
+
+
+def test_decoration_never_touches_titles_captions_or_unanchored_blocks():
+    pages = {p: PAGE for p in range(3)}
+    blocks = [
+        DC(0, "A Paper Title", 0, TOP, "title"),
+        DC(1, "Figure 1. Copyright © 2020 shows the header", 0, BOTTOM, "caption"),
+        DC(2, "Running title", 1, TOP, "heading"),
+        DC(3, "Running title", 2, TOP, "heading"),
+        DC(4, "First page abstract all rights reserved", 0, TOP, "abstract"),
+        DecorationCandidate("b_0005", "paragraph", "Running", []),  # 没有锚点：只看样板
+        DecorationCandidate("b_0006", "paragraph", "Running", [(9, TOP)]),  # 页码越界
+    ]
+    assert decoration_ids(blocks, pages) == set()
+
+
+def test_source_blocks_blank_decorations_for_map():
+    def row(i, text, page, bbox, type_="paragraph"):
+        return BlockRow(
+            doc_id="d", block_id=f"b_{i:04d}", ord=i, type=type_, section_id="s1", text=text,
+            inlines=[], anchors=[{"page": page, "bbox": list(bbox)}], content_hash="h",
+        )  # fmt: skip
+
+    doc = LoadedDoc(
+        "d",
+        "en",
+        [
+            row(0, "A Paper", 0, TOP, "title"),
+            row(1, "Downloaded from https://www.science.org at X on May 1, 2026", 0, SIDE),
+            row(2, "Real body text about the experiment.", 0, BODY),
+            row(3, "Downloaded from https://www.science.org at X on May 1, 2026", 1, SIDE),
+        ],
+        SECTIONS,
+        {0: PAGE, 1: PAGE},
+    )
+    out = _source_blocks(doc)
+    assert [b.text for b in out] == ["A Paper", "", "Real body text about the experiment.", ""]
+    groups = group_blocks(out, SECTIONS, approx_tokens)
+    assert [b for g in groups for b in g.block_ids] == ["b_0000", "b_0002"]
+
+
 # ---------------------------------------------------------------- 服务
 
 
@@ -138,6 +238,7 @@ async def test_generate_map_reduce_saves_and_reuses_map_cache(ctx, tmp_path):
     fake = FakeProvider("p1", responder=summary_responder)
     configure(ctx, fake)  # 只配了翻译路由：总结回退到它
     doc_id = await parsed_doc(ctx, tmp_path)
+    assert load_doc(ctx.sessions, ctx.paths, doc_id).pages[0][1] > 0  # 页面尺寸来自 ir.json
 
     events = await collect(ctx.summary.generate(doc_id, "paper"))
     kinds = [k for k, _ in events]

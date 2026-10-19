@@ -1,11 +1,11 @@
 """读取一篇已解析文档的块与章节结构（嵌入、总结共用）。
 
-块来自 blocks 表（按阅读顺序）；章节只存在 ir.json 里（sections 是扁平列表，
+块来自 blocks 表（按阅读顺序）；章节与页面尺寸只存在 ir.json 里（sections 是扁平列表，
 用 parent_id 组成树，见 docs/02-document-ir.md）。
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from sqlalchemy import select
@@ -26,6 +26,7 @@ class LoadedDoc:
     language: str | None
     blocks: list[BlockRow]
     sections: list[dict[str, Any]]
+    pages: dict[int, tuple[float, float]] = field(default_factory=dict)  # 页码 → (宽, 高)
 
     @property
     def title(self) -> str:
@@ -49,8 +50,12 @@ def load_doc(sessions: SessionFactory, paths: DataPaths, doc_id: str) -> LoadedD
         )
         ir_rel, language = doc.ir_path, doc.language
     sections: list[dict[str, Any]] = []
+    pages: dict[int, tuple[float, float]] = {}
     if ir_rel:
         ir_path = paths.root / ir_rel
         if ir_path.is_file():
-            sections = json.loads(ir_path.read_text(encoding="utf-8")).get("sections", [])
-    return LoadedDoc(doc_id, language, blocks, sections)
+            ir = json.loads(ir_path.read_text(encoding="utf-8"))
+            sections = ir.get("sections", [])
+            for p in (ir.get("source") or {}).get("pages", []):
+                pages[p["index"]] = (p["width"], p["height"])
+    return LoadedDoc(doc_id, language, blocks, sections, pages)
