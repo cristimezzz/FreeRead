@@ -1327,21 +1327,18 @@ body.resizing .reader-pane {
   pointer-events: none;
 }
 
-/* 重排视图：衬线正文 */
+/* 重排视图：衬线正文；宽度随所在栏自适应，左右留白随栏宽伸缩 */
 .reflow {
-  max-width: var(--reflow-width, 708px);
+  box-sizing: border-box;
+  width: 100%;
   margin: 0 auto;
-  padding: 40px 48px 96px;
+  padding: 40px clamp(16px, 5%, 64px) 96px;
   font-family: var(--font-serif);
   font-size: var(--reflow-font-size, 17px);
   line-height: 1.72;
   color: var(--ink);
   /* 不含空格的长 URL 也要折行，否则整个阅读区会横向滚动 */
   overflow-wrap: anywhere;
-}
-
-.reflow[data-mode="side"] {
-  max-width: calc(var(--reflow-width, 708px) * 1.7);
 }
 
 .rf-block {
