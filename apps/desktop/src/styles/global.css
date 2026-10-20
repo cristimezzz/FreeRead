@@ -1812,6 +1812,25 @@ body.resizing .reader-pane {
   margin-top: 8px;
 }
 
+/* 引擎安装：当前一行输出、失败时的输出末尾 */
+.install-msg {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.install-err {
+  display: block;
+  max-height: 9em;
+  overflow: auto;
+  color: var(--err);
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .model-inp.inp {
   min-width: 180px;
 }

@@ -3,8 +3,8 @@
 - pymupdf：快速模式，随 sidecar 分发，总是可用；
 - mineru：默认高质量引擎，本机为常驻 worker（进程在本注册表内共享）；
 - docling：备选高质量引擎，本机每篇起一个子进程。
-重型引擎在 M1 只在开发环境可用：需要 .engines/<engine>/ 下的独立 Python 环境
-（或环境变量 FREEREAD_<ENGINE>_PYTHON），首次使用时下载在 M2 实现。
+重型引擎的本机模式需要 <engines_root>/<engine>/ 下的独立 Python 环境（或环境变量
+FREEREAD_<ENGINE>_PYTHON）：开发时为仓库下的 .engines/，打包版由设置里的"安装"创建（installer.py）。
 mineru / docling 也可以设为 API 模式（settings.parsers），改为调用自部署或云端服务；
 引擎名、Normalizer、raw/<engine>/ 与质量等级都不变。设置每次调用时读取，改了立即生效。
 """

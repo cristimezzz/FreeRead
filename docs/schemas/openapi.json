@@ -1393,6 +1393,69 @@
         }
       }
     },
+    "/parsers/{engine}/install": {
+      "post": {
+        "tags": [
+          "parsers"
+        ],
+        "summary": "Install Engine",
+        "description": "下载并安装本机引擎到独立环境（已有安装任务时返回它）。进度见任务事件。",
+        "operationId": "install_engine_parsers__engine__install_post",
+        "parameters": [
+          {
+            "name": "engine",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "mineru",
+                "docling"
+              ],
+              "type": "string",
+              "title": "Engine"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/parsers/{engine}/key": {
       "put": {
         "tags": [

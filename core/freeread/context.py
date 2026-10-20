@@ -15,6 +15,7 @@ from freeread.infra.llm.default_gateway import DefaultGateway
 from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
 from freeread.infra.parsers.registry import ParserRegistry
+from freeread.infra.parsers.subprocess_engine import FROZEN, set_engines_root
 from freeread.infra.zotero.local_api import LocalApiConnector
 from freeread.services.embed import EmbedService
 from freeread.services.library import LibraryService
@@ -68,6 +69,8 @@ class AppContext:
             cfg = getattr(settings.get().parsers, engine)
             return cfg if cfg.mode == "api" else None
 
+        if FROZEN:
+            set_engines_root(paths.engines)
         registry = ParserRegistry(
             paths.logs, remote_parser, lambda engine: secrets.get(PARSER_KEY_PREFIX + engine)
         )
@@ -75,6 +78,7 @@ class AppContext:
         parse.has_key = lambda engine: secrets.has(PARSER_KEY_PREFIX + engine)
         worker.register("parse", parse.run_parse_job, concurrency=2)
         worker.register("parse_hq", parse.run_parse_hq_job, concurrency=1)
+        worker.register("engine_install", parse.run_engine_install_job, concurrency=1)
         prompts = PromptRegistry()
         llm = DefaultGateway(settings, sessions, secrets)
         embed = EmbedService(sessions, paths, jobs, bus, settings, llm, engine=engine)

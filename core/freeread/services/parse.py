@@ -10,6 +10,7 @@
 import asyncio
 import json
 import logging
+import os
 import shutil
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
@@ -36,6 +37,7 @@ from freeread.infra.jobs.events import EventBus
 from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
 from freeread.infra.parsers.base import RawLayout
+from freeread.infra.parsers.installer import ENGINE_PACKAGES, EngineInstaller
 from freeread.infra.parsers.registry import EngineSpec, ParserRegistry
 from freeread.infra.search import fts
 from freeread.services.qa import migrate_qa
@@ -80,6 +82,10 @@ class EngineUnavailableError(RuntimeError):
     pass
 
 
+class EngineInstallError(RuntimeError):
+    pass
+
+
 _UNAVAILABLE_MSG = {
     "not_installed": "未安装",
     "not_configured": "未填写服务地址",
@@ -91,6 +97,15 @@ def _ensure_available(spec: EngineSpec) -> None:
     if not spec.available():
         reason = _UNAVAILABLE_MSG.get(spec.unavailable_reason() or "", "不可用")
         raise EngineUnavailableError(f"解析引擎 {spec.name} {reason}")
+
+
+def _ensure_installable(engine: str) -> None:
+    if engine not in ENGINE_PACKAGES:
+        raise EngineInstallError(f"解析引擎 {engine} 不能在应用内安装")
+    var = f"FREEREAD_{engine.upper()}_PYTHON"
+    if os.environ.get(var):
+        # 环境由用户自己指定；安装会写到 engines_root，开发时还会覆盖仓库里的 .engines/
+        raise EngineInstallError(f"{engine} 的 Python 由环境变量 {var} 指定，不能在应用内安装")
 
 
 @dataclass
@@ -145,6 +160,7 @@ class ParseService:
         self.on_blocks_replaced: Callable[[str], object] | None = None
         # 引擎的 API Key 是否已保存：由 AppContext 接到 SecretStore（parser-<engine>）
         self.has_key: Callable[[str], bool] = lambda engine: False
+        self.installer = EngineInstaller(log_dir=paths.logs)
 
     # ------------------------------------------------------------ 查询
 
@@ -188,6 +204,28 @@ class ParseService:
         _ensure_available(spec)
         kind = "parse_hq" if spec.heavy else "parse"
         return self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine, "force": True})
+
+    def request_install(self, engine: str) -> JobOut:
+        """在本机安装重型引擎（已有安装任务时返回它）。见 infra/parsers/installer.py。"""
+        _ensure_installable(engine)
+        with self._sessions() as s:
+            job_id = s.scalar(
+                select(JobRow.id).where(
+                    JobRow.kind == "engine_install",
+                    JobRow.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+                    JobRow.payload["engine"].as_string() == engine,
+                )
+            )
+        existing = self._jobs.get(job_id) if job_id else None
+        return existing or self._jobs.enqueue("engine_install", {"engine": engine})
+
+    async def run_engine_install_job(self, ctx: JobContext) -> None:
+        engine = ctx.job.payload["engine"]
+        _ensure_installable(engine)
+        if engine == "mineru":
+            await self.registry.close()  # 重新安装时常驻 worker 还占着旧环境
+        await self.installer.install(engine, ctx.report)
+        await ctx.report(1.0, f"{self.registry.get(engine).label} 已安装")
 
     def enqueue_renormalize(self) -> list[str]:
         """启动时调用：Normalizer 升级后，为 IR 版本过旧且有原生输出的文档建非强制解析任务。

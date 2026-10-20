@@ -39,6 +39,11 @@ class DataPaths:
         return self.root / "models"
 
     @property
+    def engines(self) -> Path:
+        """打包版的本机解析引擎环境（应用内安装）；开发时用仓库下的 .engines/。"""
+        return self.root / "engines"
+
+    @property
     def logs(self) -> Path:
         return self.root / "logs"
 

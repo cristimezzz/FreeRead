@@ -2,6 +2,10 @@
 
 每个重型引擎（MinerU / Docling / Marker）有自己的虚拟环境，避免 torch 等依赖冲突；
 引擎侧的薄包装脚本位于 scripts/engines/run_<engine>.py，只负责调用引擎并把原生输出写到 raw 目录。
+
+环境的位置（engines_root）：开发时为仓库下的 .engines/（scripts/m0_setup_engines.sh 创建）；
+打包版为数据目录下的 engines/，由应用内安装（installer.py）创建，见 AppContext.open。
+打包版的包装脚本随 sidecar 放在 sys._MEIPASS/engines/（scripts/build_sidecar.ps1）。
 """
 
 import asyncio
@@ -13,19 +17,40 @@ from pathlib import Path
 from freeread.infra.parsers.base import ParserCaps, ProgressCb, RawLayout
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+FROZEN = bool(getattr(sys, "frozen", False))
+
+_engines_root = REPO_ROOT / ".engines"
+
+
+def engines_root() -> Path:
+    return _engines_root
+
+
+def set_engines_root(root: Path) -> None:
+    global _engines_root
+    _engines_root = root
+
+
+def scripts_dir() -> Path:
+    if FROZEN:
+        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "engines"
+    return REPO_ROOT / "scripts" / "engines"
+
+
+def venv_python(venv: Path) -> Path:
+    return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
 def engine_python(engine: str) -> Path:
     env = os.environ.get(f"FREEREAD_{engine.upper()}_PYTHON")
     if env:
         return Path(env)
-    sub = "Scripts/python.exe" if sys.platform == "win32" else "bin/python"
-    return REPO_ROOT / ".engines" / engine / sub
+    return venv_python(engines_root() / engine)
 
 
 def engine_env() -> dict[str, str]:
-    """模型与缓存统一放到 .engines/cache/，并关闭遥测。与 scripts/engines/env.sh 保持一致。"""
-    cache = Path(os.environ.get("ENGINE_CACHE", REPO_ROOT / ".engines" / "cache"))
+    """模型与缓存统一放到 <engines_root>/cache/，并关闭遥测。与 scripts/engines/env.sh 保持一致。"""
+    cache = Path(os.environ.get("ENGINE_CACHE", engines_root() / "cache"))
     env = dict(os.environ)
     env.update(
         {
@@ -46,7 +71,7 @@ def engine_env() -> dict[str, str]:
 def engine_command(
     engine: str, pdf: Path, out_dir: Path, extra: list[str] | None = None
 ) -> list[str]:
-    script = REPO_ROOT / "scripts" / "engines" / f"run_{engine}.py"
+    script = scripts_dir() / f"run_{engine}.py"
     return [str(engine_python(engine)), str(script), str(pdf), str(out_dir), *(extra or [])]
 
 
