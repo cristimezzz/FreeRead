@@ -11,7 +11,7 @@
      不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
      选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
   3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据、
-     sqlite-vec 扩展（vec0.dll）。
+     sqlite-vec 扩展（vec0.dll）、重型引擎的包装脚本 scripts/engines/*.py（引擎本身由用户在设置里安装）。
      打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF、检索）。
 
 .EXAMPLE
@@ -57,6 +57,8 @@ if __name__ == "__main__":
 # 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Prompts = Join-Path $Core "prompts"
+# 重型引擎的包装脚本由引擎自己的 Python 运行（不是 sidecar），以源文件带上，运行时在 sys._MEIPASS/engines。
+$EngineScripts = Join-Path $Root "scripts/engines"
 $Dist = Join-Path $Build "dist"
 
 Write-Host "==> PyInstaller --onedir"
@@ -70,6 +72,7 @@ Write-Host "==> PyInstaller --onedir"
     --collect-binaries onnxruntime `
     --add-data "${Migrations};freeread/infra/db/migrations" `
     --add-data "${Prompts};prompts" `
+    --add-data "${EngineScripts};engines" `
     --distpath $Dist `
     --workpath (Join-Path $Build "work") `
     --specpath $Build `
@@ -82,7 +85,9 @@ foreach ($required in @(
         "_internal/prompts/translate.yaml",
         "_internal/prompts/summarize_map.yaml",
         "_internal/prompts/templates/summary.yaml",
-        "_internal/sqlite_vec/vec0.dll"
+        "_internal/sqlite_vec/vec0.dll",
+        "_internal/engines/mineru_worker.py",
+        "_internal/engines/run_docling.py"
     )) {
     if (-not (Test-Path (Join-Path $OneDir $required))) {
         throw "onedir 产物缺少 $required"

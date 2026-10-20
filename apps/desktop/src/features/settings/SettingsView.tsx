@@ -10,6 +10,7 @@ type Provider = Schemas["ProviderConfig"];
 type Engine = Schemas["EngineOut"];
 type RemoteEngine = "mineru" | "docling";
 type RemoteParser = Schemas["RemoteParser"];
+type Job = Schemas["JobOut"];
 
 const REMOTE_ENGINES: RemoteEngine[] = ["mineru", "docling"];
 
@@ -84,7 +85,18 @@ export function SettingsView() {
   const toast = useApp((s) => s.toast);
   const [engines, setEngines] = useState<Engine[]>([]);
   const [keys, setKeys] = useState<Record<string, boolean>>({});
+  const jobs = useApp((s) => s.jobs);
   const page = useRef<HTMLDivElement>(null);
+
+  // 每个引擎最近一次本机安装任务（进行中或已结束）
+  const installJobs: Partial<Record<RemoteEngine, Job>> = {};
+  for (const j of Object.values(jobs)) {
+    const name = j.payload.engine as RemoteEngine;
+    if (j.kind !== "engine_install") continue;
+    const prev = installJobs[name];
+    if (!prev || j.created_at > prev.created_at) installJobs[name] = j;
+  }
+  const installKey = REMOTE_ENGINES.map((n) => installJobs[n]?.status).join(":");
 
   const refreshKeys = async () => {
     const list = unwrap(await api().GET("/llm/providers"));
@@ -102,9 +114,10 @@ export function SettingsView() {
   }, []);
 
   // 引擎可用性取决于设置（运行位置、地址、上传确认），设置变化后重新获取
+  // 安装任务结束后可用性也会变
   useEffect(() => {
     void refreshEngines();
-  }, [settings]);
+  }, [settings, installKey]);
 
   // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。滚到底时最后几节到不了顶部，
   // 这时保留侧栏点过的那一节（只要它在可见范围内）；用户自己滚动后取消
@@ -233,6 +246,14 @@ export function SettingsView() {
       if (key) toast(isTauri() ? "API Key 已保存到系统钥匙串" : "API Key 已设置（浏览器开发模式下只在本次运行有效）");
     } catch (e) {
       toast(`保存 API Key 失败：${e}`);
+    }
+  };
+
+  const installEngine = async (engine: RemoteEngine) => {
+    try {
+      unwrap(await api().POST("/parsers/{engine}/install", { params: { path: { engine } } }));
+    } catch (e) {
+      toast(`无法开始安装：${e}`);
     }
   };
 
@@ -469,6 +490,8 @@ export function SettingsView() {
                 label={info?.label ?? name}
                 cfg={settings.parsers[name]}
                 info={info}
+                installJob={installJobs[name]}
+                onInstall={() => installEngine(name)}
                 onChange={(patch) => updateParser(name, patch)}
                 onKey={(k) => setParserKey(name, k)}
                 onTest={() => testParser(name)}
@@ -633,12 +656,24 @@ interface RemoteParserCardProps {
   label: string;
   cfg: RemoteParser;
   info: Engine | undefined;
+  installJob: Job | undefined;
+  onInstall: () => void;
   onChange: (patch: Partial<RemoteParser>) => void;
   onKey: (key: string | null) => void;
   onTest: () => Promise<boolean | null>;
 }
 
-function RemoteParserCard({ engine, label, cfg, info, onChange, onKey, onTest }: RemoteParserCardProps) {
+function RemoteParserCard({
+  engine,
+  label,
+  cfg,
+  info,
+  installJob,
+  onInstall,
+  onChange,
+  onKey,
+  onTest,
+}: RemoteParserCardProps) {
   const [key, setKey] = useState("");
   const [tested, setTested] = useState<boolean | null>(null);
   const isApi = cfg.mode === "api";
@@ -730,10 +765,56 @@ function RemoteParserCard({ engine, label, cfg, info, onChange, onKey, onTest }:
           )}
         </>
       )}
-      {!isApi && info?.unavailable_reason === "not_installed" && (
-        <p className="set-hint">本机未安装 {label}，可以改用 API 服务。</p>
-      )}
+      {!isApi && <LocalInstall label={label} info={info} job={installJob} onInstall={onInstall} />}
     </div>
+  );
+}
+
+/** 本机模式：未安装时提供安装，安装中显示进度，失败时显示原因并可重试。 */
+function LocalInstall({
+  label,
+  info,
+  job,
+  onInstall,
+}: {
+  label: string;
+  info: Engine | undefined;
+  job: Job | undefined;
+  onInstall: () => void;
+}) {
+  const active = job && (job.status === "queued" || job.status === "running");
+  if (active) {
+    return (
+      <Row
+        title={`正在安装 ${label}… ${Math.round(job.progress * 100)}%`}
+        desc={
+          <>
+            <span className="install-msg">{job.message ?? "排队中"}</span>
+            <Progress value={job.progress} className="row-bar" />
+          </>
+        }
+      />
+    );
+  }
+  if (info?.unavailable_reason !== "not_installed") return null;
+  const failed = job?.status === "failed";
+  return (
+    <Row
+      title={failed ? "安装失败" : `本机未安装 ${label}`}
+      desc={
+        failed ? (
+          <span className="install-err">{job.error}</span>
+        ) : (
+          <>
+            安装会下载 Python 3.12、PyTorch 与 {label}（共数 GB）到独立环境，首次解析时还会下载模型。也可以改用 API 服务。
+          </>
+        )
+      }
+    >
+      <Button small variant={failed ? undefined : "primary"} onClick={onInstall}>
+        {failed ? "重试安装" : "安装"}
+      </Button>
+    </Row>
   );
 }
 

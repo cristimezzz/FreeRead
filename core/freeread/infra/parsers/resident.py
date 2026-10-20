@@ -15,7 +15,7 @@ from itertools import count
 from pathlib import Path
 
 from freeread.infra.parsers.base import ParserCaps, ProgressCb, RawLayout
-from freeread.infra.parsers.subprocess_engine import REPO_ROOT, engine_env, engine_python
+from freeread.infra.parsers.subprocess_engine import engine_env, engine_python, scripts_dir
 
 log = logging.getLogger(__name__)
 
@@ -149,7 +149,7 @@ class ResidentEngineParser:
 
 
 def mineru_resident(log_dir: Path | None = None) -> ResidentEngineParser:
-    script = REPO_ROOT / "scripts" / "engines" / "mineru_worker.py"
+    script = scripts_dir() / "mineru_worker.py"
     return ResidentEngineParser(
         "mineru",
         ParserCaps(formulas=True, tables=True, ocr=True, needs_gpu=False),

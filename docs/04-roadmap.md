@@ -39,7 +39,7 @@
 - [x] sidecar 启动失败或中途退出时，壳把 `Terminated` 事件推给前端（`core-terminated` 事件 + `core_status` 命令，前端立即报错并显示 stderr 末尾）。
 - [ ] footnote 规则（`docling.mark_footnotes`）移到公共层，PyMuPDF / MinerU 共用。
 - [ ] sidecar 启动时间出现 1.03 s / 1.52 s 两档跳变，查原因。
-- [ ] 打包版的 MinerU：首次使用时下载独立环境。
+- [x] 打包版的 MinerU / Docling：设置里一键安装到数据目录下的独立环境（`infra/parsers/installer.py`：uv + 托管 Python 3.12 + 固定版本的引擎包）。未在安装版上实测完整安装（需下载数 GB）。
 
 ## M2 理解：总结与单篇问答（3–4 周）
 
