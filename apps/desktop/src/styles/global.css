@@ -333,7 +333,7 @@ select:hover:not(:focus):not(:disabled) {
       overlay var(--dur-fast) allow-discrete, display var(--dur-fast) allow-discrete;
   }
 
-  ::picker(select):popover-open {
+  select:open::picker(select) {
     opacity: 1;
     transform: none;
     transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete,
@@ -341,7 +341,7 @@ select:hover:not(:focus):not(:disabled) {
   }
 
   @starting-style {
-    ::picker(select):popover-open {
+    select:open::picker(select) {
       opacity: 0;
       transform: translateY(-4px) scaleY(0.96);
     }
