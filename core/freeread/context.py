@@ -17,7 +17,9 @@ from freeread.infra.llm.secrets import SecretStore
 from freeread.infra.parsers.registry import ParserRegistry
 from freeread.infra.parsers.subprocess_engine import FROZEN, set_engines_root
 from freeread.infra.zotero.local_api import LocalApiConnector
+from freeread.services.annotations import AnnotationService
 from freeread.services.embed import EmbedService
+from freeread.services.export import ExportService
 from freeread.services.glossary import GlossaryService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
@@ -48,6 +50,8 @@ class AppContext:
     search: SearchService
     summary: SummaryService
     qa: QAService
+    annotations: AnnotationService
+    export: ExportService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -91,6 +95,9 @@ class AppContext:
         worker.register("model_download", embed.run_model_download_job, concurrency=1)
         parse.on_blocks_replaced = embed.enqueue_embed
         search = SearchService(sessions, embed)
+        summary = SummaryService(sessions, paths, settings, llm, prompts)
+        qa = QAService(sessions, paths, settings, llm, prompts, search)
+        annotations = AnnotationService(sessions)
         glossary = GlossaryService(sessions, paths, jobs, settings, llm, prompts)
         worker.register("glossary_extract", glossary.run_extract_job, concurrency=1)
         translate = TranslateService(sessions, settings, llm, prompts, jobs=jobs, glossary=glossary)
@@ -112,8 +119,10 @@ class AppContext:
             glossary=glossary,
             embed=embed,
             search=search,
-            summary=SummaryService(sessions, paths, settings, llm, prompts),
-            qa=QAService(sessions, paths, settings, llm, prompts, search),
+            summary=summary,
+            qa=qa,
+            annotations=annotations,
+            export=ExportService(sessions, paths, translate, summary, qa, annotations, settings),
         )
 
     def close(self) -> None:

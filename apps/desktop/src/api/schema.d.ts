@@ -746,10 +746,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/annotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Annotations
+         * @description 按阅读顺序排列（只读本地库）。
+         */
+        get: operations["list_annotations_documents__doc_id__annotations_get"];
+        put?: never;
+        /** Create Annotation */
+        post: operations["create_annotation_documents__doc_id__annotations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/annotations/{annotation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Annotation */
+        delete: operations["delete_annotation_annotations__annotation_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Annotation */
+        patch: operations["update_annotation_annotations__annotation_id__patch"];
+        trace?: never;
+    };
+    "/documents/{doc_id}/export/markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Markdown
+         * @description 导出为 Markdown 文本（浏览器模式下载用）。
+         */
+        get: operations["export_markdown_documents__doc_id__export_markdown_get"];
+        put?: never;
+        /**
+         * Export Markdown To File
+         * @description 导出并写入本机文件（桌面版）。
+         */
+        post: operations["export_markdown_to_file_documents__doc_id__export_markdown_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnnotationIn */
+        AnnotationIn: {
+            /** Block Id */
+            block_id: string;
+            /** Start */
+            start?: number | null;
+            /** End */
+            end?: number | null;
+            /**
+             * Color
+             * @default yellow
+             * @enum {string}
+             */
+            color: "yellow" | "green" | "blue" | "pink" | "purple";
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** AnnotationOut */
+        AnnotationOut: {
+            /** Id */
+            id: string;
+            /** Doc Id */
+            doc_id: string;
+            /** Block Id */
+            block_id: string;
+            /** Start */
+            start: number | null;
+            /** End */
+            end: number | null;
+            /** Quote */
+            quote: string;
+            /**
+             * Color
+             * @enum {string}
+             */
+            color: "yellow" | "green" | "blue" | "pink" | "purple";
+            /** Note */
+            note: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "stale";
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** AnnotationPatch */
+        AnnotationPatch: {
+            /** Color */
+            color?: ("yellow" | "green" | "blue" | "pink" | "purple") | null;
+            /** Note */
+            note?: string | null;
+        };
         /** AppSettings */
         AppSettings: {
             /**
@@ -1007,6 +1128,46 @@ export interface components {
              * @default false
              */
             has_key: boolean;
+        };
+        /** ExportResult */
+        ExportResult: {
+            /** Path */
+            path: string;
+            /** Bytes */
+            bytes: number;
+        };
+        /** ExportToFile */
+        ExportToFile: {
+            /** Lang */
+            lang?: string | null;
+            /**
+             * Summary
+             * @default true
+             */
+            summary: boolean;
+            /**
+             * Annotations
+             * @default true
+             */
+            annotations: boolean;
+            /**
+             * Body
+             * @default true
+             */
+            body: boolean;
+            /**
+             * Translation
+             * @default below
+             * @enum {string}
+             */
+            translation: "off" | "below" | "only";
+            /**
+             * Qa
+             * @default false
+             */
+            qa: boolean;
+            /** Path */
+            path: string;
         };
         /** ExtractRequest */
         ExtractRequest: {
@@ -3114,6 +3275,221 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_annotations_documents__doc_id__annotations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_annotation_documents__doc_id__annotations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnotationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_annotation_annotations__annotation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                annotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_annotation_annotations__annotation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                annotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnotationPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_markdown_documents__doc_id__export_markdown_get: {
+        parameters: {
+            query?: {
+                lang?: string | null;
+                summary?: boolean;
+                annotations?: boolean;
+                body?: boolean;
+                translation?: "off" | "below" | "only";
+                qa?: boolean;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_markdown_to_file_documents__doc_id__export_markdown_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportToFile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportResult"];
                 };
             };
             /** @description Validation Error */

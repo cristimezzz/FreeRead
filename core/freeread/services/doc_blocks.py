@@ -27,6 +27,7 @@ class LoadedDoc:
     blocks: list[BlockRow]
     sections: list[dict[str, Any]]
     pages: dict[int, tuple[float, float]] = field(default_factory=dict)  # 页码 → (宽, 高)
+    meta: dict[str, Any] = field(default_factory=dict)  # ir.json 的 meta（标题、作者、DOI…）
 
     @property
     def title(self) -> str:
@@ -51,11 +52,13 @@ def load_doc(sessions: SessionFactory, paths: DataPaths, doc_id: str) -> LoadedD
         ir_rel, language = doc.ir_path, doc.language
     sections: list[dict[str, Any]] = []
     pages: dict[int, tuple[float, float]] = {}
+    meta: dict[str, Any] = {}
     if ir_rel:
         ir_path = paths.root / ir_rel
         if ir_path.is_file():
             ir = json.loads(ir_path.read_text(encoding="utf-8"))
             sections = ir.get("sections", [])
+            meta = ir.get("meta") or {}
             for p in (ir.get("source") or {}).get("pages", []):
                 pages[p["index"]] = (p["width"], p["height"])
-    return LoadedDoc(doc_id, language, blocks, sections, pages)
+    return LoadedDoc(doc_id, language, blocks, sections, pages, meta)

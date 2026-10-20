@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from freeread import __version__
 from freeread.api import (
+    annotations,
     documents,
     embedding,
     glossary,
@@ -109,6 +110,7 @@ def create_app(token: str | None = None, data_dir: Path | None = None) -> FastAP
     app.include_router(embedding.router)
     app.include_router(summary.router)
     app.include_router(qa.router)
+    app.include_router(annotations.router)
     return app
 
 

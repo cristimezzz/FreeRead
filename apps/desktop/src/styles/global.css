@@ -2254,3 +2254,215 @@ body.resizing .reader-pane {
 .gl-inline .search-note {
   margin: 4px 0 8px;
 }
+
+/* 高亮与批注：五种颜色（半透明，深浅色主题通用） */
+[data-color="yellow"] {
+  --mark: #f2c230;
+}
+[data-color="green"] {
+  --mark: #5bb974;
+}
+[data-color="blue"] {
+  --mark: #5b9bea;
+}
+[data-color="pink"] {
+  --mark: #e57ab0;
+}
+[data-color="purple"] {
+  --mark: #9b7be0;
+}
+
+.rf-mark {
+  padding: 0.05em 0;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mark) 34%, transparent);
+  color: inherit;
+  cursor: pointer;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.rf-mark[data-note] {
+  text-decoration: underline dotted color-mix(in srgb, var(--mark) 90%, var(--ink));
+  text-underline-offset: 3px;
+}
+
+.rf-block[data-mark] {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mark) 80%, transparent);
+}
+
+.rf-block[data-mark="yellow"] { --mark: #f2c230; }
+.rf-block[data-mark="green"] { --mark: #5bb974; }
+.rf-block[data-mark="blue"] { --mark: #5b9bea; }
+.rf-block[data-mark="pink"] { --mark: #e57ab0; }
+.rf-block[data-mark="purple"] { --mark: #9b7be0; }
+
+.pdf-mark {
+  position: absolute;
+  width: 3px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--mark) 85%, transparent);
+  pointer-events: none;
+}
+
+/* 选中原文后的浮动工具条 */
+.sel-toolbar {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 14%);
+  transform: translate(-50%, calc(-100% - 8px));
+  animation: fade-in var(--dur-fast) var(--ease);
+}
+
+.sel-color {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--mark) 70%, var(--ink) 10%);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mark) 60%, transparent);
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease);
+}
+
+.sel-color:hover {
+  transform: scale(1.12);
+}
+
+.sel-color.sm {
+  width: 16px;
+  height: 16px;
+}
+
+.sel-color[aria-pressed="true"] {
+  outline: 2px solid var(--ink2);
+  outline-offset: 1px;
+}
+
+.sel-note {
+  height: 26px;
+  margin-left: 2px;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* 批注面板 */
+.ann-list {
+  flex: 1;
+  margin: 0;
+  padding: 0 24px 24px;
+  overflow: auto;
+  list-style: none;
+}
+
+.ann-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.ann-item[data-active] .ann-quote {
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.ann-quote {
+  display: -webkit-box;
+  width: 100%;
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--mark) 85%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--mark) 14%, transparent);
+  color: var(--ink2);
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.ann-note {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  resize: none;
+}
+
+.ann-note:hover {
+  border-color: var(--line);
+}
+
+.ann-note:focus {
+  border-color: var(--accent);
+  outline: 0;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.ann-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  opacity: 0.6;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.ann-item:hover .ann-tools,
+.ann-item:focus-within .ann-tools {
+  opacity: 1;
+}
+
+.ann-spacer {
+  flex: 1;
+}
+
+.ann-tools .ibtn {
+  width: 30px;
+  height: 30px;
+}
+
+/* 导出对话框 */
+.export-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 320px;
+}
+
+.export-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 40px;
+}
+
+.export-row select {
+  min-width: 160px;
+}
+
+.export-form .search-note {
+  margin: 8px 0 0;
+}

@@ -251,6 +251,9 @@ M2 实现了其中的单篇部分（没有图扩展）：检索词为当前问�
 | GET / POST | `/documents/{doc_id}/qa/sessions` | 单篇问答的对话列表 / 新建对话（M2） |
 | GET / DELETE | `/qa/sessions/{id}` | 对话详情（各轮）/ 删除 |
 | POST | `/qa/sessions/{id}/ask` | 提问（SSE：context / delta / answer）；M3 加 parent_id 支持分叉 |
+| GET / POST | `/documents/{doc_id}/annotations` | 高亮与批注列表 / 新增 |
+| PATCH / DELETE | `/annotations/{id}` | 改颜色、批注 / 删除 |
+| GET / POST | `/documents/{doc_id}/export/markdown` | 导出 Markdown（返回文本 / 写入本机文件） |
 | GET | `/kg/subgraph` | 按实体或文档范围取子图 |
 | GET | `/jobs/stream` | 任务进度 SSE |
 | GET/PUT | `/settings` | 设置（不含密钥） |

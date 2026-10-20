@@ -230,6 +230,30 @@ class SummaryRow(Base):
     __table_args__ = (UniqueConstraint("doc_id", "template_id", "lang"),)
 
 
+# ---------------------------------------------------------------- 批注
+
+
+class AnnotationRow(Base):
+    """高亮与批注。start / end 是块 text（含 ⟦KEY⟧ 占位符）里的字符区间，都为空表示整块；
+    quote 是区间里的原文，重新解析后靠它在新块里重新定位（IR §8），找不到时标 stale。"""
+
+    __tablename__ = "annotations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    block_id: Mapped[str] = mapped_column(String)
+    start: Mapped[int | None] = mapped_column(Integer)
+    end: Mapped[int | None] = mapped_column(Integer)
+    quote: Mapped[str] = mapped_column(Text, default="")
+    color: Mapped[str] = mapped_column(String, default="yellow")
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String, default="ok")  # ok | stale
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+    updated_at: Mapped[str] = mapped_column(String, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (Index("ix_annotations_doc_id_block_id", "doc_id", "block_id"),)
+
+
 # ---------------------------------------------------------------- 问答
 
 

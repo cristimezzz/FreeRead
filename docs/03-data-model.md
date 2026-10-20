@@ -5,7 +5,7 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms。下文标"计划"的表（annotations、kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations。下文标"计划"的表（kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -146,15 +146,22 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 ```
 维度随模型而定，所以不在迁移里建，由 `SqliteVecIndex.ensure` 按第一批向量的维度创建；当前模型和维度记在 `settings` 的内部键 `_vector_index`。表名带维度：WAL 模式下在显式事务里 DROP vec0 表会报 `SQL logic error`，所以换模型时只清空，旧维度的空表由 `drop_unused` 在 autocommit 连接上删除。
 
-### annotations（计划）
-| 列 | 说明 |
-|---|---|
-| id PK | |
-| doc_id, block_id | 关联块 |
-| kind | `highlight` / `note` |
-| range | JSON，块内字符区间，或 PDF 坐标 |
-| color, note | |
-| created_at | |
+### annotations
+高亮与批注（[M2 批注](m2/annotations.md)）。没有单独的 kind：有 note 的就是批注。原版视图没有文字层，按块的 anchors 画标记。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| doc_id | TEXT FK→documents ON DELETE CASCADE | |
+| block_id | TEXT | 不做外键：重新解析时按块映射迁移 |
+| start, end | INTEGER NULL | 块 text（含 `⟦KEY⟧` 占位符）里的字符区间；都为空表示整块 |
+| quote | TEXT | 区间里的原文，重新解析后用于重新定位 |
+| color | TEXT | `yellow` / `green` / `blue` / `pink` / `purple` |
+| note | TEXT | 批注内容，可为空 |
+| status | TEXT | `ok` / `stale`（重新解析后找不到原文；批注保留） |
+| created_at, updated_at | TEXT | |
+
+索引：`ix_annotations_doc_id_block_id`。
 
 ## 4. 翻译
 
