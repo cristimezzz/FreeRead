@@ -6,6 +6,8 @@ import { usePresence } from "../../components/motion";
 import { Resizer } from "../../components/Resizer";
 import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components/ui";
 import { useTranslations } from "../translate/useTranslations";
+import { GlossaryPanel } from "../translate/GlossaryPanel";
+import { useGlossary } from "../translate/useGlossary";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
 import { PdfView } from "./PdfView";
 import { ReflowView, type TranslationMode } from "./ReflowView";
@@ -77,9 +79,10 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const firstVisible = useRef<string | null>(null);
   const prevDoc = useRef<Document | null>(null);
   const loadedParse = useRef<string | null>(null);
-  // 右侧面板：文内搜索与总结共用一个位置
-  const [side, setSide] = useState<"search" | "summary" | "qa" | null>(null);
-  const toggleSide = (panel: "search" | "summary" | "qa") => setSide((cur) => (cur === panel ? null : panel));
+  // 右侧面板：文内搜索、总结、问答、术语表共用一个位置
+  type Side = "search" | "summary" | "qa" | "glossary";
+  const [side, setSide] = useState<Side | null>(null);
+  const toggleSide = (panel: Side) => setSide((cur) => (cur === panel ? null : panel));
   // 关闭时保留最后一个面板播放退出动画
   const lastSide = useRef(side);
   if (side) lastSide.current = side;
@@ -171,22 +174,30 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
 
   const lang = settings?.target_lang ?? "zh-CN";
   const translationOn = prefs.mode !== "off" && prefs.layout !== "pdf";
+  // 本文最近的整篇翻译任务：进度变化时把新译文合并进来
+  const docJob = Object.values(jobs)
+    .filter((j) => j.kind === "translate_doc" && j.payload.doc_id === docId && j.payload.lang === lang)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  const translatingAll = docJob?.status === "queued" || docJob?.status === "running";
   const translation = useTranslations(
     doc,
     translationOn,
     lang,
     irVersion,
+    docJob && docJob.status !== "queued" ? `${docJob.id}:${docJob.progress}:${docJob.status}` : "",
   );
 
   const { states, requestVisible } = translation;
   const summary = useSummary(docId, lang, side === "summary");
   // 两个功能都可能先问隐私确认：同一时间只会有一个在等
   const qa = useQa(docId, lang, side === "qa");
-  // 翻译、总结、问答都可能先问隐私确认：取第一个在等的
+  const glossary = useGlossary(docId, lang, side === "glossary");
+  // 翻译、总结、问答、术语抽取都可能先问隐私确认：取第一个在等的
   const asking = [
     { label: "翻译", ...translation },
     { label: "总结", ...summary },
     { label: "问答", ...qa },
+    { label: "术语抽取", ...glossary },
   ].find((f) => f.consent);
   const consentFor = asking?.label ?? null;
   const consent = asking?.consent ?? null;
@@ -333,6 +344,24 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               ]}
               onValue={(v) => setPref("mode", v)}
             />
+            {ready && (
+              <Button
+                variant="ghost"
+                small
+                icon="translate"
+                disabled={translatingAll}
+                title={
+                  translatingAll
+                    ? `正在翻译全文${docJob?.message ? `：${docJob.message}` : ""}`
+                    : "在后台翻译全文，之后离线也能读"
+                }
+                onClick={() => void translation.translateAll()}
+              >
+                {translatingAll
+                  ? `翻译中 ${Math.round((docJob?.progress ?? 0) * 100)}%`
+                  : "翻译全文"}
+              </Button>
+            )}
           </div>
         )}
         {layout !== "pdf" && (
@@ -366,6 +395,15 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             </Button>
             <Button variant="ghost" small icon="qa" pressed={side === "qa"} onClick={() => toggleSide("qa")}>
               问答
+            </Button>
+            <Button
+              variant="ghost"
+              small
+              icon="glossary"
+              pressed={side === "glossary"}
+              onClick={() => toggleSide("glossary")}
+            >
+              术语
             </Button>
           </div>
         )}
@@ -433,6 +471,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                   onClose={() => setSide(null)}
                 />
               )}
+              {shownSide === "glossary" && <GlossaryPanel state={glossary} onClose={() => setSide(null)} />}
               {shownSide === "qa" && (
                 <QaPanel
                   state={qa}

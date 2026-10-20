@@ -3,9 +3,12 @@
 1. 前端上报可视区域的 block_id → 已有译文立即返回，其余按阅读顺序、受限并发调用 LLM；
 2. 占位保护（domain/translate/placeholders.py）：校验失败不走缓存重试一次，仍失败记
    needs_review，译文回退为原文；
-3. 上下文：论文标题、当前章节标题、上一段原文（prompt translate@N）；
+3. 上下文：论文标题、当前章节标题、上一段原文、块里出现的术语（prompt translate@N）；
 4. 结果写入 translations（同一块同一语言只有一行 is_active），并逐块产出事件。
 首次向某个 provider 发送文档内容前，必须由用户在前端确认（settings.consented_providers）。
+
+整篇翻译是后台任务 translate_doc：按阅读顺序分批调用 translate_blocks，和阅读器的请求共用
+并发上限与"同一块只翻一次"的去重。
 """
 
 import asyncio
@@ -13,7 +16,7 @@ import logging
 from collections import Counter
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 from sqlalchemy import select, update
@@ -22,6 +25,8 @@ from freeread.domain.ir.models import TRANSLATABLE_TYPES, BlockType
 from freeread.domain.translate.placeholders import PlaceholderMismatch, protect, restore
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import BlockRow, DocumentRow, TranslationRow
+from freeread.infra.jobs.queue import JobOut, JobQueue
+from freeread.infra.jobs.worker import JobContext
 from freeread.infra.llm.default_gateway import DefaultGateway
 from freeread.infra.llm.errors import LLMError, MissingAPIKey, RouteNotConfigured
 from freeread.infra.llm.gateway import TaskKind
@@ -29,10 +34,14 @@ from freeread.infra.llm.prompts import PromptRegistry
 from freeread.services.llm_preflight import PreflightError, check_provider
 from freeread.services.settings import SettingsService
 
+if TYPE_CHECKING:
+    from freeread.services.glossary import GlossaryService
+
 log = logging.getLogger(__name__)
 
 PROMPT_ID = "translate"
 MAX_CONCURRENCY = 3
+DOC_BATCH = 30  # 整篇翻译每批的块数
 TRANSLATABLE = frozenset(t.value for t in TRANSLATABLE_TYPES)
 LANG_NAMES = {
     "zh": "中文",
@@ -106,8 +115,13 @@ class TranslateService:
         gateway: DefaultGateway,
         prompts: PromptRegistry,
         max_concurrency: int = MAX_CONCURRENCY,
+        *,
+        jobs: JobQueue | None = None,
+        glossary: "GlossaryService | None" = None,
     ) -> None:
         self._sessions = sessions
+        self._jobs = jobs
+        self.glossary = glossary
         self._settings = settings
         self._gateway = gateway
         self._prompts = prompts
@@ -200,6 +214,11 @@ class TranslateService:
     ) -> TranslationEvent:
         prompt = self._prompts.get(PROMPT_ID)
         protected = protect(block.text)
+        glossary = (
+            await asyncio.to_thread(self.glossary.terms_for_block, doc.doc_id, lang, block.text)
+            if self.glossary
+            else []
+        )
         messages = prompt.render(
             source_lang=_lang_name(doc.source_lang),
             target_lang=_lang_name(lang),
@@ -207,6 +226,7 @@ class TranslateService:
             section_title=doc.section_titles.get(block.section_id or "", ""),
             prev_text=self._prev_text(doc, block.id),
             text=protected.text,
+            glossary=glossary,
         )
         status, text = "ok", None
         async with self._sem:
@@ -248,6 +268,66 @@ class TranslateService:
             log.exception("save translation %s/%s failed", doc.doc_id, block.id)
             return TranslationEvent(block_id=block.id, status="error", message=str(e))
         return TranslationEvent(block_id=block.id, status=status, text=text)
+
+    # ------------------------------------------------------------ 整篇翻译
+
+    def request_doc(self, doc_id: str, lang: str | None = None) -> JobOut:
+        """排队整篇翻译。文档未就绪抛 LookupError，模型不可用抛 TranslateError。
+
+        设置了 glossary.auto_extract 且该文档还没有自动抽取的术语时，先排一个抽取任务，
+        翻译任务等它完成（抽取失败则翻译任务被取消）。
+        """
+        assert self._jobs is not None
+        self._load(doc_id)
+        _, _, lang = self.preflight(lang)
+        existing = self._jobs.find_active("translate_doc", doc_id=doc_id, lang=lang)
+        if existing:
+            return existing
+        depends_on = None
+        if (
+            self.glossary is not None
+            and self._settings.get().glossary.auto_extract
+            and not self.glossary.has_auto_terms(doc_id, lang)
+        ):
+            depends_on = self.glossary.request_extract(doc_id, lang).id
+        return self._jobs.enqueue("translate_doc", {"doc_id": doc_id, "lang": lang}, depends_on)
+
+    async def run_doc_job(self, ctx: JobContext) -> None:
+        doc_id = ctx.job.payload["doc_id"]
+        lang = ctx.job.payload.get("lang") or self._settings.get().target_lang
+        doc = await asyncio.to_thread(self._load, doc_id)
+        if _same_language(doc.source_lang, lang):
+            await ctx.report(1.0, "原文已是目标语言")
+            return
+        self.preflight(lang)
+        done_ids = {t.block_id for t in await asyncio.to_thread(self.list_for_doc, doc_id, lang)}
+        todo = [
+            bid
+            for bid in doc.order
+            if bid not in done_ids
+            and doc.blocks[bid].type in TRANSLATABLE
+            and doc.blocks[bid].text.strip()
+        ]
+        total = len(todo)
+        if not total:
+            await ctx.report(1.0, "全文已翻译")
+            return
+        counts: Counter[str] = Counter()
+        await ctx.report(0.0, f"0 / {total} 段")
+        for start in range(0, total, DOC_BATCH):
+            async for event in self.translate_blocks(doc_id, todo[start : start + DOC_BATCH], lang):
+                counts[event.status] += 1
+            n = min(start + DOC_BATCH, total)
+            await ctx.report(n / total, f"{n} / {total} 段")
+        translated = counts["ok"] + counts["needs_review"]
+        if counts["error"] and not translated:
+            raise RuntimeError(f"{counts['error']} 段全部翻译失败")
+        parts = [f"翻译 {translated} 段"]
+        if counts["needs_review"]:
+            parts.append(f"{counts['needs_review']} 段需要复核")
+        if counts["error"]:
+            parts.append(f"{counts['error']} 段失败")
+        await ctx.report(1.0, "，".join(parts))
 
     @staticmethod
     def _prev_text(doc: _DocContext, block_id: str) -> str:

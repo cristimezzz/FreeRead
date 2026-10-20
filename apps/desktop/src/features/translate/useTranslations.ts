@@ -1,8 +1,9 @@
 // 块级翻译（docs/01-architecture.md §5.5）：打开文档时先拉已有译文（离线可读），
 // 之后把可视区域内、还没有译文的块合并成一批，经 SSE 逐块拿结果。
+// 整篇翻译是后台任务（translate_doc）：任务进度变化时重新拉一次已有译文。
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, unwrap } from "../../api/client";
+import { api, preflightError, unwrap } from "../../api/client";
 import { TRANSLATABLE, type Document } from "../../api/ir";
 import { streamSse } from "../../api/sse";
 import { useApp } from "../../app/store";
@@ -29,10 +30,22 @@ interface BatchError {
 const DEBOUNCE_MS = 300;
 const MAX_BATCH = 30;
 
-/** irVersion：IR 重新加载（如升级为 MinerU 结果）后块 ID 会变，译文要重新拉。 */
-export function useTranslations(doc: Document | null, enabled: boolean, lang: string, irVersion = 0) {
+/**
+ * irVersion：IR 重新加载（如升级为 MinerU 结果）后块 ID 会变，译文要重新拉。
+ * reloadKey：整篇翻译任务的进度；变化时把新译文合并进来。
+ */
+export function useTranslations(
+  doc: Document | null,
+  enabled: boolean,
+  lang: string,
+  irVersion = 0,
+  reloadKey = "",
+) {
   const [states, setStates] = useState<Record<string, TranslationState>>({});
-  const [consent, setConsent] = useState<{ providerId: string; message: string } | null>(null);
+  // retry：确认后要重试的操作（可视区域翻译，或排队整篇翻译）
+  const [consent, setConsent] = useState<{ providerId: string; message: string; retry: "visible" | "doc" } | null>(
+    null,
+  );
   const statesRef = useRef(states);
   statesRef.current = states;
   const wanted = useRef<string[]>([]);
@@ -66,6 +79,27 @@ export function useTranslations(doc: Document | null, enabled: boolean, lang: st
       cancelled = true;
     };
   }, [docId, lang, irVersion]);
+
+  // 整篇翻译进行中：合并新译文，不动正在等待 / 出错的块
+  useEffect(() => {
+    if (!docId || !reloadKey) return;
+    let cancelled = false;
+    void api()
+      .GET("/documents/{doc_id}/translations", { params: { path: { doc_id: docId }, query: { lang } } })
+      .then((r) => {
+        if (cancelled) return;
+        const list = unwrap(r);
+        setStates((s) => {
+          const next = { ...s };
+          for (const t of list) next[t.block_id] = { status: t.status, text: t.text };
+          return next;
+        });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [docId, lang, reloadKey]);
 
   useEffect(() => {
     const current = aborts.current;
@@ -119,7 +153,7 @@ export function useTranslations(doc: Document | null, enabled: boolean, lang: st
             const err = e.data as BatchError;
             blocked.current = true;
             if (err.code === "consent_required" && err.provider_id) {
-              setConsent({ providerId: err.provider_id, message: err.message });
+              setConsent({ providerId: err.provider_id, message: err.message, retry: "visible" });
             } else {
               toast(`无法翻译：${err.message}。请到设置里配置大模型服务。`);
             }
@@ -151,6 +185,24 @@ export function useTranslations(doc: Document | null, enabled: boolean, lang: st
     [enabled, flush],
   );
 
+  /** 排队整篇翻译（后台任务，进度在任务栏）。 */
+  const translateAll = useCallback(async () => {
+    if (!docId) return;
+    try {
+      unwrap(
+        await api().POST("/documents/{doc_id}/translate", { params: { path: { doc_id: docId } }, body: { lang } }),
+      );
+      toast("已开始翻译全文，进度见底部任务栏");
+    } catch (e) {
+      const p = preflightError(e);
+      if (p?.code === "consent_required" && p.provider_id) {
+        setConsent({ providerId: p.provider_id, message: p.message, retry: "doc" });
+      } else {
+        toast(`无法翻译全文：${p?.message ?? e}${p ? "。请到设置里配置大模型服务。" : ""}`);
+      }
+    }
+  }, [docId, lang, toast]);
+
   /** 用户确认隐私提示后：记下同意，解除阻塞并重试。 */
   const acceptConsent = useCallback(async () => {
     const settings = useApp.getState().settings;
@@ -161,9 +213,13 @@ export function useTranslations(doc: Document | null, enabled: boolean, lang: st
     });
     setConsent(null);
     blocked.current = false;
+    if (consent.retry === "doc") {
+      void translateAll();
+      return;
+    }
     wanted.current = lastVisible.current;
     void flush();
-  }, [consent, flush]);
+  }, [consent, flush, translateAll]);
 
   // 打开翻译、或切换文档 / 语言后，补上当前可视区域
   useEffect(() => {
@@ -172,5 +228,5 @@ export function useTranslations(doc: Document | null, enabled: boolean, lang: st
 
   const declineConsent = useCallback(() => setConsent(null), []);
 
-  return { states, requestVisible, consent, acceptConsent, declineConsent };
+  return { states, requestVisible, translateAll, consent, acceptConsent, declineConsent };
 }

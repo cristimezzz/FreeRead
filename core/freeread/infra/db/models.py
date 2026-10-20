@@ -181,6 +181,29 @@ class TranslationRow(Base):
     )
 
 
+class GlossaryTermRow(Base):
+    """术语表。scope=global 全局生效；scope=doc:<doc_id> 只对该文档生效，并覆盖全局同名条目。
+
+    term_key 是归一化后的原文术语（小写、合并空白），用于去重；doc_id 只为删除文档时级联。
+    """
+
+    __tablename__ = "glossary_terms"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    scope: Mapped[str] = mapped_column(String)
+    doc_id: Mapped[str | None] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    lang: Mapped[str] = mapped_column(String)  # 目标语言
+    source_term: Mapped[str] = mapped_column(Text)
+    term_key: Mapped[str] = mapped_column(Text)
+    target_term: Mapped[str] = mapped_column(Text)
+    note: Mapped[str] = mapped_column(Text, default="")
+    origin: Mapped[str] = mapped_column(String, default="user")  # user | auto
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+    updated_at: Mapped[str] = mapped_column(String, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (UniqueConstraint("scope", "lang", "term_key"),)
+
+
 # ---------------------------------------------------------------- 总结
 
 

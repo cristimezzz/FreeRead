@@ -444,6 +444,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/translate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Translate Document
+         * @description 排队整篇翻译（任务 translate_doc；已有同一文档、同一语言的任务时返回它）。
+         *
+         *     模型不可用时 409，detail 为 {code, message, provider_id}。
+         */
+        post: operations["translate_document_documents__doc_id__translate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{doc_id}/translations": {
         parameters: {
             query?: never;
@@ -458,6 +480,65 @@ export interface paths {
         get: operations["list_translations_documents__doc_id__translations_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/glossary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Terms
+         * @description 不给 doc_id 只列全局条目；给了列全局 + 该文档条目（文档条目在前）。
+         */
+        get: operations["list_terms_glossary_get"];
+        put?: never;
+        /** Create Term */
+        post: operations["create_term_glossary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/glossary/{term_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Term */
+        delete: operations["delete_term_glossary__term_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Term */
+        patch: operations["update_term_glossary__term_id__patch"];
+        trace?: never;
+    };
+    "/documents/{doc_id}/glossary/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Terms
+         * @description 排队自动抽取（已有同一文档、同一语言的任务时返回它）。重新抽取只替换自动条目。
+         */
+        post: operations["extract_terms_documents__doc_id__glossary_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -738,6 +819,12 @@ export interface components {
              *     }
              */
             embedding: components["schemas"]["EmbeddingSettings"];
+            /**
+             * @default {
+             *       "auto_extract": false
+             *     }
+             */
+            glossary: components["schemas"]["GlossarySettings"];
         };
         /** Appearance */
         Appearance: {
@@ -920,6 +1007,19 @@ export interface components {
              * @default false
              */
             has_key: boolean;
+        };
+        /** ExtractRequest */
+        ExtractRequest: {
+            /** Lang */
+            lang?: string | null;
+        };
+        /** GlossarySettings */
+        GlossarySettings: {
+            /**
+             * Auto Extract
+             * @default false
+             */
+            auto_extract: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1348,6 +1448,55 @@ export interface components {
              */
             hint: string;
         };
+        /** TermIn */
+        TermIn: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Lang */
+            lang?: string | null;
+        };
+        /** TermOut */
+        TermOut: {
+            /** Id */
+            id: string;
+            /** Scope */
+            scope: string;
+            /** Lang */
+            lang: string;
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /** Note */
+            note: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "auto";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** TermPatch */
+        TermPatch: {
+            /** Source */
+            source?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Scope */
+            scope?: "global" | null;
+        };
         /** TestIn */
         TestIn: {
             /** Model */
@@ -1363,6 +1512,11 @@ export interface components {
             latency_ms: number;
             /** Error */
             error?: string | null;
+        };
+        /** TranslateDocRequest */
+        TranslateDocRequest: {
+            /** Lang */
+            lang?: string | null;
         };
         /** TranslateRequest */
         TranslateRequest: {
@@ -2324,6 +2478,43 @@ export interface operations {
             };
         };
     };
+    translate_document_documents__doc_id__translate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TranslateDocRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_translations_documents__doc_id__translations_get: {
         parameters: {
             query?: {
@@ -2346,6 +2537,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranslationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_terms_glossary_get: {
+        parameters: {
+            query?: {
+                lang?: string | null;
+                doc_id?: string | null;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_term_glossary_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_term_glossary__term_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                term_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_term_glossary__term_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                term_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_terms_documents__doc_id__glossary_extract_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExtractRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */

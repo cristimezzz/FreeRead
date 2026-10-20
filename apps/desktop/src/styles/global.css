@@ -2132,3 +2132,125 @@ body.resizing .reader-pane {
   }
 
 }
+
+/* 术语表（阅读器侧栏与设置页共用） */
+.gl-panel .gl-filter {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+}
+
+.gl-body {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 24px 24px;
+}
+
+.gl-inline .gl-body {
+  overflow: visible;
+  padding: 0;
+}
+
+.gl-inline .summary-controls {
+  padding: 0 0 8px;
+}
+
+.gl-body h3 {
+  margin: 18px 0 6px;
+  color: var(--ink3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.gl-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gl-term {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.gl-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.gl-arrow {
+  margin: 0 6px;
+  color: var(--ink3);
+}
+
+.gl-tgt {
+  color: var(--ink2);
+}
+
+.gl-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  vertical-align: 1px;
+}
+
+.gl-note-text {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+.gl-actions {
+  display: flex;
+  flex: none;
+  opacity: 0.55;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.gl-term:hover .gl-actions,
+.gl-term:focus-within .gl-actions {
+  opacity: 1;
+}
+
+.gl-actions .ibtn {
+  width: 30px;
+  height: 30px;
+}
+
+.gl-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.gl-form .inp {
+  min-width: 0;
+  height: 34px;
+}
+
+.gl-form .gl-note,
+.gl-form-actions {
+  grid-column: 1 / -1;
+}
+
+.gl-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gl-inline .search-note {
+  margin: 4px 0 8px;
+}

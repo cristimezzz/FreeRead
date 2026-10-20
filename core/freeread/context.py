@@ -18,6 +18,7 @@ from freeread.infra.parsers.registry import ParserRegistry
 from freeread.infra.parsers.subprocess_engine import FROZEN, set_engines_root
 from freeread.infra.zotero.local_api import LocalApiConnector
 from freeread.services.embed import EmbedService
+from freeread.services.glossary import GlossaryService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
@@ -42,6 +43,7 @@ class AppContext:
     prompts: PromptRegistry
     llm: DefaultGateway
     translate: TranslateService
+    glossary: GlossaryService
     embed: EmbedService
     search: SearchService
     summary: SummaryService
@@ -89,6 +91,10 @@ class AppContext:
         worker.register("model_download", embed.run_model_download_job, concurrency=1)
         parse.on_blocks_replaced = embed.enqueue_embed
         search = SearchService(sessions, embed)
+        glossary = GlossaryService(sessions, paths, jobs, settings, llm, prompts)
+        worker.register("glossary_extract", glossary.run_extract_job, concurrency=1)
+        translate = TranslateService(sessions, settings, llm, prompts, jobs=jobs, glossary=glossary)
+        worker.register("translate_doc", translate.run_doc_job, concurrency=1)
         return cls(
             paths=paths,
             engine=engine,
@@ -102,7 +108,8 @@ class AppContext:
             secrets=secrets,
             prompts=prompts,
             llm=llm,
-            translate=TranslateService(sessions, settings, llm, prompts),
+            translate=translate,
+            glossary=glossary,
             embed=embed,
             search=search,
             summary=SummaryService(sessions, paths, settings, llm, prompts),

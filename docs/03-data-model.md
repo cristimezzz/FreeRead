@@ -1,11 +1,11 @@
 # 数据模型
 
 - 版本：0.2（M1 已实现部分与代码同步）
-- 更新日期：2026-10-18
+- 更新日期：2026-10-20
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes。下文标"计划"的表（annotations、glossary_terms、kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms。下文标"计划"的表（annotations、kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -173,14 +173,23 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 索引：`ix_translations_doc_id_lang_block_id`。
 
-### glossary_terms（计划）
-| 列 | 说明 |
-|---|---|
-| id PK | |
-| scope | `global` / `collection:<id>` / `doc:<doc_id>` |
-| source_term, target_term, lang | |
-| note | |
-| origin | `user` / `auto` |
+### glossary_terms
+术语表（[M2 术语表](m2/glossary.md)）。翻译时只注入在块里出现的条目；文档条目覆盖全局同名条目。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| scope | TEXT | `global` / `doc:<doc_id>`（以后可能有 `collection:<id>`） |
+| doc_id | TEXT NULL FK→documents ON DELETE CASCADE | 文档条目的文档；全局条目为空。只用于删除文档时级联 |
+| lang | TEXT | 目标语言 |
+| source_term | TEXT | 原文术语（按用户 / 模型写法保存） |
+| term_key | TEXT | 归一化的原文术语（合并空白、casefold），用于去重 |
+| target_term | TEXT | 译法 |
+| note | TEXT | 说明，如缩写的全称 |
+| origin | TEXT | `user` / `auto`（自动抽取）。用户改过的 auto 条目变成 user，重新抽取不覆盖 |
+| created_at, updated_at | TEXT | |
+
+唯一约束 `(scope, lang, term_key)`。
 
 ## 5. 总结
 

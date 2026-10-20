@@ -182,7 +182,8 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
 
 - 占位符只校验**数量**（每个恰好出现一次），不校验顺序：中文语序调整后引用的先后可能合理地变化。模型写成 `⟦ CITE1 ⟧`、`[[CITE1]]`、`【CITE1】` 的会先统一回标准写法。只保护数字引用 `[1, 3–5]`；作者年份引用要翻译，不保护。
 - 不按章节分批，而是逐块调用、全局并发 3，可视区域内的块按请求顺序开始；同一块同一语言并发请求时只调用一次。前端断开（滚走）时，没有其他请求在等的块会被取消。
-- 上下文暂不含摘要和术语表（术语表在 M2）。
+- 上下文暂不含摘要。术语表（M2）只注入在该块里出现的条目，文档条目覆盖全局同名条目（[M2 术语表](m2/glossary.md)）。
+- 整篇翻译是后台任务 `translate_doc`：按阅读顺序分批调用同一套逐块翻译，与阅读器的请求共用并发上限和去重。
 - 重试一次时绕开 LLM 缓存（否则拿回同一个错误译文）；两次都失败时 `needs_review`，译文存原文。
 - 发送前检查：任务路由已配置、provider 有密钥、用户已确认向该 provider 发送内容（`settings.consented_providers`）；不满足时 SSE 发 `error` 事件（`route_not_configured` / `missing_api_key` / `consent_required`），已有译文仍先发出。
 - 文档语言与目标语言相同时不翻译。离线阅读走 `GET /documents/{id}/translations`，只读本地库。
@@ -242,7 +243,10 @@ M2 实现了其中的单篇部分（没有图扩展）：检索词为当前问�
 | GET | `/documents/{doc_id}/ir` | 获取 IR |
 | POST | `/documents/{doc_id}/parse` | （重新）解析，可指定引擎 / 页范围 |
 | POST | `/translate/blocks` | 翻译指定块（SSE 流式） |
-| GET/PUT | `/glossary` | 术语表 |
+| POST | `/documents/{doc_id}/translate` | 整篇后台翻译（返回任务） |
+| GET / POST | `/glossary` | 术语表列表（全局 / 全局 + 文档）/ 新增 |
+| PATCH / DELETE | `/glossary/{id}` | 修改（含提升为全局）/ 删除 |
+| POST | `/documents/{doc_id}/glossary/extract` | 自动抽取术语（返回任务） |
 | POST | `/documents/{doc_id}/summary` | 生成总结（SSE） |
 | GET / POST | `/documents/{doc_id}/qa/sessions` | 单篇问答的对话列表 / 新建对话（M2） |
 | GET / DELETE | `/qa/sessions/{id}` | 对话详情（各轮）/ 删除 |

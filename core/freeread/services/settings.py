@@ -91,6 +91,11 @@ class EmbeddingSettings(_Strict):
     mirror: str = Field(default="https://huggingface.co", pattern=r"^https?://\S+$")
 
 
+class GlossarySettings(_Strict):
+    # 翻译全文前，文档还没有自动抽取的术语时先抽取一次（会多一次大模型调用）
+    auto_extract: bool = False
+
+
 class AppSettings(_Strict):
     appearance: Appearance = Appearance()
     target_lang: str = "zh-CN"
@@ -104,6 +109,7 @@ class AppSettings(_Strict):
     # 用户已同意向其发送文档内容的 provider（architecture §10）
     consented_providers: list[str] = []
     embedding: EmbeddingSettings = EmbeddingSettings()
+    glossary: GlossarySettings = GlossarySettings()
 
     @model_validator(mode="after")
     def _check_refs(self) -> "AppSettings":
