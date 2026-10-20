@@ -131,7 +131,8 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
       const parseKey = [s.parser_engine, s.parser_version, s.normalizer_version, parsedAt].join("|");
       if (parseKey === loadedParse.current) return;
       try {
-        const ir = (await (await rawFetch(`/documents/${docId}/ir`)).json()) as Document;
+        // 重新解析后 IR 原地替换：不用 HTTP 缓存（旧版本 Core 的响应没有 Cache-Control，会被启发式缓存）
+        const ir = (await (await rawFetch(`/documents/${docId}/ir`, { cache: "no-cache" })).json()) as Document;
         if (cancelled) return;
         prevDoc.current = doc;
         loadedParse.current = parseKey;

@@ -66,7 +66,7 @@ export interface Document {
   doc_id: string;
   source: { pdf_sha256: string; page_count: number; pages: PageInfo[] };
   meta: { title?: string; language?: string };
-  parser: { engine: string; engine_version: string };
+  parser: { engine: string; engine_version: string; created_at: string };
   blocks: Block[];
   assets: Asset[];
 }

@@ -324,6 +324,8 @@ def test_documents_api(client, tmp_path):
 
     ir = client.get(f"/documents/{doc_id}/ir")
     assert ir.status_code == 200 and ir.json()["doc_id"] == doc_id
+    # 重新解析后 IR 原地替换：不能让 WebView 按 Last-Modified 启发式缓存旧结果
+    assert ir.headers["cache-control"] == "no-cache"
     pdf = client.get(f"/documents/{doc_id}/pdf")
     assert pdf.headers["content-type"] == "application/pdf" and pdf.content[:5] == b"%PDF-"
     assert client.get(f"/documents/{doc_id}/assets/..%2Fir.json").status_code == 404

@@ -81,6 +81,7 @@ export function ReflowView(p: Props) {
             block={b}
             docId={p.doc.doc_id}
             assetPath={b.asset_id ? assets.get(b.asset_id)?.path : undefined}
+            assetVersion={p.doc.parser.created_at}
             mode={TRANSLATABLE.has(b.type) ? p.mode : "off"}
             translation={p.translations[b.id]}
             located={p.located === b.id}
@@ -96,14 +97,17 @@ interface BlockProps {
   block: Block;
   docId: string;
   assetPath?: string;
+  assetVersion?: string;
   mode: TranslationMode;
   translation?: TranslationState;
   located: boolean;
   onLocate: (b: Block) => void;
 }
 
-const BlockView = memo(function BlockView({ block, docId, assetPath, mode, translation, located, onLocate }: BlockProps) {
-  const original = <BlockBody block={block} text={block.text} docId={docId} assetPath={assetPath} />;
+const BlockView = memo(function BlockView({ block, docId, assetPath, assetVersion, mode, translation, located, onLocate }: BlockProps) {
+  const original = (
+    <BlockBody block={block} text={block.text} docId={docId} assetPath={assetPath} assetVersion={assetVersion} />
+  );
   let content = original;
   if (mode !== "off") {
     const done = translation && (translation.status === "ok" || translation.status === "needs_review");
@@ -155,7 +159,19 @@ function Inline({ text, block }: { text: string; block: Block }) {
   );
 }
 
-function BlockBody({ block, text, docId, assetPath }: { block: Block; text: string; docId: string; assetPath?: string }) {
+function BlockBody({
+  block,
+  text,
+  docId,
+  assetPath,
+  assetVersion,
+}: {
+  block: Block;
+  text: string;
+  docId: string;
+  assetPath?: string;
+  assetVersion?: string;
+}) {
   const inline = <Inline text={text} block={block} />;
   switch (block.type) {
     case "title":
@@ -180,7 +196,7 @@ function BlockBody({ block, text, docId, assetPath }: { block: Block; text: stri
     case "figure":
       return (
         <figure>
-          <AssetImage docId={docId} path={assetPath} alt={block.label ?? "图"} />
+          <AssetImage docId={docId} path={assetPath} version={assetVersion} alt={block.label ?? "图"} />
         </figure>
       );
     case "table":
@@ -188,7 +204,7 @@ function BlockBody({ block, text, docId, assetPath }: { block: Block; text: stri
         <div className="rf-table" dangerouslySetInnerHTML={{ __html: renderTableHtml(block.html) }} />
       ) : (
         <figure>
-          <AssetImage docId={docId} path={assetPath} alt={block.label ?? "表"} />
+          <AssetImage docId={docId} path={assetPath} version={assetVersion} alt={block.label ?? "表"} />
         </figure>
       );
     case "caption":
@@ -204,8 +220,8 @@ function BlockBody({ block, text, docId, assetPath }: { block: Block; text: stri
   }
 }
 
-function AssetImage({ docId, path, alt }: { docId: string; path?: string; alt: string }) {
-  const url = useAssetUrl(docId, path);
+function AssetImage({ docId, path, version, alt }: { docId: string; path?: string; version?: string; alt: string }) {
+  const url = useAssetUrl(docId, path, version);
   if (!url) return <div className="rf-pending">（图片加载中）</div>;
   return <img src={url} alt={alt} loading="lazy" />;
 }
