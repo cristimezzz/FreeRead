@@ -66,6 +66,7 @@ class DocRef(BaseModel):
     doc_id: str | None
     filename: str
     parse_status: str | None  # pending | parsing | ready | failed
+    file_exists: bool  # 本地 PDF 是否还在（Zotero 端删除后、下次同步前为 False）
 
 
 class ItemOut(BaseModel):
@@ -101,12 +102,14 @@ class SyncResult:
     archived: int = 0
     collections: int = 0
     missing_files: int = 0
+    removed_files: int = 0
     parse_jobs: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         return (
             f"新增 {self.added}，更新 {self.updated}，归档 {self.archived}，"
-            f"缺失文件 {self.missing_files}，待解析 {len(self.parse_jobs)}"
+            f"缺失文件 {self.missing_files}，移除附件 {self.removed_files}，"
+            f"待解析 {len(self.parse_jobs)}"
         )
 
 
@@ -257,6 +260,13 @@ class LibraryService:
                     doc_id = self._upsert_attachment(s, row.id, att_key, path, hashes[att_key])
                     if in_scope:
                         to_parse.add(doc_id)
+                # Zotero 里已删除（或文件已不在本地）的 PDF 附件不再挂在条目下，否则会打开到 404
+                result.removed_files += s.execute(
+                    delete(AttachmentRow).where(
+                        AttachmentRow.item_id == row.id,
+                        AttachmentRow.zotero_key.not_in([k for k, _ in r.pdfs]),
+                    )
+                ).rowcount
 
             stale = s.scalars(
                 select(ItemRow).where(
@@ -506,6 +516,7 @@ class LibraryService:
                     doc_id=att.doc_id,
                     filename=Path(att.path).name,
                     parse_status=parse_status,
+                    file_exists=Path(att.path).is_file(),
                 )
             )
         return out
