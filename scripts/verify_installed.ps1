@@ -54,13 +54,13 @@ Emit ""
 Emit "## sidecar 启动到 /health（ms，每次新数据目录，含迁移）"
 Emit ""
 foreach ($mode in "cold", "warm") {
-    $out = @(& pwsh -NoProfile -File (Join-Path $PSScriptRoot "measure_sidecar.ps1") -Mode $mode -Runs $Runs -Dir $coreDir 2>&1)
+    $measured = @(& pwsh -NoProfile -File (Join-Path $PSScriptRoot "measure_sidecar.ps1") -Mode $mode -Runs $Runs -Dir $coreDir 2>&1)
     # 子进程里的异常不会传上来：看退出码，冒烟失败（导入 / 解析 / 检索）时打出全部输出（含 sidecar 日志）并失败
     if ($LASTEXITCODE) {
-        $out | ForEach-Object { Write-Host $_ }
+        $measured | ForEach-Object { Write-Host $_ }
         throw "sidecar 复测失败（$mode），见上面的 freeread-core 日志"
     }
-    Emit "- $($out[-1])"
+    Emit "- $($measured[-1])"
 }
 Emit ""
 
