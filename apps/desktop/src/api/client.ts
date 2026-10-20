@@ -46,9 +46,18 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** 服务端返回的原始 detail（可能是对象，如 {code, message, provider_id}） */
+    readonly detail?: unknown,
   ) {
     super(message);
   }
+}
+
+/** 调用大模型前的检查失败（409）：未配置、缺密钥、需要隐私确认。不是这类错误时返回 null。 */
+export function preflightError(e: unknown): { code: string; message: string; provider_id?: string | null } | null {
+  if (!(e instanceof ApiError) || e.status !== 409) return null;
+  const d = e.detail as { code?: unknown; message?: unknown } | undefined;
+  return d && typeof d === "object" && typeof d.code === "string" ? (d as never) : null;
 }
 
 async function errorDetail(resp: Response): Promise<string> {
@@ -65,7 +74,7 @@ export function unwrap<T>(result: { data?: T; error?: unknown; response: Respons
   if (result.error !== undefined || result.data === undefined) {
     const e = result.error as { detail?: unknown } | undefined;
     const detail = typeof e?.detail === "string" ? e.detail : JSON.stringify(e?.detail ?? e ?? "");
-    throw new ApiError(result.response.status, detail || `HTTP ${result.response.status}`);
+    throw new ApiError(result.response.status, detail || `HTTP ${result.response.status}`, e?.detail);
   }
   return result.data;
 }

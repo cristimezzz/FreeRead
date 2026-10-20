@@ -84,7 +84,7 @@ export function LibraryView() {
 
   const sync = async () => {
     try {
-      unwrap(await api().POST("/library/sync", { body: { collection_key: zoteroKey } }));
+      unwrap(await api().POST("/library/sync", { body: { collection_key: zoteroKey, full: false } }));
       toast(zoteroKey ? "已开始同步该分类" : "已开始从 Zotero 同步");
     } catch (e) {
       toast(`同步失败：${e}`);

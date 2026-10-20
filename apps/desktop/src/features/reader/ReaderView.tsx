@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, rawFetch, unwrap } from "../../api/client";
-import type { Anchor, Block, Document } from "../../api/ir";
+import { type Anchor, type Block, type Document, PLACEHOLDER_RE } from "../../api/ir";
 import { type DocumentStatus, useApp } from "../../app/store";
 import { usePresence } from "../../components/motion";
 import { Resizer } from "../../components/Resizer";
 import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components/ui";
 import { useTranslations } from "../translate/useTranslations";
+import { GlossaryPanel } from "../translate/GlossaryPanel";
+import { useGlossary } from "../translate/useGlossary";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
-import { PdfView } from "./PdfView";
+import { type PdfMark, PdfView } from "./PdfView";
+import { AnnotationsPanel } from "../annotations/AnnotationsPanel";
+import { ExportDialog } from "../annotations/ExportDialog";
+import { type Annotation, type AnnotationColor, useAnnotations } from "../annotations/useAnnotations";
 import { ReflowView, type TranslationMode } from "./ReflowView";
 import { SearchPanel } from "./SearchPanel";
 import { SummaryPanel } from "../summary/SummaryPanel";
@@ -77,9 +82,10 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const firstVisible = useRef<string | null>(null);
   const prevDoc = useRef<Document | null>(null);
   const loadedParse = useRef<string | null>(null);
-  // 右侧面板：文内搜索与总结共用一个位置
-  const [side, setSide] = useState<"search" | "summary" | "qa" | null>(null);
-  const toggleSide = (panel: "search" | "summary" | "qa") => setSide((cur) => (cur === panel ? null : panel));
+  // 右侧面板：文内搜索、总结、问答、术语表共用一个位置
+  type Side = "search" | "summary" | "qa" | "glossary" | "notes";
+  const [side, setSide] = useState<Side | null>(null);
+  const toggleSide = (panel: Side) => setSide((cur) => (cur === panel ? null : panel));
   // 关闭时保留最后一个面板播放退出动画
   const lastSide = useRef(side);
   if (side) lastSide.current = side;
@@ -92,6 +98,8 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const toast = useApp((s) => s.toast);
   const jobs = useApp((s) => s.jobs);
   const [reparseOpen, setReparseOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [focusAnn, setFocusAnn] = useState<string | null>(null);
   // 本文最近一次完成的解析任务：用同一引擎重新解析时引擎和版本号都不变，靠它触发重新拉 IR
   const parsedAt = Object.values(jobs).reduce(
     (m, j) =>
@@ -171,22 +179,66 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
 
   const lang = settings?.target_lang ?? "zh-CN";
   const translationOn = prefs.mode !== "off" && prefs.layout !== "pdf";
+  // 本文最近的整篇翻译任务：进度变化时把新译文合并进来
+  const docJob = Object.values(jobs)
+    .filter((j) => j.kind === "translate_doc" && j.payload.doc_id === docId && j.payload.lang === lang)
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0];
+  const translatingAll = docJob?.status === "queued" || docJob?.status === "running";
   const translation = useTranslations(
     doc,
     translationOn,
     lang,
     irVersion,
+    docJob && docJob.status !== "queued" ? `${docJob.id}:${docJob.progress}:${docJob.status}` : "",
   );
 
   const { states, requestVisible } = translation;
   const summary = useSummary(docId, lang, side === "summary");
   // 两个功能都可能先问隐私确认：同一时间只会有一个在等
   const qa = useQa(docId, lang, side === "qa");
-  // 翻译、总结、问答都可能先问隐私确认：取第一个在等的
+  const glossary = useGlossary(docId, lang, side === "glossary");
+  const ann = useAnnotations(docId, irVersion);
+  const wholeMarks = useMemo(
+    () => Object.fromEntries(Object.entries(ann.wholeBlocks).map(([id, a]) => [id, a.color])),
+    [ann.wholeBlocks],
+  );
+  const pdfMarks = useMemo<PdfMark[]>(
+    () =>
+      ann.items
+        .filter((a) => a.status === "ok")
+        .flatMap((a) => (byId.get(a.block_id)?.anchors ?? []).map((an) => ({ ...an, color: a.color }))),
+    [ann.items, byId],
+  );
+  const onAnnotate = useCallback(
+    async (sel: { blockId: string; start: number; end: number }, color: AnnotationColor, note: boolean) => {
+      const a = await ann.create(sel.blockId, sel.start, sel.end, color);
+      if (a && note) {
+        setFocusAnn(a.id);
+        setSide("notes");
+      }
+    },
+    [ann],
+  );
+  const onMarkClick = useCallback((id: string) => {
+    setFocusAnn(id);
+    setSide("notes");
+  }, []);
+  const quoteText = useCallback(
+    (a: Annotation) => {
+      const inlines = byId.get(a.block_id)?.inlines ?? [];
+      return a.quote.replace(PLACEHOLDER_RE, (_, key: string) => {
+        const latex = inlines.find((i) => i.key === key)?.latex;
+        return latex ? `$${latex}$` : "";
+      });
+    },
+    [byId],
+  );
+  // 翻译、总结、问答、术语抽取都可能先问隐私确认：取第一个在等的
   const asking = [
     { label: "翻译", ...translation },
     { label: "总结", ...summary },
     { label: "问答", ...qa },
+    { label: "术语抽取", ...glossary },
   ].find((f) => f.consent);
   const consentFor = asking?.label ?? null;
   const consent = asking?.consent ?? null;
@@ -290,6 +342,18 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           <Button
             variant="ghost"
             small
+            icon="upload"
+            disabled={!ready}
+            title="导出总结、批注、正文和译文为 Markdown"
+            onClick={() => setExportOpen(true)}
+          >
+            导出
+          </Button>
+        )}
+        {status && (
+          <Button
+            variant="ghost"
+            small
             icon="sync"
             disabled={Boolean(parsing)}
             title={parsing ? "正在解析，完成后可以重新解析" : "换一个解析引擎重新解析本文"}
@@ -299,6 +363,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           </Button>
         )}
       </header>
+      <ExportDialog
+        open={exportOpen}
+        docId={docId}
+        title={doc?.meta.title || title}
+        lang={lang}
+        onClose={() => setExportOpen(false)}
+      />
       <ReparseDialog
         open={reparseOpen}
         docId={docId}
@@ -333,6 +404,24 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               ]}
               onValue={(v) => setPref("mode", v)}
             />
+            {ready && (
+              <Button
+                variant="ghost"
+                small
+                icon="translate"
+                disabled={translatingAll}
+                title={
+                  translatingAll
+                    ? `正在翻译全文${docJob?.message ? `：${docJob.message}` : ""}`
+                    : "在后台翻译全文，之后离线也能读"
+                }
+                onClick={() => void translation.translateAll()}
+              >
+                {translatingAll
+                  ? `翻译中 ${Math.round((docJob?.progress ?? 0) * 100)}%`
+                  : "翻译全文"}
+              </Button>
+            )}
           </div>
         )}
         {layout !== "pdf" && (
@@ -367,6 +456,18 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             <Button variant="ghost" small icon="qa" pressed={side === "qa"} onClick={() => toggleSide("qa")}>
               问答
             </Button>
+            <Button
+              variant="ghost"
+              small
+              icon="glossary"
+              pressed={side === "glossary"}
+              onClick={() => toggleSide("glossary")}
+            >
+              术语
+            </Button>
+            <Button variant="ghost" small icon="edit" pressed={side === "notes"} onClick={() => toggleSide("notes")}>
+              批注{ann.items.length ? ` ${ann.items.length}` : ""}
+            </Button>
           </div>
         )}
       </div>
@@ -376,6 +477,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             <PdfView
               docId={docId}
               highlight={pdfHighlight}
+              marks={pdfMarks}
               scrollKey={pdfScroll}
               onPoint={onPoint}
               onError={onPdfError}
@@ -402,6 +504,10 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               fontSize={prefs.fontSize}
               onLocate={onLocateBlock}
               onVisible={onVisible}
+              marks={ann.marks}
+              wholeMarks={wholeMarks}
+              onAnnotate={onAnnotate}
+              onMarkClick={onMarkClick}
             />
           )}
         </div>
@@ -430,6 +536,17 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                   state={summary}
                   blockText={(id) => blockPreview(byId.get(id))}
                   onPick={jumpTo}
+                  onClose={() => setSide(null)}
+                />
+              )}
+              {shownSide === "glossary" && <GlossaryPanel state={glossary} onClose={() => setSide(null)} />}
+              {shownSide === "notes" && (
+                <AnnotationsPanel
+                  state={ann}
+                  quoteText={quoteText}
+                  focusId={focusAnn}
+                  onPick={jumpTo}
+                  onExport={() => setExportOpen(true)}
                   onClose={() => setSide(null)}
                 />
               )}

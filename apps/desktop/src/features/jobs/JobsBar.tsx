@@ -9,6 +9,8 @@ const KIND_LABEL: Record<string, string> = {
   parse_hq: "高质量解析",
   embed: "建立语义索引",
   model_download: "下载嵌入模型",
+  translate_doc: "翻译全文",
+  glossary_extract: "抽取术语",
 };
 
 export function JobsBar() {

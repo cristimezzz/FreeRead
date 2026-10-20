@@ -3,6 +3,10 @@
 前提：Zotero 7 正在运行，并在 设置 → 高级 中启用了"允许此计算机上的其他应用程序与 Zotero 通信"
 （prefs: extensions.zotero.httpServer.localAPI.enabled = true）。
 接口与 Zotero Web API v3 相同，库前缀为 /api/users/0/。
+
+增量：since 只作用于普通条目；附件每次全量读（只有元数据，很快），这样变化了的条目带着完整的
+附件列表，只变了附件的条目也会被带上（父条目按 itemKey 补读）。本地 API 没有 /deleted，
+删除（含移入回收站）靠 items?format=versions 一次取回全部现存 key 来发现。
 """
 
 import re
@@ -12,10 +16,17 @@ from urllib.parse import unquote, urlparse
 
 import httpx
 
-from freeread.infra.zotero.base import Attachment, Collection, Item
+from freeread.infra.zotero.base import (
+    Attachment,
+    Collection,
+    Item,
+    ZoteroUnavailableError,
+    storage_candidates,
+)
 
 DEFAULT_BASE_URL = "http://localhost:23119/api/users/0/"
 PAGE_SIZE = 100
+KEY_BATCH = 50  # Web API 的 itemKey 参数最多 50 个
 SKIP_TYPES = frozenset({"attachment", "note", "annotation"})
 YEAR_RE = re.compile(r"\b(\d{4})\b")
 # 不同条目类型的"发表于"字段
@@ -30,8 +41,7 @@ VENUE_FIELDS = (
 )
 
 
-class ZoteroUnavailableError(RuntimeError):
-    pass
+__all__ = ["LocalApiConnector", "ZoteroUnavailableError", "default_data_dir"]
 
 
 def default_data_dir() -> Path:
@@ -39,7 +49,8 @@ def default_data_dir() -> Path:
 
 
 class LocalApiConnector:
-    source_id = "zotero-local"
+    source_id = "zotero_local"
+    incremental = True
 
     def __init__(
         self,
@@ -107,7 +118,22 @@ class LocalApiConnector:
     async def list_items(self, since_version: int | None = None) -> list[Item]:
         params = {"since": since_version} if since_version is not None else {}
         rows = await self._get_all("items", {"itemType": "-attachment", **params})
-        att_rows = await self._get_all("items", {"itemType": "attachment", **params})
+        att_rows = await self._get_all("items", {"itemType": "attachment"})
+        if since_version is not None:
+            # 只有附件变了的条目：补读父条目；没变的独立附件不再返回
+            have = {r["key"] for r in rows}
+            changed = [r for r in att_rows if _version(r) > since_version]
+            parents = sorted(
+                {p for r in changed if (p := r["data"].get("parentItem")) and p not in have}
+            )
+            for i in range(0, len(parents), KEY_BATCH):
+                rows += await self._get_all(
+                    "items", {"itemKey": ",".join(parents[i : i + KEY_BATCH])}
+                )
+            changed_keys = {r["key"] for r in changed}
+            att_rows = [
+                r for r in att_rows if r["data"].get("parentItem") or r["key"] in changed_keys
+            ]
 
         attachments: dict[str, list[Attachment]] = {}
         standalone: list[Item] = []
@@ -122,7 +148,7 @@ class LocalApiConnector:
                 standalone.append(
                     Item(
                         key=r["key"],
-                        version=r.get("version", d.get("version", 0)),
+                        version=_version(r),
                         item_type="attachment",
                         title=d.get("title") or att.filename or r["key"],
                         collection_keys=d.get("collections", []),
@@ -141,7 +167,7 @@ class LocalApiConnector:
             items.append(
                 Item(
                     key=r["key"],
-                    version=r.get("version", d.get("version", 0)),
+                    version=_version(r),
                     item_type=d["itemType"],
                     title=d.get("title") or "",
                     creators=d.get("creators", []),
@@ -157,18 +183,33 @@ class LocalApiConnector:
             )
         return items + standalone
 
+    async def list_keys(self) -> set[str] | None:
+        """库里现存的全部条目 key（含附件、笔记，不含回收站）。不支持时返回 None。"""
+        try:
+            resp = await self._client.get("items", params={"format": "versions"})
+        except httpx.HTTPError:
+            return None
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        total = resp.headers.get("Total-Results")
+        if not isinstance(data, dict) or (total is not None and int(total) != len(data)):
+            return None  # 被分页截断时不能用来判断删除
+        return set(data)
+
     async def resolve_attachment(self, item: Item, attachment: Attachment) -> Path | None:
         candidates: list[Path] = []
         if attachment.href and attachment.href.startswith("file:"):
             candidates.append(_path_from_file_url(attachment.href))
-        if attachment.path and not attachment.path.startswith("storage:"):
-            candidates.append(Path(attachment.path))  # linked file
-        if attachment.filename:
-            candidates.append(self.data_dir / "storage" / attachment.key / attachment.filename)
+        candidates += storage_candidates(self.data_dir, attachment)
         for c in candidates:
             if c.is_file():
                 return c
         return None
+
+
+def _version(r: dict) -> int:
+    return int(r.get("version", r.get("data", {}).get("version", 0)) or 0)
 
 
 def _attachment_from_row(r: dict) -> Attachment:

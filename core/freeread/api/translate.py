@@ -1,4 +1,4 @@
-"""块级翻译（SSE）与已有译文。"""
+"""块级翻译（SSE）、整篇后台翻译与已有译文。"""
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -9,7 +9,9 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from freeread.api.deps import Ctx
+from freeread.api.glossary import preflight_http
 from freeread.api.sse import encode, sse_response
+from freeread.infra.jobs.queue import JobOut
 from freeread.services.translate import TranslateError, TranslationOut
 
 router = APIRouter(tags=["translate"])
@@ -53,6 +55,24 @@ async def translate_blocks(ctx: Ctx, body: TranslateRequest, request: Request):
         yield encode("done", {})
 
     return sse_response(stream())
+
+
+class TranslateDocRequest(BaseModel):
+    lang: str | None = None  # 默认取设置中的目标语言
+
+
+@router.post("/documents/{doc_id}/translate", response_model=JobOut, status_code=202)
+def translate_document(ctx: Ctx, doc_id: str, body: TranslateDocRequest | None = None) -> JobOut:
+    """排队整篇翻译（任务 translate_doc；已有同一文档、同一语言的任务时返回它）。
+
+    模型不可用时 409，detail 为 {code, message, provider_id}。
+    """
+    try:
+        return ctx.translate.request_doc(doc_id, (body or TranslateDocRequest()).lang)
+    except LookupError as e:
+        raise HTTPException(404 if "不存在" in str(e) else 409, str(e)) from e
+    except TranslateError as e:
+        raise preflight_http(e) from e
 
 
 @router.get("/documents/{doc_id}/translations", response_model=list[TranslationOut])

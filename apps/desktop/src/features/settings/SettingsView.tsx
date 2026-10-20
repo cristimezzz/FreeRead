@@ -4,7 +4,10 @@ import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
 import { ACCENT_PRESETS } from "../../app/theme";
 import { Button, IconButton, Progress, Segmented, Select, Switch, TextField } from "../../components/ui";
+import { GlossaryPanel } from "../translate/GlossaryPanel";
+import { useGlossary } from "../translate/useGlossary";
 import { SETTINGS_SECTIONS } from "./sections";
+import { ZoteroSection } from "./ZoteroSection";
 
 type Provider = Schemas["ProviderConfig"];
 type Engine = Schemas["EngineOut"];
@@ -434,6 +437,8 @@ export function SettingsView() {
           </Row>
         </Group>
 
+        <GlossarySection settings={settings} update={update} />
+
         <EmbeddingSection settings={settings} update={update} />
 
         <Group id="providers" title={sectionTitle("providers")}>
@@ -456,6 +461,8 @@ export function SettingsView() {
             添加服务
           </Button>
         </Group>
+
+        <ZoteroSection settings={settings} update={update} Group={Group} Row={Row} title={sectionTitle("zotero")} />
 
         <Group id="parse" title={sectionTitle("parse")}>
           <Row title="高质量解析引擎" desc="导入后先用快速模式秒级出可读版本，再在后台用高质量引擎升级">
@@ -998,6 +1005,29 @@ function EmbeddingSection({
           </Button>
         </Row>
       )}
+    </Group>
+  );
+}
+
+/** 术语表：翻译全文前自动抽取的开关 + 全局术语（对所有文档生效）。 */
+function GlossarySection({ settings, update }: { settings: Settings; update: (p: Partial<Settings>) => Promise<void> }) {
+  const glossary = useGlossary(null, settings.target_lang, true);
+  return (
+    <Group id="glossary" title={sectionTitle("glossary")}>
+      <Row
+        title="翻译全文前自动抽取术语"
+        desc="文档还没有术语时，先让模型从论文中抽取一次（多一次模型调用），之后的译法更统一"
+        htmlFor="glossary-auto"
+      >
+        <Switch
+          id="glossary-auto"
+          label="翻译全文前自动抽取术语"
+          checked={settings.glossary.auto_extract}
+          onValue={(auto_extract) => update({ glossary: { ...settings.glossary, auto_extract } })}
+        />
+      </Row>
+      <p className="set-hint">全局术语对所有文档生效；文档里的同名术语优先。翻译时只会带上段落里出现的术语。</p>
+      <GlossaryPanel state={glossary} globalOnly />
     </Group>
   );
 }

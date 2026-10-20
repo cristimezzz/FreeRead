@@ -16,8 +16,13 @@ from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
 from freeread.infra.parsers.registry import ParserRegistry
 from freeread.infra.parsers.subprocess_engine import FROZEN, set_engines_root
-from freeread.infra.zotero.local_api import LocalApiConnector
+from freeread.infra.zotero.auto import AutoConnector
+from freeread.infra.zotero.local_api import LocalApiConnector, default_data_dir
+from freeread.infra.zotero.sqlite_snapshot import SqliteSnapshotConnector
+from freeread.services.annotations import AnnotationService
 from freeread.services.embed import EmbedService
+from freeread.services.export import ExportService
+from freeread.services.glossary import GlossaryService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
@@ -42,10 +47,13 @@ class AppContext:
     prompts: PromptRegistry
     llm: DefaultGateway
     translate: TranslateService
+    glossary: GlossaryService
     embed: EmbedService
     search: SearchService
     summary: SummaryService
     qa: QAService
+    annotations: AnnotationService
+    export: ExportService
 
     @classmethod
     def open(cls, data_dir: Path, secrets: SecretStore | None = None) -> "AppContext":
@@ -60,9 +68,20 @@ class AppContext:
         bus = EventBus()
         jobs = JobQueue(sessions, bus)
         worker = JobWorker(jobs, bus)
-        library = LibraryService(sessions, paths, jobs, LocalApiConnector)
-        worker.register("sync", library.run_sync_job)
         settings = SettingsService(sessions)
+
+        def zotero_connector():
+            cfg = settings.get().zotero
+            data_dir = Path(cfg.data_dir) if cfg.data_dir else default_data_dir()
+            if cfg.source == "sqlite":
+                return SqliteSnapshotConnector(data_dir, paths.zotero_snapshots)
+            local = LocalApiConnector(data_dir=data_dir)
+            if cfg.source == "local_api":
+                return local
+            return AutoConnector(local, SqliteSnapshotConnector(data_dir, paths.zotero_snapshots))
+
+        library = LibraryService(sessions, paths, jobs, zotero_connector)
+        worker.register("sync", library.run_sync_job)
         secrets = secrets if secrets is not None else SecretStore.from_env()
 
         def remote_parser(engine: str):
@@ -89,6 +108,13 @@ class AppContext:
         worker.register("model_download", embed.run_model_download_job, concurrency=1)
         parse.on_blocks_replaced = embed.enqueue_embed
         search = SearchService(sessions, embed)
+        summary = SummaryService(sessions, paths, settings, llm, prompts)
+        qa = QAService(sessions, paths, settings, llm, prompts, search)
+        annotations = AnnotationService(sessions)
+        glossary = GlossaryService(sessions, paths, jobs, settings, llm, prompts)
+        worker.register("glossary_extract", glossary.run_extract_job, concurrency=1)
+        translate = TranslateService(sessions, settings, llm, prompts, jobs=jobs, glossary=glossary)
+        worker.register("translate_doc", translate.run_doc_job, concurrency=1)
         return cls(
             paths=paths,
             engine=engine,
@@ -102,11 +128,14 @@ class AppContext:
             secrets=secrets,
             prompts=prompts,
             llm=llm,
-            translate=TranslateService(sessions, settings, llm, prompts),
+            translate=translate,
+            glossary=glossary,
             embed=embed,
             search=search,
-            summary=SummaryService(sessions, paths, settings, llm, prompts),
-            qa=QAService(sessions, paths, settings, llm, prompts, search),
+            summary=summary,
+            qa=qa,
+            annotations=annotations,
+            export=ExportService(sessions, paths, translate, summary, qa, annotations, settings),
         )
 
     def close(self) -> None:

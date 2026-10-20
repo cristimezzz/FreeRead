@@ -357,3 +357,99 @@ def test_item_collections_cascade(ctx):
         s.delete(s.get(CollectionRow, col.id))
     with ctx.sessions() as s:
         assert s.query(ItemCollectionRow).count() == 0
+
+
+class IncrementalConnector(FakeConnector):
+    """支持增量的假数据源：按版本过滤条目，list_keys 返回现存 key。"""
+
+    source_id = "zotero_local"
+    incremental = True
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.since_calls: list = []
+        self.keys_supported = True
+
+    async def list_items(self, since_version=None):
+        self.since_calls.append(since_version)
+        if since_version is None:
+            return self.items
+        return [i for i in self.items if i.version > since_version]
+
+    async def list_keys(self):
+        if not self.keys_supported:
+            return None
+        return {i.key for i in self.items} | {a.key for i in self.items for a in i.attachments}
+
+
+@pytest.fixture
+def inc(zotero):
+    return IncrementalConnector(zotero.collections, zotero.items, zotero.files, version=10)
+
+
+async def test_incremental_sync(ctx, inc):
+    use(ctx, inc)
+    first = await ctx.library.sync_zotero()
+    assert first.full and inc.since_calls == [None]
+    with ctx.sessions() as s:
+        full_at = s.get(SyncStateRow, "zotero_local").last_full_sync_at
+
+    # 没有变化：增量，不归档任何条目
+    second = await ctx.library.sync_zotero()
+    assert not second.full and inc.since_calls[-1] == 10
+    assert (second.added, second.updated, second.archived) == (0, 0, 0)
+    assert "增量（本地 API）" in second.summary()
+
+    # 改一条、删一条（含附件）、删 C 的一个附件
+    inc.items[0].title, inc.items[0].version = "Attention v2", 11
+    inc.items = [i for i in inc.items if i.key != "B"]
+    inc.items[1].attachments = [pdf_att("ATT_C")]  # C：ATT_GONE 本来就找不到文件
+    inc.library_version = 11
+    third = await ctx.library.sync_zotero()
+    assert not third.full and inc.since_calls[-1] == 10
+    assert (third.added, third.updated, third.archived) == (0, 1, 1)
+    assert ctx.library.list_items(status="archived").items[0].title == "Neural Machine Translation"
+    with ctx.sessions() as s:
+        assert s.query(AttachmentRow).filter_by(zotero_key="ATT_B").count() == 0
+        state = s.get(SyncStateRow, "zotero_local")
+        assert state.last_version == 11 and state.last_full_sync_at == full_at  # 增量不更新
+
+    # 用户要求完全同步
+    fourth = await ctx.library.sync_zotero(full=True)
+    assert fourth.full and inc.since_calls[-1] is None
+
+
+async def test_incremental_falls_back_to_full(ctx, inc, monkeypatch):
+    use(ctx, inc)
+    await ctx.library.sync_zotero()
+
+    inc.keys_supported = False  # 查不到现存 key：全量
+    assert (await ctx.library.sync_zotero()).full
+
+    inc.keys_supported = True
+    with ctx.sessions.begin() as s:
+        s.get(SyncStateRow, "zotero_local").last_full_sync_at = "2020-01-01T00:00:00.000Z"
+    assert (await ctx.library.sync_zotero()).full  # 距上次全量太久
+
+    inc.library_version = 0
+    await ctx.library.sync_zotero()
+    assert (await ctx.library.sync_zotero()).full  # 版本为 0：没用 Zotero 同步，版本不增长
+
+
+async def test_incremental_collection_sync_still_parses_unchanged_items(ctx, inc):
+    use(ctx, inc)
+    await ctx.library.sync_zotero("OTHER")  # 只为 OTHER 下的 C 建解析任务
+    c_doc = doc_id_for(sha256_file(inc.files["ATT_C"]))
+    assert parse_jobs(ctx) == {c_doc}
+
+    result = await ctx.library.sync_zotero("ROOT")  # 增量：没有变化，但 ROOT 下的条目要解析
+    assert not result.full
+    expected = {doc_id_for(sha256_file(inc.files[k])) for k in ("ATT_A", "ATT_B")}
+    assert parse_jobs(ctx) == expected | {c_doc}
+
+
+def test_sync_request_full_and_state_api(client, inc):
+    use(client.app.state.ctx, inc)
+    r = client.post("/library/sync", json={"full": True})
+    assert r.status_code == 202 and r.json()["payload"] == {"collection_key": None, "full": True}
+    assert client.get("/library/sync/state").json() == []

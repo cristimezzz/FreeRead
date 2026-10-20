@@ -155,9 +155,30 @@ export interface paths {
         put?: never;
         /**
          * Sync
-         * @description 从 Zotero 本地 API 同步，返回 sync 任务（进度见 /jobs/stream）。
+         * @description 从 Zotero 同步（本地 API 或数据库快照，见设置 zotero.source），返回 sync 任务
+         *     （进度见 /jobs/stream）。
          */
         post: operations["sync_library_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/sync/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync State
+         * @description 各数据源上次同步的库版本与时间。
+         */
+        get: operations["sync_state_library_sync_state_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -444,6 +465,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/translate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Translate Document
+         * @description 排队整篇翻译（任务 translate_doc；已有同一文档、同一语言的任务时返回它）。
+         *
+         *     模型不可用时 409，detail 为 {code, message, provider_id}。
+         */
+        post: operations["translate_document_documents__doc_id__translate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{doc_id}/translations": {
         parameters: {
             query?: never;
@@ -458,6 +501,65 @@ export interface paths {
         get: operations["list_translations_documents__doc_id__translations_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/glossary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Terms
+         * @description 不给 doc_id 只列全局条目；给了列全局 + 该文档条目（文档条目在前）。
+         */
+        get: operations["list_terms_glossary_get"];
+        put?: never;
+        /** Create Term */
+        post: operations["create_term_glossary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/glossary/{term_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Term */
+        delete: operations["delete_term_glossary__term_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Term */
+        patch: operations["update_term_glossary__term_id__patch"];
+        trace?: never;
+    };
+    "/documents/{doc_id}/glossary/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Terms
+         * @description 排队自动抽取（已有同一文档、同一语言的任务时返回它）。重新抽取只替换自动条目。
+         */
+        post: operations["extract_terms_documents__doc_id__glossary_extract_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -665,10 +767,131 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/annotations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Annotations
+         * @description 按阅读顺序排列（只读本地库）。
+         */
+        get: operations["list_annotations_documents__doc_id__annotations_get"];
+        put?: never;
+        /** Create Annotation */
+        post: operations["create_annotation_documents__doc_id__annotations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/annotations/{annotation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Annotation */
+        delete: operations["delete_annotation_annotations__annotation_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Annotation */
+        patch: operations["update_annotation_annotations__annotation_id__patch"];
+        trace?: never;
+    };
+    "/documents/{doc_id}/export/markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Markdown
+         * @description 导出为 Markdown 文本（浏览器模式下载用）。
+         */
+        get: operations["export_markdown_documents__doc_id__export_markdown_get"];
+        put?: never;
+        /**
+         * Export Markdown To File
+         * @description 导出并写入本机文件（桌面版）。
+         */
+        post: operations["export_markdown_to_file_documents__doc_id__export_markdown_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AnnotationIn */
+        AnnotationIn: {
+            /** Block Id */
+            block_id: string;
+            /** Start */
+            start?: number | null;
+            /** End */
+            end?: number | null;
+            /**
+             * Color
+             * @default yellow
+             * @enum {string}
+             */
+            color: "yellow" | "green" | "blue" | "pink" | "purple";
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+        };
+        /** AnnotationOut */
+        AnnotationOut: {
+            /** Id */
+            id: string;
+            /** Doc Id */
+            doc_id: string;
+            /** Block Id */
+            block_id: string;
+            /** Start */
+            start: number | null;
+            /** End */
+            end: number | null;
+            /** Quote */
+            quote: string;
+            /**
+             * Color
+             * @enum {string}
+             */
+            color: "yellow" | "green" | "blue" | "pink" | "purple";
+            /** Note */
+            note: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "stale";
+            /** Created At */
+            created_at: string;
+            /** Updated At */
+            updated_at: string;
+        };
+        /** AnnotationPatch */
+        AnnotationPatch: {
+            /** Color */
+            color?: ("yellow" | "green" | "blue" | "pink" | "purple") | null;
+            /** Note */
+            note?: string | null;
+        };
         /** AppSettings */
         AppSettings: {
             /**
@@ -738,6 +961,19 @@ export interface components {
              *     }
              */
             embedding: components["schemas"]["EmbeddingSettings"];
+            /**
+             * @default {
+             *       "auto_extract": false
+             *     }
+             */
+            glossary: components["schemas"]["GlossarySettings"];
+            /**
+             * @default {
+             *       "source": "auto",
+             *       "data_dir": ""
+             *     }
+             */
+            zotero: components["schemas"]["ZoteroSettings"];
         };
         /** Appearance */
         Appearance: {
@@ -920,6 +1156,59 @@ export interface components {
              * @default false
              */
             has_key: boolean;
+        };
+        /** ExportResult */
+        ExportResult: {
+            /** Path */
+            path: string;
+            /** Bytes */
+            bytes: number;
+        };
+        /** ExportToFile */
+        ExportToFile: {
+            /** Lang */
+            lang?: string | null;
+            /**
+             * Summary
+             * @default true
+             */
+            summary: boolean;
+            /**
+             * Annotations
+             * @default true
+             */
+            annotations: boolean;
+            /**
+             * Body
+             * @default true
+             */
+            body: boolean;
+            /**
+             * Translation
+             * @default below
+             * @enum {string}
+             */
+            translation: "off" | "below" | "only";
+            /**
+             * Qa
+             * @default false
+             */
+            qa: boolean;
+            /** Path */
+            path: string;
+        };
+        /** ExtractRequest */
+        ExtractRequest: {
+            /** Lang */
+            lang?: string | null;
+        };
+        /** GlossarySettings */
+        GlossarySettings: {
+            /**
+             * Auto Extract
+             * @default false
+             */
+            auto_extract: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -1314,6 +1603,22 @@ export interface components {
         SyncRequest: {
             /** Collection Key */
             collection_key?: string | null;
+            /**
+             * Full
+             * @default false
+             */
+            full: boolean;
+        };
+        /** SyncStateOut */
+        SyncStateOut: {
+            /** Source */
+            source: string;
+            /** Last Version */
+            last_version: number | null;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Last Full Sync At */
+            last_full_sync_at: string | null;
         };
         /**
          * TaskKind
@@ -1348,6 +1653,55 @@ export interface components {
              */
             hint: string;
         };
+        /** TermIn */
+        TermIn: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Doc Id */
+            doc_id?: string | null;
+            /** Lang */
+            lang?: string | null;
+        };
+        /** TermOut */
+        TermOut: {
+            /** Id */
+            id: string;
+            /** Scope */
+            scope: string;
+            /** Lang */
+            lang: string;
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /** Note */
+            note: string;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "user" | "auto";
+            /** Updated At */
+            updated_at: string;
+        };
+        /** TermPatch */
+        TermPatch: {
+            /** Source */
+            source?: string | null;
+            /** Target */
+            target?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Scope */
+            scope?: "global" | null;
+        };
         /** TestIn */
         TestIn: {
             /** Model */
@@ -1363,6 +1717,11 @@ export interface components {
             latency_ms: number;
             /** Error */
             error?: string | null;
+        };
+        /** TranslateDocRequest */
+        TranslateDocRequest: {
+            /** Lang */
+            lang?: string | null;
         };
         /** TranslateRequest */
         TranslateRequest: {
@@ -1405,6 +1764,20 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ZoteroSettings */
+        ZoteroSettings: {
+            /**
+             * Source
+             * @default auto
+             * @enum {string}
+             */
+            source: "auto" | "local_api" | "sqlite";
+            /**
+             * Data Dir
+             * @default
+             */
+            data_dir: string;
         };
     };
     responses: never;
@@ -1704,6 +2077,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_state_library_sync_state_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -2324,6 +2728,43 @@ export interface operations {
             };
         };
     };
+    translate_document_documents__doc_id__translate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TranslateDocRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_translations_documents__doc_id__translations_get: {
         parameters: {
             query?: {
@@ -2346,6 +2787,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TranslationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_terms_glossary_get: {
+        parameters: {
+            query?: {
+                lang?: string | null;
+                doc_id?: string | null;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_term_glossary_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_term_glossary__term_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                term_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_term_glossary__term_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                term_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TermPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TermOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_terms_documents__doc_id__glossary_extract_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExtractRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
                 };
             };
             /** @description Validation Error */
@@ -2749,6 +3364,221 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_annotations_documents__doc_id__annotations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_annotation_documents__doc_id__annotations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnotationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_annotation_annotations__annotation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                annotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_annotation_annotations__annotation_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                annotation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnnotationPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnnotationOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_markdown_documents__doc_id__export_markdown_get: {
+        parameters: {
+            query?: {
+                lang?: string | null;
+                summary?: boolean;
+                annotations?: boolean;
+                body?: boolean;
+                translation?: "off" | "below" | "only";
+                qa?: boolean;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_markdown_to_file_documents__doc_id__export_markdown_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ExportToFile"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportResult"];
                 };
             };
             /** @description Validation Error */

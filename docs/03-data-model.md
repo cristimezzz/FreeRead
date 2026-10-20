@@ -1,11 +1,11 @@
 # 数据模型
 
 - 版本：0.2（M1 已实现部分与代码同步）
-- 更新日期：2026-10-18
+- 更新日期：2026-10-20
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes。下文标"计划"的表（annotations、glossary_terms、kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations；迁移 `0007_sync_state_full` 给 sync_state 加了 last_full_sync_at。下文标"计划"的表（kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -77,9 +77,10 @@ settings       sync_state
 ### sync_state
 | 列 | 说明 |
 |---|---|
-| source PK | `zotero_local`（M1 只实现了这一种）；计划：`zotero_sqlite` / `zotero_web:<library_id>` |
-| last_version | INTEGER NULL，最后同步的 Zotero library version |
+| source PK | `zotero_local`（本地 API）/ `zotero_sqlite`（数据库快照）；计划：`zotero_web:<library_id>` |
+| last_version | INTEGER NULL，最后同步的 Zotero library version；增量同步从这里开始 |
 | last_synced_at | TEXT NULL |
+| last_full_sync_at | TEXT NULL，上次全量同步；超过 7 天下次同步做全量（[M2 Zotero 同步](m2/zotero-sync.md)） |
 
 ## 3. 文档与块
 
@@ -146,15 +147,22 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 ```
 维度随模型而定，所以不在迁移里建，由 `SqliteVecIndex.ensure` 按第一批向量的维度创建；当前模型和维度记在 `settings` 的内部键 `_vector_index`。表名带维度：WAL 模式下在显式事务里 DROP vec0 表会报 `SQL logic error`，所以换模型时只清空，旧维度的空表由 `drop_unused` 在 autocommit 连接上删除。
 
-### annotations（计划）
-| 列 | 说明 |
-|---|---|
-| id PK | |
-| doc_id, block_id | 关联块 |
-| kind | `highlight` / `note` |
-| range | JSON，块内字符区间，或 PDF 坐标 |
-| color, note | |
-| created_at | |
+### annotations
+高亮与批注（[M2 批注](m2/annotations.md)）。没有单独的 kind：有 note 的就是批注。原版视图没有文字层，按块的 anchors 画标记。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| doc_id | TEXT FK→documents ON DELETE CASCADE | |
+| block_id | TEXT | 不做外键：重新解析时按块映射迁移 |
+| start, end | INTEGER NULL | 块 text（含 `⟦KEY⟧` 占位符）里的字符区间；都为空表示整块 |
+| quote | TEXT | 区间里的原文，重新解析后用于重新定位 |
+| color | TEXT | `yellow` / `green` / `blue` / `pink` / `purple` |
+| note | TEXT | 批注内容，可为空 |
+| status | TEXT | `ok` / `stale`（重新解析后找不到原文；批注保留） |
+| created_at, updated_at | TEXT | |
+
+索引：`ix_annotations_doc_id_block_id`。
 
 ## 4. 翻译
 
@@ -173,14 +181,23 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 索引：`ix_translations_doc_id_lang_block_id`。
 
-### glossary_terms（计划）
-| 列 | 说明 |
-|---|---|
-| id PK | |
-| scope | `global` / `collection:<id>` / `doc:<doc_id>` |
-| source_term, target_term, lang | |
-| note | |
-| origin | `user` / `auto` |
+### glossary_terms
+术语表（[M2 术语表](m2/glossary.md)）。翻译时只注入在块里出现的条目；文档条目覆盖全局同名条目。
+
+| 列 | 类型 | 说明 |
+|---|---|---|
+| id | TEXT PK | ULID |
+| scope | TEXT | `global` / `doc:<doc_id>`（以后可能有 `collection:<id>`） |
+| doc_id | TEXT NULL FK→documents ON DELETE CASCADE | 文档条目的文档；全局条目为空。只用于删除文档时级联 |
+| lang | TEXT | 目标语言 |
+| source_term | TEXT | 原文术语（按用户 / 模型写法保存） |
+| term_key | TEXT | 归一化的原文术语（合并空白、casefold），用于去重 |
+| target_term | TEXT | 译法 |
+| note | TEXT | 说明，如缩写的全称 |
+| origin | TEXT | `user` / `auto`（自动抽取）。用户改过的 auto 条目变成 user，重新抽取不覆盖 |
+| created_at, updated_at | TEXT | |
+
+唯一约束 `(scope, lang, term_key)`。
 
 ## 5. 总结
 

@@ -100,7 +100,7 @@ class ZoteroConnector(Protocol):
 | `SqliteSnapshotConnector` | 能找到 Zotero 数据目录 | Zotero 未运行时；**先复制 `zotero.sqlite` 到快照目录再只读打开**，附件路径从 `storage/<key>/` 解析 |
 | `WebApiConnector` | 用户提供 API Key 与 library ID | 云同步；后续用于写回 |
 
-同步策略：记录每个 library 的最后同步 version，增量拉取；本地以 `zotero_key` 作为外部主键做 upsert；Zotero 端删除的条目在本地标记为 `archived`，不立即物理删除。M1 先做全量拉取（`LibraryService.sync_zotero`），增量在 M2。
+同步策略：记录每个 library 的最后同步 version，增量拉取；本地以 `zotero_key` 作为外部主键做 upsert；Zotero 端删除的条目在本地标记为 `archived`，不立即物理删除。M2 实现了增量（本地 API 的 `since` + `format=versions` 发现删除）和快照导入，设置 `zotero.source` 默认 auto：先本地 API，Zotero 没运行时读快照；详见 [M2 Zotero 同步](m2/zotero-sync.md)。
 
 - 没有父条目的独立 PDF 也作为文献导入（`item_type = attachment`，`extra.standalone = true`，标题取附件标题或文件名）。
 - 同步时可以指定一个分类：元数据仍全量更新，只为该分类（含子分类）下的条目建解析任务。
@@ -182,7 +182,8 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
 
 - 占位符只校验**数量**（每个恰好出现一次），不校验顺序：中文语序调整后引用的先后可能合理地变化。模型写成 `⟦ CITE1 ⟧`、`[[CITE1]]`、`【CITE1】` 的会先统一回标准写法。只保护数字引用 `[1, 3–5]`；作者年份引用要翻译，不保护。
 - 不按章节分批，而是逐块调用、全局并发 3，可视区域内的块按请求顺序开始；同一块同一语言并发请求时只调用一次。前端断开（滚走）时，没有其他请求在等的块会被取消。
-- 上下文暂不含摘要和术语表（术语表在 M2）。
+- 上下文暂不含摘要。术语表（M2）只注入在该块里出现的条目，文档条目覆盖全局同名条目（[M2 术语表](m2/glossary.md)）。
+- 整篇翻译是后台任务 `translate_doc`：按阅读顺序分批调用同一套逐块翻译，与阅读器的请求共用并发上限和去重。
 - 重试一次时绕开 LLM 缓存（否则拿回同一个错误译文）；两次都失败时 `needs_review`，译文存原文。
 - 发送前检查：任务路由已配置、provider 有密钥、用户已确认向该 provider 发送内容（`settings.consented_providers`）；不满足时 SSE 发 `error` 事件（`route_not_configured` / `missing_api_key` / `consent_required`），已有译文仍先发出。
 - 文档语言与目标语言相同时不翻译。离线阅读走 `GET /documents/{id}/translations`，只读本地库。
@@ -242,11 +243,17 @@ M2 实现了其中的单篇部分（没有图扩展）：检索词为当前问�
 | GET | `/documents/{doc_id}/ir` | 获取 IR |
 | POST | `/documents/{doc_id}/parse` | （重新）解析，可指定引擎 / 页范围 |
 | POST | `/translate/blocks` | 翻译指定块（SSE 流式） |
-| GET/PUT | `/glossary` | 术语表 |
+| POST | `/documents/{doc_id}/translate` | 整篇后台翻译（返回任务） |
+| GET / POST | `/glossary` | 术语表列表（全局 / 全局 + 文档）/ 新增 |
+| PATCH / DELETE | `/glossary/{id}` | 修改（含提升为全局）/ 删除 |
+| POST | `/documents/{doc_id}/glossary/extract` | 自动抽取术语（返回任务） |
 | POST | `/documents/{doc_id}/summary` | 生成总结（SSE） |
 | GET / POST | `/documents/{doc_id}/qa/sessions` | 单篇问答的对话列表 / 新建对话（M2） |
 | GET / DELETE | `/qa/sessions/{id}` | 对话详情（各轮）/ 删除 |
 | POST | `/qa/sessions/{id}/ask` | 提问（SSE：context / delta / answer）；M3 加 parent_id 支持分叉 |
+| GET / POST | `/documents/{doc_id}/annotations` | 高亮与批注列表 / 新增 |
+| PATCH / DELETE | `/annotations/{id}` | 改颜色、批注 / 删除 |
+| GET / POST | `/documents/{doc_id}/export/markdown` | 导出 Markdown（返回文本 / 写入本机文件） |
 | GET | `/kg/subgraph` | 按实体或文档范围取子图 |
 | GET | `/jobs/stream` | 任务进度 SSE |
 | GET/PUT | `/settings` | 设置（不含密钥） |

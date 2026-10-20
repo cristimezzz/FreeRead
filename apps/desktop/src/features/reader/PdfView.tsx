@@ -3,7 +3,7 @@
 
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { coreInfo } from "../../api/client";
 import { pulse } from "../../components/motion";
 import type { Anchor } from "../../api/ir";
@@ -14,9 +14,19 @@ const PAGE_GAP = 20;
 const PADDING = 28; // 与 global.css 里 .pdf-view 的 padding 一致
 const RESIZE_DEBOUNCE = 120;
 
+/** 有批注的块：原版没有文字层，按块的位置在左边距画一条色条 */
+export interface PdfMark {
+  page: number;
+  bbox: Anchor["bbox"];
+  color: string;
+}
+
+const NO_MARKS: PdfMark[] = [];
+
 interface Props {
   docId: string;
   highlight: Anchor | null;
+  marks?: PdfMark[];
   /** 每次值变化时滚动到 highlight（定位来自重排视图时） */
   scrollKey: number;
   onPoint: (page: number, x: number, y: number) => void;
@@ -29,7 +39,7 @@ interface PageSize {
   height: number;
 }
 
-export function PdfView({ docId, highlight, scrollKey, onPoint, onError, style }: Props) {
+export function PdfView({ docId, highlight, marks, scrollKey, onPoint, onError, style }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const [pdf, setPdf] = useState<pdfjs.PDFDocumentProxy | null>(null);
   const [sizes, setSizes] = useState<PageSize[]>([]);
@@ -95,6 +105,12 @@ export function PdfView({ docId, highlight, scrollKey, onPoint, onError, style }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scrollKey]);
 
+  const marksByPage = useMemo(() => {
+    const out = new Map<number, PdfMark[]>();
+    for (const m of marks ?? []) out.set(m.page, [...(out.get(m.page) ?? []), m]);
+    return out;
+  }, [marks]);
+
   return (
     <div className="reader-pane pdf-view" ref={container} style={style}>
       {pdf &&
@@ -106,6 +122,7 @@ export function PdfView({ docId, highlight, scrollKey, onPoint, onError, style }
             size={s}
             scale={scale}
             highlight={highlight?.page === i ? highlight.bbox : null}
+            marks={marksByPage.get(i) ?? NO_MARKS}
             onPoint={onPoint}
           />
         ))}
@@ -119,10 +136,11 @@ interface PageProps {
   size: PageSize;
   scale: number;
   highlight: Anchor["bbox"] | null;
+  marks: PdfMark[];
   onPoint: (page: number, x: number, y: number) => void;
 }
 
-function PdfPage({ pdf, index, size, scale, highlight, onPoint }: PageProps) {
+function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PageProps) {
   const wrapper = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [visible, setVisible] = useState(false);
@@ -168,6 +186,14 @@ function PdfPage({ pdf, index, size, scale, highlight, onPoint }: PageProps) {
       onClick={click}
     >
       <canvas ref={canvas} aria-label={`第 ${index + 1} 页`} />
+      {marks.map((m, i) => (
+        <div
+          key={i}
+          className="pdf-mark"
+          data-color={m.color}
+          style={{ left: m.bbox[0] * scale - 7, top: m.bbox[1] * scale, height: (m.bbox[3] - m.bbox[1]) * scale }}
+        />
+      ))}
       {highlight && (
         <div
           className="pdf-highlight"

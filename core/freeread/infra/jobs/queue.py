@@ -81,6 +81,20 @@ class JobQueue:
         with self._sessions() as s:
             return [JobOut.model_validate(r) for r in s.scalars(q)]
 
+    def find_active(
+        self,
+        kind: str,
+        statuses: tuple[JobStatus, ...] = (JobStatus.QUEUED, JobStatus.RUNNING),
+        **payload: str,
+    ) -> JobOut | None:
+        """最近的一个指定状态的同类任务，payload 里的字段都要相等（用于去重）。"""
+        q = select(JobRow).where(JobRow.kind == kind, JobRow.status.in_(statuses))
+        for key, value in payload.items():
+            q = q.where(JobRow.payload[key].as_string() == value)
+        with self._sessions() as s:
+            row = s.scalars(q.order_by(JobRow.created_at.desc()).limit(1)).first()
+            return JobOut.model_validate(row) if row else None
+
     def recover(self) -> int:
         """应用重启后把遗留的 running 任务放回队列。返回恢复的数量。"""
         with self._sessions.begin() as s:
