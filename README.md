@@ -1,27 +1,52 @@
 # FreeRead
 
-本地优先的学术文献阅读工具：从 Zotero 导入文献库，把 PDF 自动重排为易读版式，并提供大语言模型翻译、AI 总结和图状结构问答。
+本地优先的学术文献阅读工具：从 Zotero 导入文献库，把 PDF 自动重排为易读版式，并提供大语言模型翻译、AI 总结、单篇问答和批注。
 
-> 状态：M0 技术验证已完成（[总结](docs/m0/README.md)），下一步 M1 MVP。详见 [docs/](docs/README.md)。
+> 当前版本 **0.1.0**：M1（导入、重排、翻译）与 M2（总结、问答、批注）已完成，下一步是 M3 知识图谱与跨文献问答。见 [路线图](docs/04-roadmap.md)。
+
+## 功能
+
+- **文献库**：从 Zotero 7 导入分类和条目（本地 API，Zotero 没运行时读数据库快照），增量同步；也可以直接导入 PDF。
+- **阅读器**：原版 / 并排 / 重排三种视图，重排与原版双向定位；公式、表格、图片按原样渲染；文内关键词 + 语义混合检索。
+- **解析引擎**：内置 PyMuPDF 快速模式；可一键安装 MinerU / Docling 到本机，或连接 mineru.net、mineru-api、docling-serve 远程服务。
+- **翻译**：块级翻译，可视区域优先；对照 / 交替 / 仅译文显示；整篇后台翻译，离线可读；术语表自动抽取、可编辑。
+- **AI 总结与问答**：分层结构化总结、单篇论文问答，引用都经过校验，可跳转到原文。
+- **批注**：高亮与批注，连同总结、正文和译文导出为 Markdown。
+- **大模型服务**：OpenAI 兼容接口、Anthropic 兼容端点、本地 Ollama；按任务分别选择服务和模型。
+- **隐私**：数据保存在本机 SQLite，API Key 存系统钥匙串，向服务发送文档内容前征得同意。
+
+## 下载
+
+在 [Releases](https://github.com/cristimezzz/FreeRead/releases) 下载 Windows 10/11 x64 的安装包（`*-setup.exe`）或便携版（`*-portable.zip`）。程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。
+
+## 快速上手
+
+1. 打开 Zotero 7（可选），在 FreeRead 文献库里点"从 Zotero 同步"，或用"导入 PDF"添加文件。
+2. 打开一篇文献，等快速解析完成后切到"重排"或"并排"视图。
+3. 在 设置 › 大模型服务 里添加服务并保存 API Key，然后就能翻译、总结和问答。
+
+完整的使用说明见 [Wiki](https://github.com/cristimezzz/FreeRead/wiki)。
 
 ## 仓库结构
 
 ```
 FreeRead/
-├─ apps/desktop/     Tauri 2 + React 前端（待初始化）
+├─ apps/desktop/     Tauri 2 壳 + React 前端（见 apps/desktop/README.md）
 ├─ core/             Python 核心服务（FastAPI sidecar）
 │  ├─ freeread/
 │  │  ├─ api/        路由与 DTO
 │  │  ├─ services/   应用服务
-│  │  ├─ domain/     ir / kg / qa 领域模型
-│  │  └─ infra/      zotero / parsers / llm / jobs / db 适配器
+│  │  ├─ domain/     ir / qa / summary / translate 领域模型
+│  │  └─ infra/      zotero / parsers / llm / embedding / search / jobs / db 适配器
 │  ├─ prompts/       带版本号的提示词模板
-│  └─ tests/         单元测试、fixtures/pdfs 评测集、golden 标注
-├─ docs/             PRD、架构、IR 规范、数据模型、路线图、ADR
-└─ scripts/
+│  └─ tests/         单元测试、评测集清单、golden 标注
+├─ docs/             PRD、架构、IR 规范、数据模型、路线图、ADR、各里程碑记录
+└─ scripts/          打包、复测、评测脚本
 ```
 
-## 开发（Core Service）
+## 开发
+
+Core Service：
 
 ```bash
 cd core
@@ -32,19 +57,18 @@ pytest
 freeread-core --port 8765
 ```
 
-## M0 解析评测
+桌面应用（需要 Node 22、Rust stable、uv）：
 
-需要先启动 Zotero 7；模型缓存在 `.engines/cache/`，PDF 与 golden 不入库。
-
-```bash
-bash scripts/m0_setup_engines.sh                                  # MinerU / Docling 独立环境
-core/.venv/Scripts/python scripts/m0_build_eval_set.py            # 从 Zotero 构建评测集
-core/.venv/Scripts/python scripts/m0_run_parsers.py               # 运行引擎、生成 IR
-core/.venv/Scripts/python scripts/m0_golden.py consensus          # golden 共识草稿（另有 render / merge）
-core/.venv/Scripts/python scripts/m0_report.py                    # 指标 → docs/m0/
+```powershell
+pwsh scripts/build_sidecar.ps1    # 打包 sidecar 到 src-tauri/binaries/
+cd apps/desktop
+npm install
+npm run tauri dev
 ```
 
-详见 [docs/m0/parser-eval.md](docs/m0/parser-eval.md#复现)。
+只调界面、浏览器模式、生成 API 类型等见 [apps/desktop/README.md](apps/desktop/README.md)；开发文档索引见 [docs/](docs/README.md)。解析引擎评测（M0）的复现步骤见 [docs/m0/parser-eval.md](docs/m0/parser-eval.md#复现)。
+
+发布：更新各处版本号并写好 `docs/releases/<版本>.md`，推送 `v<版本>` tag 后 [desktop-build](.github/workflows/desktop-build.yml) 工作流会构建、复测并创建草稿 Release。
 
 ## 许可证
 

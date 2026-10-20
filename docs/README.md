@@ -8,6 +8,9 @@
 | [03-data-model.md](03-data-model.md) | SQLite 数据模型与存储布局 | 草案 |
 | [04-roadmap.md](04-roadmap.md) | 里程碑与验收标准 | 草案 |
 | [m0/](m0/README.md) | M0 技术验证：解析评测、Zotero 本地 API、Tauri sidecar | 已完成 |
+| [m1/](m1/README.md) | M1 MVP：打包复测与验收 | 已完成 |
+| [m2/](m2/README.md) | M2 理解：检索、总结、问答、术语表、批注、Zotero 同步 | 已完成 |
+| [releases/](releases/) | 各版本更新说明（同时作为 GitHub Release 正文） | 持续更新 |
 | [adr/](adr/) | 架构决策记录（ADR） | 持续更新 |
 
 ## 约定
