@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { connect } from "../api/client";
 import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
+import { ContextMenu, installDefaultMenu } from "../components/ContextMenu";
 import { BrandMark } from "../components/icons";
 import { Sidebar } from "../components/Sidebar";
 import { Snackbar } from "../components/Snackbar";
@@ -54,6 +55,9 @@ export default function App() {
     };
   }, []);
 
+  // 屏蔽 WebView 默认右键菜单（启动页也一样）
+  useEffect(() => installDefaultMenu((m) => useApp.getState().toast(m)), []);
+
   // 跟随系统深浅色
   useEffect(() => {
     if (!settings || settings.appearance.theme_mode !== "system") return;
@@ -98,6 +102,7 @@ export default function App() {
         <JobsBar />
       </main>
       <Snackbar />
+      <ContextMenu />
     </div>
   );
 }

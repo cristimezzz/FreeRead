@@ -488,6 +488,11 @@ class LibraryService:
                 .where(AttachmentRow.doc_id == doc_id, ItemRow.zotero_key.is_(None))
             )
             if existing is not None:
+                # 之前移除（归档）过的同一 PDF：恢复原条目，连同译文、批注一起回来
+                row = s.get(ItemRow, existing.item_id)
+                if row.status != "active":
+                    row.status = "active"
+                    return row.id, True
                 return existing.item_id, False
 
             if not dest.exists():
@@ -512,6 +517,16 @@ class LibraryService:
             item_id = item.id
         self._enqueue_parse([doc_id])
         return item_id, True
+
+    def archive_item(self, item_id: str) -> bool:
+        """从文献库移除条目：标记 archived，不删除文件与解析结果。
+        Zotero 条目下次同步时会恢复为 active（要彻底删除需在 Zotero 里删）。"""
+        with self._sessions.begin() as s:
+            row = s.get(ItemRow, item_id)
+            if row is None:
+                return False
+            row.status = "archived"
+            return True
 
     # ------------------------------------------------------------ 查询
 

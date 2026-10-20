@@ -560,6 +560,58 @@
         }
       }
     },
+    "/library/items/{item_id}/archive": {
+      "post": {
+        "tags": [
+          "library"
+        ],
+        "summary": "Archive Item",
+        "description": "从文献库移除（归档）条目；文件与解析结果保留，重新导入同一 PDF 会恢复。",
+        "operationId": "archive_item_library_items__item_id__archive_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/library/sync": {
       "post": {
         "tags": [

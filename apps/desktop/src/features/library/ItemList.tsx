@@ -24,16 +24,50 @@ export function defaultDoc(item: Item): Doc | undefined {
   return present.find((d) => d.parse_status === "ready") ?? present[0];
 }
 
-export function ItemList({ items, onOpen }: { items: Item[]; onOpen: (item: Item, doc?: Doc) => void }) {
+interface ItemListProps {
+  items: Item[];
+  onOpen: (item: Item, doc?: Doc) => void;
+  /** 当前选中的条目（键盘操作、右键菜单的对象） */
+  selectedId?: string | null;
+  onSelect?: (item: Item) => void;
+  /** 右键（或菜单键 / Shift+F10）：在视口坐标 (x, y) 为该条目弹出菜单 */
+  onMenu?: (item: Item, x: number, y: number) => void;
+}
+
+export function ItemList({ items, onOpen, selectedId, onSelect, onMenu }: ItemListProps) {
   return (
     <div className="item-list" role="list">
       {items.map((it) => {
         const doc = defaultDoc(it);
         const meta = [formatAuthors(it.authors), it.year, it.venue].filter(Boolean).join(" · ");
         const status = doc ? (doc.parse_status ?? "pending") : "none";
+        const selected = it.id === selectedId;
         return (
-          <div key={it.id} className="item" role="listitem">
-            <button type="button" className="item-row" onClick={() => onOpen(it)}>
+          <div
+            key={it.id}
+            className="item"
+            role="listitem"
+            data-selected={selected || undefined}
+            onContextMenu={(e) => {
+              if (!onMenu) return;
+              e.preventDefault();
+              onSelect?.(it);
+              // 键盘触发的 contextmenu 坐标可能落在别处：不在本条目内时贴着条目左下角弹出
+              const r = e.currentTarget.getBoundingClientRect();
+              const inside = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+              onMenu(it, inside ? e.clientX : r.left + 16, inside ? e.clientY : r.bottom);
+            }}
+          >
+            <button
+              type="button"
+              className="item-row"
+              data-item-id={it.id}
+              aria-current={selected || undefined}
+              // 只有选中项可 Tab 进入，其余用方向键移动（没有选中项时第一项可进入）
+              tabIndex={selected || (!selectedId && it === items[0]) ? 0 : -1}
+              onFocus={() => onSelect?.(it)}
+              onClick={() => onOpen(it)}
+            >
               <span className="item-text">
                 <span className="item-title serif">{it.title || "（无标题）"}</span>
                 {meta && <span className="item-meta">{meta}</span>}
