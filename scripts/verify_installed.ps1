@@ -1,9 +1,10 @@
 <#
 .SYNOPSIS
-  安装 NSIS 包并复测体积、启动时间、退出残留（方法见 docs/m0-tauri-sidecar.md），输出 Markdown。
+  安装 NSIS 包（或解压便携版 zip）并复测体积、启动时间、退出残留（方法见 docs/m0-tauri-sidecar.md），输出 Markdown。
 
 .DESCRIPTION
   1. 静默安装（/S，可用 -InstallDir 指定目录），记录安装包大小、安装耗时、安装后目录大小；
+     传 -Portable 时改为把便携版 zip 解压到 -InstallDir，其余步骤相同；
   2. scripts/measure_sidecar.ps1 对已安装的 sidecar 测冷 / 热启动（每次新数据目录，含迁移）；
   3. 启动壳 freeread-desktop.exe：从 sidecar 命令行取端口和 token，计时到 /health 可用，
      检查数据目录（%APPDATA%\FreeRead）里数据库已创建；
@@ -12,10 +13,13 @@
   需要交互的检查（文件对话框、钥匙串、阅读器）不在这里，见 docs/m1/README.md。
 
 .EXAMPLE
-  pwsh scripts/verify_installed.ps1 -Installer apps/desktop/src-tauri/target/release/bundle/nsis/FreeRead_0.0.1_x64-setup.exe
+  pwsh scripts/verify_installed.ps1 -Installer apps/desktop/src-tauri/target/release/bundle/nsis/FreeRead_0.1.0_x64-setup.exe
+.EXAMPLE
+  pwsh scripts/verify_installed.ps1 -Portable FreeRead_0.1.0_x64-portable.zip -InstallDir build/portable
 #>
 param(
-    [Parameter(Mandatory)][string]$Installer,
+    [Parameter(Mandatory, ParameterSetName = "Installer")][string]$Installer,
+    [Parameter(Mandatory, ParameterSetName = "Portable")][string]$Portable,
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA "FreeRead"),
     [int]$Runs = 5,
     [string]$Out = "verify-installed.md"
@@ -27,22 +31,30 @@ $lines = [Collections.Generic.List[string]]::new()
 function Emit([string]$s) { Write-Host $s; $lines.Add($s) }
 function Get-CoreProcs { @(Get-CimInstance Win32_Process -Filter "Name='freeread-core.exe'") }
 
-$Installer = (Resolve-Path $Installer).Path
-Emit "# 安装包复测（$(Get-Date -Format 'yyyy-MM-dd HH:mm')，$env:COMPUTERNAME）"
+$package = (Resolve-Path ($Portable ? $Portable : $Installer)).Path
+$kind = $Portable ? "便携版" : "安装包"
+Emit "# ${kind}复测（$(Get-Date -Format 'yyyy-MM-dd HH:mm')，$env:COMPUTERNAME）"
 Emit ""
-Emit ("- 安装包：{0}（{1:N2} MiB，{2:N0} 字节）" -f (Split-Path -Leaf $Installer), ((Get-Item $Installer).Length / 1MB), (Get-Item $Installer).Length)
+Emit ("- {0}：{1}（{2:N2} MiB，{3:N0} 字节）" -f $kind, (Split-Path -Leaf $package), ((Get-Item $package).Length / 1MB), (Get-Item $package).Length)
 
-# 1. 静默安装
+# 1. 静默安装 / 解压便携版
 $sw = [Diagnostics.Stopwatch]::StartNew()
-$proc = Start-Process -PassThru -Wait $Installer -ArgumentList "/S", "/D=$InstallDir"
+if ($Portable) {
+    Expand-Archive -Force $package $InstallDir
+    $step = "解压"
+} else {
+    $proc = Start-Process -PassThru -Wait $package -ArgumentList "/S", "/D=$InstallDir"
+    $step = "静默安装"
+}
 $installMs = $sw.ElapsedMilliseconds
 $shell = Join-Path $InstallDir "freeread-desktop.exe"
 $coreDir = Join-Path $InstallDir "freeread-core"
 if (-not (Test-Path $shell) -or -not (Test-Path (Join-Path $coreDir "freeread-core.exe"))) {
-    throw "安装失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe（安装程序退出码 $($proc.ExitCode)）"
+    $code = $Portable ? "" : "（安装程序退出码 $($proc.ExitCode)）"
+    throw "${step}失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe$code"
 }
 $files = Get-ChildItem -Recurse -File $InstallDir
-Emit ("- 静默安装耗时：{0:N1} s；安装后目录：{1:N1} MB，{2} 个文件" -f ($installMs / 1000), (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count)
+Emit ("- {0}耗时：{1:N1} s；之后目录：{2:N1} MB，{3} 个文件" -f $step, ($installMs / 1000), (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count)
 $coreFiles = Get-ChildItem -Recurse -File $coreDir
 Emit ("- 其中 sidecar onedir：{0:N1} MB；壳 exe：{1:N1} MB" -f (($coreFiles | Measure-Object Length -Sum).Sum / 1MB), ((Get-Item $shell).Length / 1MB))
 foreach ($f in "_internal\prompts\translate.yaml", "_internal\freeread\infra\db\migrations\env.py") {
