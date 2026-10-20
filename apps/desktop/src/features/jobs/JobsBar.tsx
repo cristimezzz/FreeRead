@@ -11,6 +11,7 @@ const KIND_LABEL: Record<string, string> = {
   model_download: "下载嵌入模型",
   translate_doc: "翻译全文",
   glossary_extract: "抽取术语",
+  kg_extract: "抽取图谱",
 };
 
 export function JobsBar() {

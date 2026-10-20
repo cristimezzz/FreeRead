@@ -2428,6 +2428,176 @@ body.resizing .reader-pane {
   margin: 4px 0 8px;
 }
 
+/* 知识图谱面板：实体列表沿用术语表的排版 */
+.kg-panel .gl-body .search-note {
+  margin: 4px 0 8px;
+}
+
+.kg-entity {
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.kg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+}
+
+.kg-name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13.5px;
+  line-height: 1.6;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.kg-name:hover {
+  color: var(--accent-ink);
+}
+
+.kg-alias,
+.kg-rel-dim {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+.kg-head .gl-badge {
+  margin-left: 0;
+}
+
+.kg-badge,
+.kg-user,
+.kg-stale {
+  background: var(--hover);
+  color: var(--ink2);
+}
+
+.kg-cites {
+  margin-left: auto;
+}
+
+.kg-body {
+  padding: 4px 0 2px 12px;
+  border-left: 2px solid var(--line2);
+  margin: 6px 0 2px 2px;
+}
+
+.kg-desc {
+  margin: 0 0 6px;
+  color: var(--ink2);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.kg-rels,
+.kg-pick {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kg-rel {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 3px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.kg-rel[data-status="stale"] .kg-rel-text {
+  color: var(--ink3);
+}
+
+.kg-rel-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.kg-rel-type {
+  color: var(--ink3);
+}
+
+.kg-rel .ibtn {
+  width: 26px;
+  height: 26px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.kg-rel:hover .ibtn,
+.kg-rel:focus-within .ibtn {
+  opacity: 1;
+}
+
+.kg-sugg-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.kg-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.kg-edit {
+  margin-top: 6px;
+}
+
+.kg-edit-row {
+  display: flex;
+  gap: 6px;
+}
+
+.kg-edit-row .inp {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+}
+
+.kg-edit .search-note {
+  margin: 6px 0;
+}
+
+.kg-pick li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.kg-split {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.kg-split label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kg-split input {
+  accent-color: var(--accent);
+}
+
 /* 高亮与批注：五种颜色（半透明，深浅色主题通用） */
 [data-color="yellow"] {
   --mark: #f2c230;

@@ -61,7 +61,7 @@
 
 ```
 api/            路由与 DTO（REST + SSE）
-  ├─ library.py  reader.py  translate.py  summary.py  qa.py  jobs.py  settings.py
+  ├─ library.py  reader.py  translate.py  summary.py  qa.py  kg.py  jobs.py  settings.py
 services/       应用服务：编排领域对象与基础设施
   ├─ LibraryService    导入、同步、条目管理
   ├─ ReaderService     获取 IR、定位映射、批注
@@ -206,6 +206,14 @@ M1 实现（`services/translate.py`、`domain/translate/placeholders.py`）与�
 - 消歧：名称归一化（大小写、缩写表）→ 嵌入相似度候选 → 阈值以上合并，模糊区间交给 LLM 判定；合并记录保留别名。
 - 存储：`kg_entities`、`kg_relations` 表；查询时按需加载子图到 NetworkX。
 
+M3 实现了抽取、消歧和出处（`services/kg.py`、`domain/kg/`，[M3 图谱](m3/kg.md)），与上面的差异：
+
+- 按章节组（约 2500 token）调用，而不是严格按章节；关系的出处块必须在本组内，`achieves` 的数值必须能在出处块里找到，否则丢弃。
+- 跨文档只有别名精确相同才自动合并。嵌入只找候选（≥ 0.86，名称里数字不同的排除；内置 e5 上版本 / 变体的相似度比很多真同义还高），模型（`kg_resolve`）判定为同一个的也只作为"可能重复"，由用户在图谱面板里确认或否决——DeepSeek 评测里模型判定的误合并率有 10%–40%。
+- 另有 `kg_mentions`（实体出现在哪些块）和 `kg_distinct`（用户拆开的实体对）；用户可改名、合并、拆分、删除关系，重新抽取不推翻。
+- 任务链 embed → kg_extract 由设置 `kg.auto` 控制，默认关；`kg_extract` 路由未配置时沿用总结的服务。
+- 子图接口目前只取本篇或实体一跳，没有用 NetworkX。
+
 **混合检索流程**
 
 ```
@@ -254,7 +262,14 @@ M2 实现了其中的单篇部分（没有图扩展）：检索词为当前问�
 | GET / POST | `/documents/{doc_id}/annotations` | 高亮与批注列表 / 新增 |
 | PATCH / DELETE | `/annotations/{id}` | 改颜色、批注 / 删除 |
 | GET / POST | `/documents/{doc_id}/export/markdown` | 导出 Markdown（返回文本 / 写入本机文件） |
-| GET | `/kg/subgraph` | 按实体或文档范围取子图 |
+| POST | `/documents/{doc_id}/kg/extract` | 抽取知识图谱（返回任务） |
+| GET | `/documents/{doc_id}/kg` | 本篇实体与关系（含出处块） |
+| GET | `/kg/entities` | 按名称 / 别名搜索实体 |
+| GET / PATCH | `/kg/entities/{id}` | 实体在全库的提及与关系 / 改名、改类型 |
+| POST | `/kg/entities/{id}/merge`、`/kg/entities/{id}/split` | 合并 / 按写法拆分实体 |
+| DELETE | `/kg/relations/{id}` | 删除关系（重新抽取不再加回） |
+| POST | `/kg/suggestions/{id}/accept`、`/kg/suggestions/{id}/dismiss` | 确认 / 否决合并建议 |
+| GET | `/kg/subgraph` | 按实体（一跳）或文档范围取子图 |
 | GET | `/jobs/stream` | 任务进度 SSE |
 | GET/PUT | `/settings` | 设置（不含密钥） |
 

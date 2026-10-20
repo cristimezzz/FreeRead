@@ -7,7 +7,17 @@
 
 from typing import Any
 
-from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from freeread.infra.db.base import Base, new_ulid, utcnow
@@ -254,6 +264,131 @@ class AnnotationRow(Base):
     updated_at: Mapped[str] = mapped_column(String, default=utcnow, onupdate=utcnow)
 
     __table_args__ = (Index("ix_annotations_doc_id_block_id", "doc_id", "block_id"),)
+
+
+# ---------------------------------------------------------------- 知识图谱
+
+
+class KGEntityRow(Base):
+    """图谱实体，全库共享。embedding 是 float32 小端字节，只和 embedding_model 相同的向量比较。
+
+    origin=user 表示用户改过（改名、合并、拆分），重新抽取不会删除它。
+    """
+
+    __tablename__ = "kg_entities"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    type: Mapped[str] = mapped_column(String)
+    name: Mapped[str] = mapped_column(Text)
+    name_norm: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(Text, default="")
+    origin: Mapped[str] = mapped_column(String, default="auto")  # auto | user
+    embedding: Mapped[bytes | None] = mapped_column(LargeBinary)
+    embedding_model: Mapped[str | None] = mapped_column(String)
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+    updated_at: Mapped[str] = mapped_column(String, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (Index("ix_kg_entities_type_name_norm", "type", "name_norm"),)
+
+
+class KGAliasRow(Base):
+    """实体的别名（含规范名）。消歧时 alias_norm 精确命中即视为同一实体。"""
+
+    __tablename__ = "kg_entity_aliases"
+
+    entity_id: Mapped[str] = mapped_column(
+        ForeignKey("kg_entities.id", ondelete="CASCADE"), primary_key=True
+    )
+    alias_norm: Mapped[str] = mapped_column(Text, primary_key=True)
+    alias: Mapped[str] = mapped_column(Text)
+    origin: Mapped[str] = mapped_column(String, default="auto")  # auto | user
+
+    __table_args__ = (Index("ix_kg_entity_aliases_alias_norm", "alias_norm"),)
+
+
+class KGMentionRow(Base):
+    """实体在某篇文档某个块里的出现。block_id 不做外键：重新解析时按块映射迁移。"""
+
+    __tablename__ = "kg_mentions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    entity_id: Mapped[str] = mapped_column(ForeignKey("kg_entities.id", ondelete="CASCADE"))
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    block_id: Mapped[str] = mapped_column(String)
+    surface: Mapped[str] = mapped_column(Text)
+    surface_norm: Mapped[str] = mapped_column(Text)
+    extractor: Mapped[str] = mapped_column(String)
+
+    __table_args__ = (
+        Index("ix_kg_mentions_doc_id", "doc_id"),
+        Index("ix_kg_mentions_entity_id", "entity_id"),
+    )
+
+
+class KGRelationRow(Base):
+    """实体间的关系，出处（doc_id, source_block_id）必填。
+
+    src_surface / dst_surface 是原文里的写法，拆分实体时据此把关系端点分到新实体。
+    status：ok | stale（重新解析后出处映射不上）| rejected（用户删除；重新抽取不再加回）。
+    """
+
+    __tablename__ = "kg_relations"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    src_id: Mapped[str] = mapped_column(ForeignKey("kg_entities.id", ondelete="CASCADE"))
+    dst_id: Mapped[str] = mapped_column(ForeignKey("kg_entities.id", ondelete="CASCADE"))
+    type: Mapped[str] = mapped_column(String)
+    attrs: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    source_block_id: Mapped[str] = mapped_column(String)
+    src_surface: Mapped[str] = mapped_column(Text, default="")
+    dst_surface: Mapped[str] = mapped_column(Text, default="")
+    evidence: Mapped[str] = mapped_column(Text, default="")
+    confidence: Mapped[float] = mapped_column(Float, default=1.0)
+    extractor: Mapped[str] = mapped_column(String)  # provider/model+kg_extract@<版本>
+    status: Mapped[str] = mapped_column(String, default="ok")
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+
+    __table_args__ = (
+        Index("ix_kg_relations_src_id_type", "src_id", "type"),
+        Index("ix_kg_relations_dst_id_type", "dst_id", "type"),
+        Index("ix_kg_relations_doc_id", "doc_id"),
+    )
+
+
+class KGDistinctRow(Base):
+    """用户判定"不是同一个"的实体对（a_id < b_id）：拆分过或否决过合并建议，不再建议合并。"""
+
+    __tablename__ = "kg_distinct"
+
+    a_id: Mapped[str] = mapped_column(
+        ForeignKey("kg_entities.id", ondelete="CASCADE"), primary_key=True
+    )
+    b_id: Mapped[str] = mapped_column(
+        ForeignKey("kg_entities.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class KGMergeSuggestionRow(Base):
+    """可能重复的实体对，等用户确认：抽取 doc_id 时，entity_id 经嵌入找到 candidate_id，
+    模型判定为同一个。只有别名精确相同才自动合并（模型判定的误合并率太高，见 docs/m3/kg.md）。
+
+    确认 → 把 entity_id 并入 candidate_id；否决 → 写 kg_distinct。两种情况都删除这一行。
+    """
+
+    __tablename__ = "kg_merge_suggestions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
+    entity_id: Mapped[str] = mapped_column(ForeignKey("kg_entities.id", ondelete="CASCADE"))
+    candidate_id: Mapped[str] = mapped_column(ForeignKey("kg_entities.id", ondelete="CASCADE"))
+    doc_id: Mapped[str] = mapped_column(ForeignKey("documents.doc_id", ondelete="CASCADE"))
+    score: Mapped[float] = mapped_column(Float)  # 嵌入余弦相似度
+    created_at: Mapped[str] = mapped_column(String, default=utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("entity_id", "candidate_id"),
+        Index("ix_kg_merge_suggestions_doc_id", "doc_id"),
+    )
 
 
 # ---------------------------------------------------------------- 问答

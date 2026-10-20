@@ -274,6 +274,7 @@ export function SettingsView() {
   const route = settings.routes.translate;
   const summaryRoute = settings.routes.summarize;
   const qaRoute = settings.routes.qa;
+  const kgRoute = settings.routes.kg_extract;
   const accent = settings.appearance.seed_color.toUpperCase();
   const isPreset = ACCENT_PRESETS.some((s) => s.color.toUpperCase() === accent);
   const providerOptions = settings.providers.map((p) => ({ value: p.id, label: p.name }));
@@ -434,6 +435,48 @@ export function SettingsView() {
                 onValue={(model) => update({ routes: { ...settings.routes, qa: { ...qaRoute, model } } })}
               />
             )}
+          </Row>
+          <Row title="图谱抽取使用的服务" desc="按章节找出方法、数据集、指标等实体和关系，每篇调用次数与章节数相当">
+            <Select
+              label="图谱抽取使用的服务"
+              hideLabel
+              value={kgRoute?.provider_id ?? ""}
+              options={[{ value: "", label: "与总结相同" }, ...providerOptions]}
+              onValue={(provider_id) =>
+                update({
+                  routes: provider_id
+                    ? {
+                        ...settings.routes,
+                        kg_extract: { provider_id, model: kgRoute?.model || summaryRoute?.model || route?.model || "" },
+                      }
+                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "kg_extract")),
+                })
+              }
+            />
+            {kgRoute && (
+              <TextField
+                label="图谱抽取模型"
+                hideLabel
+                mono
+                className="model-inp"
+                placeholder="模型"
+                value={kgRoute.model}
+                commitOnChange
+                onValue={(model) => update({ routes: { ...settings.routes, kg_extract: { ...kgRoute, model } } })}
+              />
+            )}
+          </Row>
+          <Row
+            title="建立语义索引后自动抽取图谱"
+            desc="新导入的文献嵌入完成后自动排队抽取（会调用大模型）；关闭时在阅读器的图谱面板里手动抽取"
+            htmlFor="kg-auto"
+          >
+            <Switch
+              id="kg-auto"
+              label="建立语义索引后自动抽取图谱"
+              checked={settings.kg.auto}
+              onValue={(auto) => update({ kg: { ...settings.kg, auto } })}
+            />
           </Row>
         </Group>
 

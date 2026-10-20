@@ -586,6 +586,207 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/documents/{doc_id}/kg/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Graph
+         * @description 排队抽取（已有同一文档的任务时返回它）。重新抽取只替换该文档的提及和关系。
+         */
+        post: operations["extract_graph_documents__doc_id__kg_extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/documents/{doc_id}/kg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Doc Graph
+         * @description 本篇的实体（含在本篇出现的块）和关系（含出处块）；用户删除的关系不返回。
+         */
+        get: operations["doc_graph_documents__doc_id__kg_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Entities
+         * @description 按名称 / 别名搜索全库实体（合并时选目标用）。
+         */
+        get: operations["search_entities_kg_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/entities/{entity_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Entity Detail
+         * @description 实体在全库的提及和关系，带文献标题。
+         */
+        get: operations["entity_detail_kg_entities__entity_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Entity */
+        patch: operations["update_entity_kg_entities__entity_id__patch"];
+        trace?: never;
+    };
+    "/kg/entities/{entity_id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge Entities
+         * @description 把 source_ids 并入这个实体。
+         */
+        post: operations["merge_entities_kg_entities__entity_id__merge_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/entities/{entity_id}/split": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Split Entity
+         * @description 把选中的别名拆成新实体，返回新实体。
+         */
+        post: operations["split_entity_kg_entities__entity_id__split_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Suggestion
+         * @description 确认合并建议：把建议里的实体并入候选实体，返回合并后的实体。
+         */
+        post: operations["accept_suggestion_kg_suggestions__suggestion_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Suggestion
+         * @description 否决合并建议：记为不是同一个，以后不再建议。
+         */
+        post: operations["dismiss_suggestion_kg_suggestions__suggestion_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/relations/{relation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reject Relation
+         * @description 删除一条关系（标记 rejected，重新抽取不会加回）。
+         */
+        delete: operations["reject_relation_kg_relations__relation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/kg/subgraph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Subgraph
+         * @description 按文档或实体（一跳）取子图。
+         */
+        get: operations["subgraph_kg_subgraph_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/documents/{doc_id}/search": {
         parameters: {
             query?: never;
@@ -989,6 +1190,12 @@ export interface components {
             glossary: components["schemas"]["GlossarySettings"];
             /**
              * @default {
+             *       "auto": false
+             *     }
+             */
+            kg: components["schemas"]["KGSettings"];
+            /**
+             * @default {
              *       "source": "auto",
              *       "data_dir": ""
              *     }
@@ -1043,6 +1250,22 @@ export interface components {
             /** Item Count */
             item_count: number;
         };
+        /** DocGraphOut */
+        DocGraphOut: {
+            /** Doc Id */
+            doc_id: string;
+            /** Kg Status */
+            kg_status: string;
+            /** Entities */
+            entities: components["schemas"]["EntityOut"][];
+            /** Relations */
+            relations: components["schemas"]["RelationOut"][];
+            /**
+             * Suggestions
+             * @default []
+             */
+            suggestions: components["schemas"]["SuggestionOut"][];
+        };
         /** DocRef */
         DocRef: {
             /** Attachment Id */
@@ -1066,6 +1289,8 @@ export interface components {
             parse_status: string;
             /** Embed Status */
             embed_status: string;
+            /** Kg Status */
+            kg_status: string;
             /** Parser Engine */
             parser_engine: string | null;
             /** Parser Version */
@@ -1177,6 +1402,52 @@ export interface components {
              */
             has_key: boolean;
         };
+        /** EntityDetailOut */
+        EntityDetailOut: {
+            entity: components["schemas"]["EntityOut"];
+            /** Mentions */
+            mentions: components["schemas"]["MentionOut"][];
+            /** Relations */
+            relations: components["schemas"]["RelationOut"][];
+        };
+        /** EntityOut */
+        EntityOut: {
+            /** Id */
+            id: string;
+            /** Type */
+            type: string;
+            /** Name */
+            name: string;
+            /** Description */
+            description: string;
+            /** Origin */
+            origin: string;
+            /** Aliases */
+            aliases: string[];
+            /**
+             * Block Ids
+             * @default []
+             */
+            block_ids: string[];
+            /**
+             * Doc Count
+             * @default 0
+             */
+            doc_count: number;
+        };
+        /** EntityPatch */
+        EntityPatch: {
+            /** Name */
+            name?: string | null;
+            type?: components["schemas"]["EntityType"] | null;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * EntityType
+         * @enum {string}
+         */
+        EntityType: "Task" | "Method" | "Dataset" | "Metric" | "Model" | "Concept" | "Claim";
         /** ExportResult */
         ExportResult: {
             /** Path */
@@ -1359,10 +1630,34 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "running" | "done" | "failed" | "cancelled";
+        /** KGSettings */
+        KGSettings: {
+            /**
+             * Auto
+             * @default false
+             */
+            auto: boolean;
+        };
         /** KeyIn */
         KeyIn: {
             /** Key */
             key: string;
+        };
+        /** MentionOut */
+        MentionOut: {
+            /** Doc Id */
+            doc_id: string;
+            /** Doc Title */
+            doc_title: string;
+            /** Block Id */
+            block_id: string;
+            /** Surface */
+            surface: string;
+        };
+        /** MergeIn */
+        MergeIn: {
+            /** Source Ids */
+            source_ids: string[];
         };
         /** ModelRoute */
         ModelRoute: {
@@ -1509,6 +1804,44 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** RelationOut */
+        RelationOut: {
+            /** Id */
+            id: string;
+            /** Type */
+            type: string;
+            /** Src Id */
+            src_id: string;
+            /** Src Name */
+            src_name: string;
+            /** Src Type */
+            src_type: string;
+            /** Dst Id */
+            dst_id: string;
+            /** Dst Name */
+            dst_name: string;
+            /** Dst Type */
+            dst_type: string;
+            /** Attrs */
+            attrs: {
+                [key: string]: unknown;
+            };
+            /** Doc Id */
+            doc_id: string;
+            /**
+             * Doc Title
+             * @default
+             */
+            doc_title: string;
+            /** Block Id */
+            block_id: string;
+            /** Evidence */
+            evidence: string;
+            /** Confidence */
+            confidence: number;
+            /** Status */
+            status: string;
+        };
         /**
          * RemoteParser
          * @description 高质量引擎的运行位置（ADR-0008）。api：调用自部署或云端服务，而不是本机 .engines/。
@@ -1559,6 +1892,30 @@ export interface components {
             modes: ("fts" | "vector")[];
             /** Hits */
             hits: components["schemas"]["SearchHit"][];
+        };
+        /** SplitIn */
+        SplitIn: {
+            /** Aliases */
+            aliases: string[];
+        };
+        /** SubgraphOut */
+        SubgraphOut: {
+            /** Entities */
+            entities: components["schemas"]["EntityOut"][];
+            /** Relations */
+            relations: components["schemas"]["RelationOut"][];
+        };
+        /**
+         * SuggestionOut
+         * @description 可能重复：确认后把 entity 并入 candidate。
+         */
+        SuggestionOut: {
+            /** Id */
+            id: string;
+            /** Score */
+            score: number;
+            entity: components["schemas"]["EntityOut"];
+            candidate: components["schemas"]["EntityOut"];
         };
         /** SummaryOut */
         SummaryOut: {
@@ -3012,6 +3369,380 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_graph_documents__doc_id__kg_extract_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    doc_graph_documents__doc_id__kg_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                doc_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocGraphOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_entities_kg_entities_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                type?: components["schemas"]["EntityType"] | null;
+                limit?: number;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    entity_detail_kg_entities__entity_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_entity_kg_entities__entity_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntityPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    merge_entities_kg_entities__entity_id__merge_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MergeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    split_entity_kg_entities__entity_id__split_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplitIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_suggestion_kg_suggestions__suggestion_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntityOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_suggestion_kg_suggestions__suggestion_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_relation_kg_relations__relation_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                relation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subgraph_kg_subgraph_get: {
+        parameters: {
+            query?: {
+                doc_id?: string | null;
+                entity_id?: string | null;
+            };
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubgraphOut"];
                 };
             };
             /** @description Validation Error */
