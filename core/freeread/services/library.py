@@ -12,6 +12,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import shutil
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -39,6 +40,8 @@ from freeread.infra.db.models import (
 from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
 from freeread.infra.zotero.base import Collection, Item, ZoteroConnector
+
+log = logging.getLogger(__name__)
 
 ZOTERO_LOCAL_SOURCE = "zotero_local"
 SOURCE_LABELS = {"zotero_local": "本地 API", "zotero_sqlite": "数据库快照"}
@@ -664,7 +667,8 @@ def _pdf_title(path: Path) -> str | None:
 
         with pymupdf.open(path) as doc:
             title = (doc.metadata or {}).get("title", "").strip()
-    except (RuntimeError, ValueError):  # pymupdf.FileDataError 是 RuntimeError 的子类
+    except Exception:  # 读不到标题（坏文件、PyMuPDF 加载失败）不影响导入，用文件名
+        log.warning("cannot read PDF title from %s", path, exc_info=True)
         return None
     # 很多 PDF 的元数据标题是 "Microsoft Word - xxx.docx" 之类，太短或像文件名的不用
     if len(title) < 8 or title.lower().endswith((".doc", ".docx", ".tex", ".dvi", ".pdf")):
