@@ -65,7 +65,10 @@ function Test-Parse($Client, [string]$Base) {
     if (-not (Test-Path $pdf)) { New-TinyPdf $pdf }
     $body = [Net.Http.StringContent]::new((@{ path = $pdf } | ConvertTo-Json), [Text.Encoding]::UTF8, "application/json")
     $resp = $Client.PostAsync("$Base/library/import-file", $body).GetAwaiter().GetResult()
-    if (-not $resp.IsSuccessStatusCode) { throw "import-file 返回 $($resp.StatusCode)" }
+    if (-not $resp.IsSuccessStatusCode) {
+        $detail = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        throw "import-file 返回 $($resp.StatusCode)：$detail"
+    }
     $docId = ($resp.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json).item.documents[0].doc_id
     $deadline = (Get-Date).AddSeconds(30)
     while ((Get-Date) -lt $deadline) {
@@ -119,6 +122,11 @@ function Measure-Start([string]$ExeDir, [int]$N) {
         }
         Test-Parse $client $base
         return $ms
+    } catch {
+        # sidecar 的日志在工作目录里，结束时会删掉：失败时先打出来，否则 CI 里只看得到状态码
+        Write-Host "---- freeread-core 日志（core-$N.err 末尾）----"
+        Get-Content (Join-Path $Work "core-$N.err") -Tail 60 -ErrorAction SilentlyContinue | Write-Host
+        throw
     } finally {
         $client.Dispose()
         taskkill /T /F /PID $proc.Id 2>&1 | Out-Null

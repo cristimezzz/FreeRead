@@ -55,6 +55,8 @@ Emit "## sidecar 启动到 /health（ms，每次新数据目录，含迁移）"
 Emit ""
 foreach ($mode in "cold", "warm") {
     $text = & pwsh -NoProfile -File (Join-Path $PSScriptRoot "measure_sidecar.ps1") -Mode $mode -Runs $Runs -Dir $coreDir | Select-Object -Last 1
+    # 子进程里的异常不会传上来：看退出码，冒烟失败（导入 / 解析 / 检索）时让整个复测失败
+    if ($LASTEXITCODE) { throw "sidecar 复测失败（$mode），见上面的 freeread-core 日志" }
     Emit "- $text"
 }
 Emit ""
