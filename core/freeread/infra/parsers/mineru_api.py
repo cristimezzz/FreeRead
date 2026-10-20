@@ -4,7 +4,8 @@
 上传 POST /v1/uploads → PUT upload_url → POST /v1/uploads/{id}/complete
 提交 POST /v1/parse/jobs（output_formats=["middle_json"]）→ 轮询 GET /v1/parse/jobs/{id}
 下载 GET /v1/files/{file_id}/content。
-产物与本机引擎相同：raw/middle.json（docvortex.middle 2.0）+ engine.json，由 MinerUNormalizer 规范化。
+产物与本机引擎相同：raw/middle.json（docvortex.middle 2.0）+ engine.json，由 MinerUNormalizer 规范化；
+服务端返回 3.x 的 pdf_info 格式时先经 mineru_legacy 升级。
 图表图片不下载：解析任务按 bbox 从 PDF 重新截取。见 ADR-0008。
 """
 
@@ -19,6 +20,11 @@ from typing import Any
 import httpx
 
 from freeread.infra.parsers.base import ParserCaps, ProgressCb, RawLayout
+from freeread.infra.parsers.mineru_legacy import (
+    is_legacy_middle,
+    legacy_version,
+    upgrade_legacy_middle,
+)
 from freeread.infra.parsers.remote_common import RemoteClient, RemoteParseError, is_loopback_url
 
 TERMINAL = {"completed", "partial", "failed", "canceled"}
@@ -119,16 +125,29 @@ class MinerUApiParser:
                 middle = json.loads(raw.content)
             except ValueError:
                 raise RemoteParseError("bad_output", "MinerU：middle_json 不是合法 JSON") from None
+            legacy = None
+            if is_legacy_middle(middle):
+                # mineru.net 仍可能按 3.x 协议返回（pdf_info，坐标为 pt）：升级成 4.x 形状
+                legacy = legacy_version(middle) or "3.x"
+                try:
+                    middle = upgrade_legacy_middle(middle)
+                except ValueError as exc:
+                    raise RemoteParseError(
+                        "bad_output", f"MinerU：无法读取 3.x 格式的 middle_json（{exc}）"
+                    ) from None
             if not isinstance(middle, dict) or "docvortex_layout" not in (
                 middle.get("extensions") or {}
             ):
                 raise RemoteParseError(
-                    "bad_output", "MinerU：服务端版本过旧（需要 MinerU ≥ 4.0 的 middle_json）"
+                    "bad_output", "MinerU：无法识别服务端返回的 middle_json 格式"
                 )
             _strip_images(middle)
 
         engine_version = (
-            (file.get("parse") or {}).get("parser_version") or health.get("version") or "api"
+            legacy
+            or (file.get("parse") or {}).get("parser_version")
+            or health.get("version")
+            or "api"
         )
         (out_dir / "middle.json").write_text(
             json.dumps(middle, ensure_ascii=False), encoding="utf-8"

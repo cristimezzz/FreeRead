@@ -167,11 +167,144 @@ async def test_mineru_unauthorized_redacts_key(tmp_path):
     assert info.value.code == "unauthorized" and KEY not in str(info.value)
 
 
-async def test_mineru_legacy_middle_json_rejected(tmp_path):
-    with pytest.raises(RemoteParseError, match="版本过旧"):
-        await mineru(FakeMinerU(middle={"pdf_info": []})).parse(
-            SYNTHETIC, tmp_path, lambda *a: None
-        )
+def _line(*spans):
+    return {"bbox": [0, 0, 1, 1], "spans": [{"bbox": [0, 0, 1, 1], **s} for s in spans]}
+
+
+# mineru.net（3.4.4，tier=standard）实际返回的形状：pdf_info、坐标为 pt、page_size
+LEGACY = {
+    "_backend": "hybrid",
+    "_effort": "medium",
+    "_ocr_enable": False,
+    "_version_name": "3.4.4",
+    "pdf_info": [
+        {
+            "page_idx": 0,
+            "page_size": [600, 800],
+            "preproc_blocks": [],
+            "para_blocks": [
+                {
+                    "type": "title",
+                    "level": 1,
+                    "bbox": [60, 40, 540, 80],
+                    "lines": [_line({"type": "text", "content": "A cGAS-mediated mechanism"})],
+                },
+                {
+                    "type": "title",
+                    "level": 2,
+                    "bbox": [60, 100, 300, 115],
+                    "lines": [_line({"type": "text", "content": "Results"})],
+                },
+                {
+                    "type": "text",
+                    "bbox": [60, 120, 300, 200],
+                    "lines": [
+                        _line({"type": "text", "content": "genomic instabil-"}),
+                        _line(
+                            {"type": "text", "content": "ity of "},
+                            {"type": "inline_equation", "content": "x^{2}"},
+                            {"type": "text", "content": " cells."},
+                        ),
+                    ],
+                },
+                {
+                    "type": "text",
+                    "merge_prev": True,
+                    "bbox": [320, 420, 540, 440],
+                    "lines": [_line({"type": "text", "content": "continued text."})],
+                },
+                {
+                    "type": "interline_equation",
+                    "bbox": [60, 210, 300, 230],
+                    "lines": [_line({"type": "interline_equation", "content": "E = mc^2"})],
+                },
+                {
+                    "type": "image",
+                    "bbox": [60, 300, 300, 500],
+                    "blocks": [
+                        {
+                            "type": "image_body",
+                            "bbox": [60, 300, 300, 480],
+                            "lines": [_line({"type": "image", "image_path": "remote.jpg"})],
+                        },
+                        {
+                            "type": "image_caption",
+                            "bbox": [60, 485, 300, 500],
+                            "lines": [_line({"type": "text", "content": "Fig. 1. Repair."})],
+                        },
+                    ],
+                },
+                {
+                    "type": "table",
+                    "bbox": [320, 300, 540, 400],
+                    "blocks": [
+                        {
+                            "type": "table_body",
+                            "bbox": [320, 300, 540, 400],
+                            "lines": [
+                                _line(
+                                    {
+                                        "type": "table",
+                                        "html": "<table><tr><td><eq>p</eq></td></tr></table>",
+                                    }
+                                )
+                            ],
+                        }
+                    ],
+                },
+            ],
+            "discarded_blocks": [
+                {
+                    "type": "header",
+                    "bbox": [0, 0, 600, 20],
+                    "lines": [_line({"type": "text", "content": "RESEARCH ARTICLE"})],
+                },
+                {
+                    "type": "page_footnote",
+                    "bbox": [60, 760, 540, 780],
+                    "lines": [_line({"type": "text", "content": "*Corresponding author."})],
+                },
+            ],
+        }
+    ],
+}
+
+
+async def test_mineru_legacy_middle_json_upgraded(tmp_path):
+    # mineru.net 仍返回 3.x 的 pdf_info：升级成 4.x 形状后，现有 Normalizer 直接可用
+    raw = await mineru(FakeMinerU(middle=LEGACY)).parse(SYNTHETIC, tmp_path, lambda *a: None)
+    assert raw.engine_version == "3.4.4"
+    middle = json.loads((tmp_path / "middle.json").read_text(encoding="utf-8"))
+    assert middle["extensions"]["docvortex_layout"]["pages"] == [
+        {"page_idx": 0, "width_pt": 600.0, "height_pt": 800.0}
+    ]
+    doc, _ = MinerUNormalizer().normalize(
+        RawLayout("mineru", raw.engine_version, tmp_path, None), "0" * 64
+    )
+    by_type = {}
+    for b in doc.blocks:
+        by_type.setdefault(b.type.value, []).append(b)
+    assert by_type["title"][0].text == "A cGAS-mediated mechanism"
+    assert by_type["heading"][0].text == "Results"
+    para = by_type["paragraph"][0]
+    # 行尾连字符接小写去掉；行内公式保留为 math 段
+    assert para.text.startswith("genomic instability of ")
+    assert any(i.kind == "math" and i.latex == "x^{2}" for i in para.inlines)
+    assert by_type["equation"][0].latex == "E = mc^2"
+    assert by_type["figure"][0].anchors[0].bbox == pytest.approx((60, 300, 300, 480))
+    assert by_type["caption"][0].text == "Fig. 1. Repair."
+    assert by_type["table"][0].html == "<table><tr><td><math>p</math></td></tr></table>"
+    assert by_type["footnote"][0].text == "*Corresponding author."
+    # merge_prev 的块并入上一段；页眉丢弃
+    assert para.text.endswith("cells. continued text.") and len(by_type["paragraph"]) == 1
+    assert "RESEARCH ARTICLE" not in json.dumps(doc.model_dump(mode="json"))
+
+
+async def test_mineru_unknown_middle_json_rejected(tmp_path):
+    for middle in ({"pdf_info": []}, {"something": "else"}):
+        with pytest.raises(RemoteParseError, match="middle_json") as info:
+            await mineru(FakeMinerU(middle=middle)).parse(SYNTHETIC, tmp_path, lambda *a: None)
+        assert info.value.code == "bad_output"
     assert not (tmp_path / "middle.json").exists()
 
 
