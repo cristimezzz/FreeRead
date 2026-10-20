@@ -577,6 +577,53 @@ input[type="range"] {
   margin: 0;
 }
 
+/* 重新解析：引擎单选列表 */
+.reparse-options {
+  display: grid;
+  gap: 4px;
+  margin: 14px 0 4px;
+}
+
+.reparse-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.reparse-option:hover {
+  background: var(--hover);
+}
+
+.reparse-option[data-disabled] {
+  color: var(--ink3);
+  cursor: default;
+}
+
+.reparse-option[data-disabled]:hover {
+  background: none;
+}
+
+.reparse-option input {
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+.reparse-current {
+  margin-left: auto;
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+.dialog-body .reparse-hint {
+  margin-top: 8px;
+  color: var(--ink3);
+  font-size: 12.5px;
+}
+
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
