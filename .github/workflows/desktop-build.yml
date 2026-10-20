@@ -2,7 +2,8 @@ name: Desktop build (Windows installer)
 
 # 打包 sidecar（PyInstaller onedir，经 bundle.resources 安装）+ Tauri NSIS 安装包，作为 artifact 上传；
 # 然后在干净的 runner 上静默安装，复测体积、启动时间和退出残留（scripts/verify_installed.ps1）。
-# 手动触发，或在打包相关文件变更的 PR 上触发。
+# 手动触发，或在打包相关文件变更的 PR 上触发；合并到 main 时也跑一次，
+# 为 PR 预热 Rust 缓存（PR 分支能读到 main 的缓存，main 读不到 PR 的，见 docs/build-speed.md）。
 # 未签名，仅供内部测试；正式发布前需要 Authenticode 签名（见 ADR-0001）。
 on:
   workflow_dispatch:
@@ -13,13 +14,31 @@ on:
       - scripts/verify_installed.ps1
       - apps/desktop/src-tauri/**
       - .github/workflows/desktop-build.yml
+  push:
+    branches: [main]
+    paths:
+      - scripts/build_sidecar.ps1
+      - scripts/measure_sidecar.ps1
+      - scripts/verify_installed.ps1
+      - apps/desktop/src-tauri/**
+      - .github/workflows/desktop-build.yml
 
 permissions:
   contents: read
 
+concurrency:
+  group: desktop-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # 内部测试用的安装包：thin LTO + 并行代码生成，编译快很多，体积略大。
+      # Cargo.toml 的完整设置（fat LTO、codegen-units = 1）留给正式发布构建。
+      # main 和 PR 必须用同一组设置，否则依赖的指纹不同，缓存用不上。
+      CARGO_PROFILE_RELEASE_LTO: thin
+      CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.0
@@ -32,6 +51,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          shared-key: desktop-release
       - name: Build sidecar
         shell: pwsh
         run: ./scripts/build_sidecar.ps1
