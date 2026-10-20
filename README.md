@@ -2,6 +2,8 @@
 
 本地优先的学术文献阅读工具：从 Zotero 导入文献库，把 PDF 自动重排为易读版式，并提供大语言模型翻译、AI 总结、单篇问答和批注。
 
+项目主页：<https://cristimezzz.github.io/FreeRead/>
+
 > 当前版本 **0.1.0**：M1（导入、重排、翻译）与 M2（总结、问答、批注）已完成，下一步是 M3 知识图谱与跨文献问答。见 [路线图](docs/04-roadmap.md)。
 
 ## 功能
@@ -41,7 +43,8 @@ FreeRead/
 │  ├─ prompts/       带版本号的提示词模板
 │  └─ tests/         单元测试、评测集清单、golden 标注
 ├─ docs/             PRD、架构、IR 规范、数据模型、路线图、ADR、各里程碑记录
-└─ scripts/          打包、复测、评测脚本
+├─ scripts/          打包、复测、评测脚本
+└─ site/             项目主页（GitHub Pages，见 .github/workflows/pages.yml）
 ```
 
 ## 开发

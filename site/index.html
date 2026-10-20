@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="zh-CN" class="no-js">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FreeRead — 本地优先的学术文献阅读器</title>
+    <meta
+      name="description"
+      content="FreeRead：从 Zotero 导入文献，把 PDF 重排为易读版式，并提供大模型翻译、AI 总结、单篇问答和批注。数据留在本机，开源免费。"
+    />
+    <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1F1E1D" media="(prefers-color-scheme: dark)" />
+    <meta property="og:title" content="FreeRead — 本地优先的学术文献阅读器" />
+    <meta property="og:description" content="把 PDF 重排成易读版式，逐块翻译、带出处的总结与问答。数据留在本机。" />
+    <meta property="og:image" content="https://cristimezzz.github.io/FreeRead/screenshots/reader-light.webp" />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preload" href="fonts/source-serif-4-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="style.css" />
+    <script>
+      // 尽早应用手动选择的深浅色，避免闪烁；读写本地存储失败时跟随系统
+      document.documentElement.classList.remove("no-js");
+      try {
+        const t = localStorage.getItem("freeread-site-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
+  </head>
+
+  <body>
+    <!-- 图标：与 apps/desktop/src/components/icons.tsx 同一套线条图标 -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <symbol id="i-library" viewBox="0 0 24 24"><path d="M4 19V5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v14" /><path d="M9 19V7a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v12" /><path d="m14.5 6.8 2.9-.8a1 1 0 0 1 1.2.7l2.6 10.6" /><path d="M3 19h18" /></symbol>
+      <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2v-13c-3.5 0-6 .5-8 2z" /><path d="M12 6.5v13" /></symbol>
+      <symbol id="i-settings" viewBox="0 0 24 24"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><path d="M17.5 11a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z" /><path d="m20 20-4.2-4.2" /></symbol>
+      <symbol id="i-summary" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9" /></symbol>
+      <symbol id="i-qa" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z" /></symbol>
+      <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></symbol>
+      <symbol id="i-translate" viewBox="0 0 24 24"><path d="M4 5h8M8 3v2" /><path d="M10 5c-.8 3.6-3 6.3-6 8" /><path d="M6 9c1 1.8 2.6 3.2 4.5 4" /><path d="m12 21 4-9 4 9" /><path d="M13.4 18h5.2" /></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="m13.5 6.5 4 4" /></symbol>
+      <symbol id="i-all" viewBox="0 0 24 24"><path d="M5.5 4h13a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" /><path d="M3.5 9h17" /></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" /></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V3" /><path d="m7 8 5-5 5 5" /><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" /></symbol>
+      <symbol id="i-sync" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20v-4h-4" /></symbol>
+      <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5z" /><path d="m3 13 9 5 9-5" /></symbol>
+      <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3v5M15 3v5" /><path d="M6 8h12v3a6 6 0 0 1-12 0z" /><path d="M12 17v4" /></symbol>
+      <symbol id="i-lock" viewBox="0 0 24 24"><path d="M6 10h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></symbol>
+      <symbol id="i-key" viewBox="0 0 24 24"><path d="M14.5 9.5a4 4 0 1 1-1.2-2.8 4 4 0 0 1 1.2 2.8z" /><path d="m13.3 12.3 7.2 7.2" /><path d="m17.5 16.5 2-2" /></symbol>
+      <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.4 3 8.3 7 10 4-1.7 7-5.6 7-10V6z" /><path d="m9 12 2 2 4-4" /></symbol>
+      <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></symbol>
+      <symbol id="i-sun" viewBox="0 0 24 24"><path d="M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" /><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4" /></symbol>
+      <symbol id="i-github" viewBox="0 0 24 24"><path d="M9 19c-4.3 1.4-4.3-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12.3 12.3 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21" /></symbol>
+      <symbol id="i-chev-l" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6" /></symbol>
+      <symbol id="i-chev-r" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6" /></symbol>
+      <symbol id="i-expand" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" /></symbol>
+      <symbol id="i-win-min" viewBox="0 0 24 24"><path d="M6.5 12h11" /></symbol>
+      <symbol id="i-win-max" viewBox="0 0 24 24"><path d="M7 7h10v10H7z" /></symbol>
+      <symbol id="i-win-close" viewBox="0 0 24 24"><path d="M7 7l10 10M17 7 7 17" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" /></symbol>
+      <symbol id="i-mark" viewBox="0 0 24 24"><path d="M11.2 6.3C9.3 5 7 4.5 3.5 4.5v13.1c3.4 0 5.8.5 7.7 1.8z" /><path d="M12.8 6.3C14.7 5 17 4.5 20.5 4.5v13.1c-3.4 0-5.8.5-7.7 1.8z" opacity="0.82" /></symbol>
+    </svg>
+
+    <!-- ============================================================ 顶栏 -->
+    <header class="top" id="top">
+      <div class="wrap top-in">
+        <a class="brand" href="#" aria-label="FreeRead 首页">
+          <span class="mark"><svg viewBox="0 0 24 24"><use href="#i-mark" /></svg></span>
+          FreeRead
+        </a>
+        <nav class="top-nav" aria-label="页面导航">
+          <a href="#tour">阅读</a>
+          <a href="#steps">功能</a>
+          <a href="#custom">外观</a>
+          <a href="#gallery">截图</a>
+          <a href="#download">下载</a>
+          <span class="nav-ind" aria-hidden="true"></span>
+        </nav>
+        <div class="top-actions">
+          <a class="ibtn" href="https://github.com/cristimezzz/FreeRead" aria-label="GitHub 仓库" title="GitHub">
+            <svg class="ico"><use href="#i-github" /></svg>
+          </a>
+          <button class="ibtn theme-btn" type="button" aria-label="切换深浅色" title="切换深浅色">
+            <svg class="ico moon"><use href="#i-moon" /></svg>
+            <svg class="ico sun"><use href="#i-sun" /></svg>
+          </button>
+          <a class="btn primary sm dl-top" href="#download">
+            <svg class="ico"><use href="#i-download" /></svg><span class="txt">下载</span>
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <!-- ============================================================ Hero -->
+      <section class="hero">
+        <div class="wrap">
+          <span class="mark hero-mark rv"><svg viewBox="0 0 24 24"><use href="#i-mark" /></svg></span>
+          <h1>
+            <span class="line rv" style="--i: 1">把论文，</span>
+            <span class="line rv" style="--i: 2">读得<em>像一本书</em>。</span>
+          </h1>
+          <p class="lead rv" style="--i: 3">
+            FreeRead 是本地优先的学术文献阅读器：从 Zotero 导入文献库，把 PDF 重排为易读版式，再用你自己的大模型翻译、总结和问答——每句结论都能跳回原文。
+          </p>
+          <div class="hero-cta rv" style="--i: 4">
+            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 0.1.0</a>
+            <a class="btn lg" href="https://github.com/cristimezzz/FreeRead"><svg class="ico"><use href="#i-github" /></svg>查看源码</a>
+          </div>
+          <div class="hero-meta rv" style="--i: 5">
+            <span>Windows 10 / 11 x64</span>
+            <span>开源 · AGPL-3.0</span>
+            <span>数据保存在本机</span>
+          </div>
+        </div>
+        <div class="wrap hero-shot rv" style="--i: 6">
+          <div class="frame">
+            <img class="shot-light" src="screenshots/reader-light.webp" width="1440" height="900" alt="FreeRead 阅读器：左侧原版 PDF，右侧重排正文与对照翻译" fetchpriority="high" />
+            <img class="shot-dark" src="screenshots/reader-dark.webp" width="1440" height="900" alt="FreeRead 阅读器（深色）" loading="lazy" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 导览 -->
+      <section class="sec" id="tour">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">阅读器</div>
+            <h2>一个窗口，读完一篇论文</h2>
+            <p>原版和重排并排放，翻译贴着原文，问答在右手边。界面退后，正文在前。</p>
+          </div>
+
+          <div class="tour auto rv" data-tour>
+            <div class="tour-list" role="group" aria-label="界面导览">
+              <button class="callout" type="button" data-target="rail" aria-pressed="true">
+                <span class="ci"><svg class="ico"><use href="#i-library" /></svg></span>
+                <span><b>收起的侧栏</b><span>阅读时侧栏收成 60px 图标栏，把宽度让给正文。</span></span>
+              </button>
+              <button class="callout" type="button" data-target="tools" aria-pressed="false">
+                <span class="ci"><svg class="ico"><use href="#i-summary" /></svg></span>
+                <span><b>视图与翻译</b><span>原版 / 并排 / 重排一键切换；译文可对照、交替或只看译文。</span></span>
+              </button>
+              <button class="callout" type="button" data-target="reflow" aria-pressed="false">
+                <span class="ci"><svg class="ico"><use href="#i-book" /></svg></span>
+                <span><b>重排正文</b><span>衬线排版，公式、表格、图片照原样渲染；点哪段，左边原版就定位到哪。</span></span>
+              </button>
+              <button class="callout" type="button" data-target="panel" aria-pressed="false">
+                <span class="ci"><svg class="ico"><use href="#i-qa" /></svg></span>
+                <span><b>搜索、总结与问答</b><span>右侧面板可拖动调宽；回答像对话一样排成正文，引用编号可点。</span></span>
+              </button>
+            </div>
+
+            <div class="win" aria-hidden="true">
+              <div class="win-bar">
+                <span class="title">FreeRead</span>
+                <span class="wb"><svg class="ico"><use href="#i-win-min" /></svg></span>
+                <span class="wb"><svg class="ico"><use href="#i-win-max" /></svg></span>
+                <span class="wb"><svg class="ico"><use href="#i-win-close" /></svg></span>
+              </div>
+              <div class="win-body">
+                <div class="w-side rail" data-zone="rail">
+                  <div class="w-brand"><span class="mark"><svg viewBox="0 0 24 24"><use href="#i-mark" /></svg></span></div>
+                  <span class="w-nav"><svg class="ico"><use href="#i-library" /></svg></span>
+                  <span class="w-nav on"><svg class="ico"><use href="#i-book" /></svg></span>
+                  <span class="w-nav"><svg class="ico"><use href="#i-settings" /></svg></span>
+                </div>
+                <div class="w-main">
+                  <div class="w-top">
+                    <div class="t">
+                      <h3>Highly accurate protein structure prediction with AlphaFold</h3>
+                      <div class="by">Jumper, John; Evans, Richard; Pritzel, Alexander · 2021 · Nature</div>
+                    </div>
+                    <span class="w-status"><span class="dot"></span>已解析 · MinerU</span>
+                  </div>
+                  <div class="w-tools" data-zone="tools">
+                    <div class="grp">
+                      <span class="lbl">视图</span>
+                      <div class="seg"><button>原版</button><button aria-pressed="true">并排</button><button>重排</button></div>
+                    </div>
+                    <div class="grp">
+                      <span class="lbl">翻译</span>
+                      <div class="seg"><button>原文</button><button>对照</button><button aria-pressed="true">交替</button><button>仅译文</button></div>
+                    </div>
+                    <div class="grp size"><span class="lbl">字号</span><span class="slider"></span></div>
+                    <div class="acts">
+                      <span class="btn ghost sm"><svg class="ico"><use href="#i-search" /></svg>搜索</span>
+                      <span class="btn ghost sm"><svg class="ico"><use href="#i-summary" /></svg>总结</span>
+                      <span class="btn ghost sm" aria-pressed="true"><svg class="ico"><use href="#i-qa" /></svg>问答</span>
+                    </div>
+                  </div>
+                  <div class="w-row">
+                  <div class="w-panes">
+                    <div class="w-pane w-pdf" data-zone="pdf">
+                      <div class="page">
+                        <div class="pb t" data-k="1"><div class="ln"></div></div>
+                        <div class="pb au"><div class="ln"></div></div>
+                        <div class="pb a" data-k="2"><div class="ln" style="--h: 41px"></div></div>
+                        <div class="cols">
+                          <div>
+                            <div class="pb" data-k="3"><div class="ln" style="--h: 48px"></div></div>
+                            <div class="pb eq" data-k="4"></div>
+                            <div class="pb" data-k="5"><div class="ln" style="--h: 62px"></div></div>
+                          </div>
+                          <div>
+                            <div class="pb fig" data-k="6"></div>
+                            <div class="pb" data-k="7"><div class="ln" style="--h: 76px"></div></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="w-pane w-reflow" data-zone="reflow">
+                      <div class="rf" data-k="1"><h4>Protein structure from sequence alone</h4></div>
+                      <div class="rf located" data-k="3">
+                        <div class="pair" data-mode="alternate">
+                          <p class="src">Proteins fold into precise three-dimensional shapes, and those shapes decide what they do.</p>
+                          <p class="tr">蛋白质会折叠成精确的三维形状，而形状决定了它们的功能。</p>
+                        </div>
+                      </div>
+                      <div class="rf" data-k="5">
+                        <div class="pair" data-mode="alternate">
+                          <p class="src">The network reasons over the sequence and over pairs of residues, refining one structure across several recycling steps.</p>
+                          <p class="tr">网络同时考虑序列和残基两两之间的关系，并在几轮循环中反复修正同一个结构。</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                <div class="w-panel" data-zone="panel">
+                  <div class="w-panel-head"><h5>问答</h5><svg class="ico"><use href="#i-close" /></svg></div>
+                  <div class="qa-msgs">
+                    <div class="qa-q">模型是怎么一步步得到最终结构的？</div>
+                    <div class="qa-a">它同时处理序列和残基对的信息<button class="cite" tabindex="-1">2</button>，再把同一个结构送回网络循环修正几轮<button class="cite" tabindex="-1">2</button>，每轮的预测都更接近实验结构。</div>
+                  </div>
+                  <div class="composer">
+                    <div class="ph">针对这篇论文提问…</div>
+                    <div class="ft"><span>Enter 发送</span><span class="send"><svg class="ico"><use href="#i-send" /></svg></span></div>
+                  </div>
+                </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 编号演示 -->
+      <section class="sec" id="steps">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">功能</div>
+            <h2>每一步，都有出处</h2>
+            <p>解析、重排、翻译、问答，每个结果都能对回原文的那一段。</p>
+          </div>
+
+          <div class="rv" data-steps>
+            <div class="steps-tabs">
+              <div class="seg" role="tablist" aria-label="功能演示">
+                <span class="seg-thumb" aria-hidden="true"></span>
+                <button role="tab" aria-selected="true" aria-controls="step-1" id="tab-1"><span class="num">01</span><span class="txt">重排与定位</span></button>
+                <button role="tab" aria-selected="false" aria-controls="step-2" id="tab-2"><span class="num">02</span><span class="txt">逐块翻译</span></button>
+                <button role="tab" aria-selected="false" aria-controls="step-3" id="tab-3"><span class="num">03</span><span class="txt">有出处的问答</span></button>
+                <button role="tab" aria-selected="false" aria-controls="step-4" id="tab-4"><span class="num">04</span><span class="txt">解析引擎</span></button>
+              </div>
+            </div>
+
+            <div class="stage">
+              <!-- 01 重排 -->
+              <div class="step" id="step-1" role="tabpanel" aria-labelledby="tab-1" data-step="reflow">
+                <div class="step-text">
+                  <div class="n">01</div>
+                  <h3>双栏 PDF，排成一栏好读的正文</h3>
+                  <p>解析引擎把页面拆成标题、段落、公式、图表等块，按阅读顺序重排。点重排里的任何一段，原版里对应的位置就会亮起来；反过来也一样。</p>
+                  <div class="facts">
+                    <div class="fact"><b>3 种</b><span>视图：原版 / 并排 / 重排</span></div>
+                    <div class="fact"><b>双向</b><span>原版与重排互相定位</span></div>
+                  </div>
+                </div>
+                <div class="step-demo">
+                  <div class="win" aria-hidden="true">
+                    <div class="win-body">
+                      <div class="w-panes">
+                        <div class="w-pane w-pdf">
+                          <div class="page">
+                            <div class="pb t" data-k="1"><div class="ln"></div></div>
+                            <div class="pb au"><div class="ln"></div></div>
+                            <div class="pb a" data-k="2"><div class="ln" style="--h: 41px"></div></div>
+                            <div class="cols">
+                              <div>
+                                <div class="pb" data-k="3"><div class="ln" style="--h: 48px"></div></div>
+                                <div class="pb eq" data-k="4"></div>
+                                <div class="pb" data-k="5"><div class="ln" style="--h: 62px"></div></div>
+                              </div>
+                              <div>
+                                <div class="pb fig" data-k="6"></div>
+                                <div class="pb" data-k="7"><div class="ln" style="--h: 76px"></div></div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="w-pane w-reflow">
+                          <div class="rf" data-k="1"><h4>Protein structure from sequence alone</h4></div>
+                          <div class="rf" data-k="2"><p><b>Abstract.</b> Determining a structure experimentally can take months. We describe a network that predicts it directly from the amino-acid sequence.</p></div>
+                          <div class="rf" data-k="3"><p>Proteins fold into precise three-dimensional shapes, and those shapes decide what they do.</p></div>
+                          <div class="rf" data-k="4"><div class="eq">ℒ = ¹⁄ₙ ∑ᵢ ‖ T̂ᵢ⁻¹ x̂ᵢ − Tᵢ⁻¹ xᵢ ‖</div></div>
+                          <div class="rf" data-k="6"><div class="fig"><svg class="ico"><use href="#i-layers" /></svg></div><p class="cap">Fig. 1 | Predicted and experimental backbones overlap closely.</p></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 02 翻译 -->
+              <div class="step" id="step-2" role="tabpanel" aria-labelledby="tab-2" data-step="translate" hidden>
+                <div class="step-text">
+                  <div class="n">02</div>
+                  <h3>按块翻译，看到哪译到哪</h3>
+                  <p>可视区域里的段落优先翻译，公式和引用先占位保护再还原；也可以整篇后台翻译，之后离线可读。术语表自动抽取，翻译时一并带上。</p>
+                  <div class="facts">
+                    <div class="fact"><b>4 种</b><span>原文 / 对照 / 交替 / 仅译文</span></div>
+                    <div class="fact"><b>离线</b><span>译过的内容存在本机</span></div>
+                  </div>
+                </div>
+                <div class="step-demo">
+                  <div class="win" aria-hidden="true">
+                    <div class="w-tools">
+                      <div class="grp">
+                        <span class="lbl">翻译</span>
+                        <div class="seg" data-tr-modes><span class="seg-thumb"></span><button data-mode="off">原文</button><button data-mode="side" aria-pressed="true">对照</button><button data-mode="alternate">交替</button><button data-mode="only">仅译文</button></div>
+                      </div>
+                    </div>
+                    <div class="w-panes">
+                      <div class="w-pane w-reflow" data-tr-stream>
+                        <div class="rf"><div class="pair" data-mode="side"><p class="src">Proteins fold into precise three-dimensional shapes, and those shapes decide what they do.</p><p class="tr" data-text="蛋白质会折叠成精确的三维形状，而形状决定了它们的功能。"></p></div></div>
+                        <div class="rf"><div class="pair" data-mode="side"><p class="src">Determining a structure experimentally can take months, so most known sequences still lack one.</p><p class="tr" data-text="实验测定一个结构往往要花上数月，因此大多数已知序列至今仍没有结构。"></p></div></div>
+                        <div class="rf"><div class="pair" data-mode="side"><p class="src">The network reasons over the sequence and over pairs of residues, refining one structure across several recycling steps.</p><p class="tr" data-text="网络同时考虑序列和残基两两之间的关系，并在几轮循环中反复修正同一个结构。"></p></div></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 03 问答 -->
+              <div class="step" id="step-3" role="tabpanel" aria-labelledby="tab-3" data-step="qa" hidden>
+                <div class="step-text">
+                  <div class="n">03</div>
+                  <h3>问答和总结，句句有出处</h3>
+                  <p>针对单篇论文提问，回答里的每个引用编号都经过校验，指向原文中的具体段落；悬停或点击就能看到它说的是哪一段。总结也一样，分层展开，可以跳回原文。</p>
+                  <div class="facts">
+                    <div class="fact"><b>校验</b><span>引用必须真实存在</span></div>
+                    <div class="fact"><b>自选模型</b><span>OpenAI 兼容 / Anthropic / Ollama</span></div>
+                  </div>
+                </div>
+                <div class="step-demo">
+                  <div class="win" aria-hidden="true">
+                    <div class="win-body">
+                      <div class="w-panes">
+                        <div class="w-pane w-reflow" data-qa-src>
+                          <div class="rf" data-k="a"><p>Proteins fold into precise three-dimensional shapes, and those shapes decide what they do.</p></div>
+                          <div class="rf" data-k="b"><p>The network reasons over the sequence and over pairs of residues, refining one structure across several recycling steps.</p></div>
+                          <div class="rf" data-k="c"><p>Each refinement is scored against the experimental structure in a local frame, so errors in orientation are penalised as well as errors in position.</p></div>
+                        </div>
+                      </div>
+                      <div class="w-panel">
+                        <div class="w-panel-head"><h5>问答</h5><svg class="ico"><use href="#i-close" /></svg></div>
+                        <div class="qa-msgs" data-qa-stream>
+                          <div class="qa-q">模型如何保证结构细节是对的？</div>
+                          <div class="qa-a"></div>
+                        </div>
+                        <div class="composer">
+                          <div class="ph">针对这篇论文提问…</div>
+                          <div class="ft"><span>Enter 发送</span><span class="send"><svg class="ico"><use href="#i-send" /></svg></span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 04 解析引擎 -->
+              <div class="step" id="step-4" role="tabpanel" aria-labelledby="tab-4" data-step="engines" hidden>
+                <div class="step-text">
+                  <div class="n">04</div>
+                  <h3>先快速可读，再换高质量</h3>
+                  <p>导入后内置的 PyMuPDF 几秒钟就能出可读版本；想要更好的公式和表格，可以一键把 MinerU 或 Docling 装到本机，或者连接 mineru.net、自部署的 mineru-api / docling-serve。</p>
+                  <div class="facts">
+                    <div class="fact"><b>秒级</b><span>快速模式，导入即可读</span></div>
+                    <div class="fact"><b>本机或远程</b><span>按需选择解析引擎</span></div>
+                  </div>
+                </div>
+                <div class="step-demo">
+                  <div class="win" aria-hidden="true" style="--win-h: auto">
+                    <div class="engines" data-engines>
+                      <div class="engine">
+                        <span class="ei">Py</span><b>PyMuPDF 快速模式</b><small>内置 · 文本与版面</small>
+                        <span class="tag" data-status="ready"><span class="dot"></span>可阅读</span>
+                        <div class="progress"><i style="--p: 0%"></i></div>
+                      </div>
+                      <div class="engine">
+                        <span class="ei">Mi</span><b>MinerU</b><small>本机 · 公式、表格、阅读顺序</small>
+                        <span class="tag"><span class="dot"></span>排队中</span>
+                        <div class="progress"><i style="--p: 0%"></i></div>
+                      </div>
+                      <div class="engine">
+                        <span class="ei">Do</span><b>Docling</b><small>远程 docling-serve</small>
+                        <span class="tag"><span class="dot"></span>排队中</span>
+                        <div class="progress"><i style="--p: 0%"></i></div>
+                      </div>
+                    </div>
+                    <div class="w-jobs">
+                      <div class="progress"><i style="--p: 0%" data-jobs-bar></i></div>
+                      <span data-jobs-label>快速解析：读取页面</span>
+                      <span class="cnt" data-jobs-count>1 个进行中，2 个排队</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="demo-note">演示为界面示意，文字为示例内容。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 全部功能 -->
+      <section class="sec" id="features">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">全部功能</div>
+            <h2>读论文要用的，都在这里</h2>
+          </div>
+          <div class="features rv">
+            <div class="feature"><svg class="ico"><use href="#i-library" /></svg><h3>文献库</h3><p>从 Zotero 7 导入分类和条目，增量同步；Zotero 没开时读数据库快照，也能直接导入 PDF。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-book" /></svg><h3>阅读器</h3><p>原版、并排、重排三种视图，双向定位；公式、表格、图片照原样渲染。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-search" /></svg><h3>文内检索</h3><p>关键词加语义的混合检索，结果直接跳到原文段落。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-layers" /></svg><h3>解析引擎</h3><p>内置 PyMuPDF；一键安装 MinerU / Docling，或连接远程服务，单篇可换引擎重解析。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-translate" /></svg><h3>翻译</h3><p>块级翻译，可视区域优先；四种显示方式；整篇后台翻译后离线可读；术语表可编辑。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-summary" /></svg><h3>AI 总结</h3><p>分层、结构化的总结，每条结论都带可跳转的原文引用。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-qa" /></svg><h3>单篇问答</h3><p>针对一篇论文提问，答案中的引用经过校验，点一下就到原文。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-edit" /></svg><h3>批注与导出</h3><p>在重排视图里高亮、写批注；连同总结、正文和译文导出为 Markdown。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 外观定制 -->
+      <section class="sec" id="custom">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">外观</div>
+            <h2>纸张、墨色，和一点强调色</h2>
+            <p>固定的暖中性色阶做底和字，强调色只用来指认：选中项、引用编号、定位高亮和进度。就在下面这个窗口上试试。</p>
+          </div>
+
+          <div class="custom rv" data-custom>
+            <div class="win" data-demo-win aria-hidden="true">
+              <div class="win-bar">
+                <span class="title">FreeRead</span>
+                <span class="wb"><svg class="ico"><use href="#i-win-min" /></svg></span>
+                <span class="wb"><svg class="ico"><use href="#i-win-max" /></svg></span>
+                <span class="wb"><svg class="ico"><use href="#i-win-close" /></svg></span>
+              </div>
+              <div class="win-body">
+                <div class="w-side">
+                  <div class="w-brand"><span class="mark"><svg viewBox="0 0 24 24"><use href="#i-mark" /></svg></span>FreeRead</div>
+                  <span class="w-nav on"><svg class="ico"><use href="#i-library" /></svg>文献库</span>
+                  <span class="w-nav"><svg class="ico"><use href="#i-settings" /></svg>设置</span>
+                  <span class="w-label">分类</span>
+                  <span class="w-nav"><svg class="ico"><use href="#i-all" /></svg>全部文献<span class="n">10</span></span>
+                  <span class="w-nav"><svg class="ico"><use href="#i-expand" /></svg>课题组文献</span>
+                  <span class="w-nav sub"><svg class="ico"><use href="#i-folder" /></svg>蛋白质结构预测<span class="n">2</span></span>
+                  <span class="w-nav sub"><svg class="ico"><use href="#i-folder" /></svg>mRNA 设计<span class="n">2</span></span>
+                  <span class="w-nav"><svg class="ico"><use href="#i-folder" /></svg>人类演化<span class="n">3</span></span>
+                </div>
+                <div class="w-main">
+                  <div class="w-lib">
+                    <div class="w-lib-head">
+                      <div><h3>文献库</h3><div class="sub">全部文献 · 10 篇</div></div>
+                      <span class="btn primary sm"><svg class="ico"><use href="#i-sync" /></svg>从 Zotero 同步</span>
+                    </div>
+                    <div class="w-search"><svg class="ico"><use href="#i-search" /></svg>搜索标题或作者</div>
+                    <div class="w-item on"><div class="it"><b>Highly accurate protein structure prediction with AlphaFold</b><small>Jumper, John; Evans, Richard; Pritzel, Alexander · 2021 · Nature</small></div><span class="tag" data-status="ready"><span class="dot"></span>可阅读</span></div>
+                    <div class="w-item"><div class="it"><b>Algorithm for optimized mRNA design improves stability and immunogenicity</b><small>Zhang, He; Zhang, Liang; Lin, Ang · 2023 · Nature</small></div><span class="tag" data-status="parsing"><span class="dot"></span>解析中</span></div>
+                    <div class="w-item"><div class="it"><b>A Draft Sequence of the Neandertal Genome</b><small>Green, Richard E.; Krause, Johannes; Briggs, Adrian W. · 2010 · Science</small></div><span class="tag" data-status="ready"><span class="dot"></span>可阅读</span></div>
+                    <div class="w-item"><div class="it"><b>Genetic sources of population epigenomic variation</b><small>Taudt, Aaron; Colomé-Tatché, Maria; Johannes, Frank · 2016 · Nature Reviews Genetics</small></div><span class="tag" data-status="ready"><span class="dot"></span>可阅读</span></div>
+                    <div class="w-item"><div class="it"><b>Body mass and encephalization in Pleistocene Homo</b><small>Ruff, Christopher B.; Trinkaus, Erik; Holliday, Trenton W. · 1997 · Nature</small></div><span class="tag" data-status="ready"><span class="dot"></span>可阅读</span></div>
+                  </div>
+                  <div class="w-jobs">
+                    <div class="progress"><i style="--p: 62%"></i></div>
+                    <span>高质量解析：识别公式</span>
+                    <span class="cnt">1 个进行中</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="appear">
+              <h3>外观</h3>
+              <p>和应用里 设置 › 外观 是同一组选项。</p>
+              <div class="fld">
+                <span>主题</span>
+                <div class="seg" data-opt="mode"><span class="seg-thumb"></span><button data-v="light" aria-pressed="true">浅色</button><button data-v="dark">深色</button></div>
+              </div>
+              <div class="fld">
+                <span>强调色</span>
+                <div class="swatches" data-opt="accent">
+                  <button class="sw" style="--c: #d97757" data-v="#D97757" data-name="陶土" aria-pressed="true" aria-label="陶土"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></button>
+                  <button class="sw" style="--c: #4f74b8" data-v="#4F74B8" data-name="墨蓝" aria-label="墨蓝"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></button>
+                  <button class="sw" style="--c: #6f8546" data-v="#6F8546" data-name="苔绿" aria-label="苔绿"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></button>
+                  <button class="sw" style="--c: #6b6a63" data-v="#6B6A63" data-name="石板" aria-label="石板"><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></button>
+                </div>
+                <div class="sw-name" data-sw-name>陶土 · #D97757</div>
+              </div>
+              <div class="fld">
+                <span>对比度</span>
+                <div class="seg" data-opt="contrast"><span class="seg-thumb"></span><button data-v="standard" aria-pressed="true">标准</button><button data-v="medium">中</button><button data-v="high">高</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 截图 -->
+      <section class="sec" id="gallery">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">截图</div>
+            <h2>真实界面</h2>
+            <p>以下截图来自 FreeRead 0.1.0，跟随你的深浅色设置。</p>
+          </div>
+          <div class="gallery-nav">
+            <button class="ibtn bordered" type="button" data-gal="-1" aria-label="上一张"><svg class="ico"><use href="#i-chev-l" /></svg></button>
+            <button class="ibtn bordered" type="button" data-gal="1" aria-label="下一张"><svg class="ico"><use href="#i-chev-r" /></svg></button>
+          </div>
+        </div>
+        <div class="gallery" data-gallery>
+          <figure class="rv">
+            <button type="button" aria-label="放大：文献库">
+              <span class="frame"><img class="shot-light" src="screenshots/library-light.webp" width="1440" height="900" alt="文献库" loading="lazy" /><img class="shot-dark" src="screenshots/library-dark.webp" width="1440" height="900" alt="文献库（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>文献库</b>Zotero 分类树、解析状态、底部任务进度</figcaption>
+          </figure>
+          <figure class="rv" style="--i: 1">
+            <button type="button" aria-label="放大：重排与翻译">
+              <span class="frame"><img class="shot-light" src="screenshots/reflow-light.webp" width="1440" height="900" alt="重排视图与交替翻译" loading="lazy" /><img class="shot-dark" src="screenshots/reflow-dark.webp" width="1440" height="900" alt="重排视图与交替翻译（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>重排与翻译</b>衬线正文，译文紧跟原文</figcaption>
+          </figure>
+          <figure class="rv" style="--i: 2">
+            <button type="button" aria-label="放大：AI 总结">
+              <span class="frame"><img class="shot-light" src="screenshots/summary-light.webp" width="1440" height="900" alt="AI 总结面板" loading="lazy" /><img class="shot-dark" src="screenshots/summary-dark.webp" width="1440" height="900" alt="AI 总结面板（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>AI 总结</b>分层结构，引用可跳转</figcaption>
+          </figure>
+          <figure class="rv" style="--i: 3">
+            <button type="button" aria-label="放大：问答">
+              <span class="frame"><img class="shot-light" src="screenshots/qa-light.webp" width="1440" height="900" alt="问答面板" loading="lazy" /><img class="shot-dark" src="screenshots/qa-dark.webp" width="1440" height="900" alt="问答面板（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>问答</b>回答排成正文，引用经过校验</figcaption>
+          </figure>
+          <figure class="rv" style="--i: 4">
+            <button type="button" aria-label="放大：设置">
+              <span class="frame"><img class="shot-light" src="screenshots/settings-light.webp" width="1440" height="900" alt="设置：外观" loading="lazy" /><img class="shot-dark" src="screenshots/settings-dark.webp" width="1440" height="900" alt="设置：外观（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>设置</b>外观、大模型服务、解析引擎、隐私</figcaption>
+          </figure>
+        </div>
+        <dialog class="lightbox" data-lightbox>
+          <form method="dialog"><button class="ibtn" aria-label="关闭"><svg class="ico"><use href="#i-close" /></svg></button></form>
+          <img alt="" />
+        </dialog>
+      </section>
+
+      <!-- ============================================================ 本地优先 -->
+      <section class="sec" id="privacy">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">本地优先</div>
+            <h2>你的文献，留在你的电脑上</h2>
+            <p>FreeRead 没有账号，也没有服务器。大模型服务由你自己选择和配置。</p>
+          </div>
+          <div class="cards3">
+            <div class="card rv"><div class="ci"><svg class="ico"><use href="#i-lock" /></svg></div><h3>数据在本机</h3><p>文献库、解析结果、译文、总结和批注都保存在本机 SQLite，断网也能读。</p></div>
+            <div class="card rv" style="--i: 1"><div class="ci"><svg class="ico"><use href="#i-key" /></svg></div><h3>Key 进钥匙串</h3><p>API Key 存在系统凭据管理器里，不写进配置文件。</p></div>
+            <div class="card rv" style="--i: 2"><div class="ci"><svg class="ico"><use href="#i-shield" /></svg></div><h3>发送前先问</h3><p>第一次把文档内容发给某个大模型或解析服务前，都会先征得你的同意。</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ 下载 -->
+      <section class="sec" id="download">
+        <div class="wrap">
+          <div class="sec-head rv">
+            <div class="eyebrow">下载 · 0.1.0</div>
+            <h2>现在就开始读</h2>
+            <p>支持 Windows 10 / 11 x64。免费、开源，以 AGPL-3.0-or-later 发布。</p>
+          </div>
+          <div class="dl">
+            <div class="card rv">
+              <h3>安装包 <span class="rec">推荐</span></h3>
+              <div class="file">FreeRead_0.1.0_x64-setup.exe</div>
+              <p>安装到当前用户目录，不需要管理员权限；缺少 WebView2 时自动安装。</p>
+              <a class="btn primary" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.1.0/FreeRead_0.1.0_x64-setup.exe"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
+            </div>
+            <div class="card rv" style="--i: 1">
+              <h3>便携版</h3>
+              <div class="file">FreeRead_0.1.0_x64-portable.zip</div>
+              <p>解压后运行 freeread-desktop.exe；文献库和设置仍保存在 %APPDATA%\FreeRead，和安装版共用。</p>
+              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.1.0/FreeRead_0.1.0_x64-portable.zip"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
+            </div>
+          </div>
+          <p class="dl-note rv">程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。所有版本见 <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a>。</p>
+
+          <ol class="quick">
+            <li class="rv"><b>导入文献</b><br />打开 Zotero 7（可选），在文献库里点"从 Zotero 同步"，或用"导入 PDF"。</li>
+            <li class="rv" style="--i: 1"><b>打开阅读</b><br />快速解析完成后，切到"重排"或"并排"视图。</li>
+            <li class="rv" style="--i: 2"><b>接入大模型</b><br />在 设置 › 大模型服务 添加服务并保存 API Key，就能翻译、总结和问答。</li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="closing">
+        <div class="wrap rv">
+          <h2>好好读一篇论文。</h2>
+          <div class="hero-cta">
+            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 FreeRead</a>
+            <a class="btn lg" href="https://github.com/cristimezzz/FreeRead/wiki">使用说明</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="wrap foot-in">
+        <a class="brand" href="#" style="font-size: 16px"><span class="mark" style="width: 22px; height: 22px; border-radius: 6px"><svg viewBox="0 0 24 24"><use href="#i-mark" /></svg></span>FreeRead</a>
+        <span>AGPL-3.0-or-later</span>
+        <nav aria-label="页脚链接">
+          <a href="https://github.com/cristimezzz/FreeRead">GitHub</a>
+          <a href="https://github.com/cristimezzz/FreeRead/wiki">使用说明</a>
+          <a href="https://github.com/cristimezzz/FreeRead/blob/main/docs/04-roadmap.md">路线图</a>
+          <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a>
+          <a href="https://github.com/cristimezzz/FreeRead/issues">反馈问题</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
