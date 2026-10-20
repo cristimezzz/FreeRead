@@ -5,7 +5,7 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations。下文标"计划"的表（kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations；迁移 `0007_sync_state_full` 给 sync_state 加了 last_full_sync_at。下文标"计划"的表（kg_*）和 items_fts 还没有建，结构仍是草案，实现时以迁移为准再回来更新本文。
 
 ## 1. 总览
 
@@ -77,9 +77,10 @@ settings       sync_state
 ### sync_state
 | 列 | 说明 |
 |---|---|
-| source PK | `zotero_local`（M1 只实现了这一种）；计划：`zotero_sqlite` / `zotero_web:<library_id>` |
-| last_version | INTEGER NULL，最后同步的 Zotero library version |
+| source PK | `zotero_local`（本地 API）/ `zotero_sqlite`（数据库快照）；计划：`zotero_web:<library_id>` |
+| last_version | INTEGER NULL，最后同步的 Zotero library version；增量同步从这里开始 |
 | last_synced_at | TEXT NULL |
+| last_full_sync_at | TEXT NULL，上次全量同步；超过 7 天下次同步做全量（[M2 Zotero 同步](m2/zotero-sync.md)） |
 
 ## 3. 文档与块
 

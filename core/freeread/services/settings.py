@@ -91,6 +91,13 @@ class EmbeddingSettings(_Strict):
     mirror: str = Field(default="https://huggingface.co", pattern=r"^https?://\S+$")
 
 
+class ZoteroSettings(_Strict):
+    # auto：先连本地 API，Zotero 没运行时读 zotero.sqlite 快照
+    source: Literal["auto", "local_api", "sqlite"] = "auto"
+    # Zotero 数据目录（含 zotero.sqlite 和 storage/）；空表示默认的 ~/Zotero
+    data_dir: str = ""
+
+
 class GlossarySettings(_Strict):
     # 翻译全文前，文档还没有自动抽取的术语时先抽取一次（会多一次大模型调用）
     auto_extract: bool = False
@@ -110,6 +117,7 @@ class AppSettings(_Strict):
     consented_providers: list[str] = []
     embedding: EmbeddingSettings = EmbeddingSettings()
     glossary: GlossarySettings = GlossarySettings()
+    zotero: ZoteroSettings = ZoteroSettings()
 
     @model_validator(mode="after")
     def _check_refs(self) -> "AppSettings":

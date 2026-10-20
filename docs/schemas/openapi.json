@@ -566,7 +566,7 @@
           "library"
         ],
         "summary": "Sync",
-        "description": "从 Zotero 本地 API 同步，返回 sync 任务（进度见 /jobs/stream）。",
+        "description": "从 Zotero 同步（本地 API 或数据库快照，见设置 zotero.source），返回 sync 任务\n（进度见 /jobs/stream）。",
         "operationId": "sync_library_sync_post",
         "parameters": [
           {
@@ -610,6 +610,60 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/JobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/library/sync/state": {
+      "get": {
+        "tags": [
+          "library"
+        ],
+        "summary": "Sync State",
+        "description": "各数据源上次同步的库版本与时间。",
+        "operationId": "sync_state_library_sync_state_get",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SyncStateOut"
+                  },
+                  "title": "Response Sync State Library Sync State Get"
                 }
               }
             }
@@ -3653,6 +3707,13 @@
             "default": {
               "auto_extract": false
             }
+          },
+          "zotero": {
+            "$ref": "#/components/schemas/ZoteroSettings",
+            "default": {
+              "source": "auto",
+              "data_dir": ""
+            }
           }
         },
         "additionalProperties": false,
@@ -5314,10 +5375,64 @@
               }
             ],
             "title": "Collection Key"
+          },
+          "full": {
+            "type": "boolean",
+            "title": "Full",
+            "default": false
           }
         },
         "type": "object",
         "title": "SyncRequest"
+      },
+      "SyncStateOut": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "last_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Version"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "last_full_sync_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Full Sync At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "last_version",
+          "last_synced_at",
+          "last_full_sync_at"
+        ],
+        "title": "SyncStateOut"
       },
       "TaskKind": {
         "type": "string",
@@ -5744,6 +5859,28 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ZoteroSettings": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "local_api",
+              "sqlite"
+            ],
+            "title": "Source",
+            "default": "auto"
+          },
+          "data_dir": {
+            "type": "string",
+            "title": "Data Dir",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ZoteroSettings"
       }
     }
   }

@@ -14,6 +14,7 @@ from freeread.services.library import (
     ItemDetail,
     ItemPage,
     ItemSort,
+    SyncStateOut,
 )
 
 router = APIRouter(prefix="/library", tags=["library"])
@@ -22,6 +23,8 @@ router = APIRouter(prefix="/library", tags=["library"])
 class SyncRequest(BaseModel):
     # Zotero 分类 key；给定时只为该分类（含子分类）下的条目建解析任务
     collection_key: str | None = None
+    # 强制全量同步（默认能增量时增量）
+    full: bool = False
 
 
 class ImportFileRequest(BaseModel):
@@ -61,8 +64,16 @@ def get_item(ctx: Ctx, item_id: str) -> ItemDetail:
 
 @router.post("/sync", response_model=JobOut, status_code=202)
 def sync(ctx: Ctx, body: SyncRequest | None = None) -> JobOut:
-    """从 Zotero 本地 API 同步，返回 sync 任务（进度见 /jobs/stream）。"""
-    return ctx.library.request_sync(body.collection_key if body else None)
+    """从 Zotero 同步（本地 API 或数据库快照，见设置 zotero.source），返回 sync 任务
+    （进度见 /jobs/stream）。"""
+    body = body or SyncRequest()
+    return ctx.library.request_sync(body.collection_key, body.full)
+
+
+@router.get("/sync/state", response_model=list[SyncStateOut])
+def sync_state(ctx: Ctx) -> list[SyncStateOut]:
+    """各数据源上次同步的库版本与时间。"""
+    return ctx.library.sync_states()
 
 
 @router.post("/import-file", response_model=ImportFileResult)

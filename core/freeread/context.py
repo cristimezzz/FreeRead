@@ -16,7 +16,9 @@ from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
 from freeread.infra.parsers.registry import ParserRegistry
 from freeread.infra.parsers.subprocess_engine import FROZEN, set_engines_root
-from freeread.infra.zotero.local_api import LocalApiConnector
+from freeread.infra.zotero.auto import AutoConnector
+from freeread.infra.zotero.local_api import LocalApiConnector, default_data_dir
+from freeread.infra.zotero.sqlite_snapshot import SqliteSnapshotConnector
 from freeread.services.annotations import AnnotationService
 from freeread.services.embed import EmbedService
 from freeread.services.export import ExportService
@@ -66,9 +68,20 @@ class AppContext:
         bus = EventBus()
         jobs = JobQueue(sessions, bus)
         worker = JobWorker(jobs, bus)
-        library = LibraryService(sessions, paths, jobs, LocalApiConnector)
-        worker.register("sync", library.run_sync_job)
         settings = SettingsService(sessions)
+
+        def zotero_connector():
+            cfg = settings.get().zotero
+            data_dir = Path(cfg.data_dir) if cfg.data_dir else default_data_dir()
+            if cfg.source == "sqlite":
+                return SqliteSnapshotConnector(data_dir, paths.zotero_snapshots)
+            local = LocalApiConnector(data_dir=data_dir)
+            if cfg.source == "local_api":
+                return local
+            return AutoConnector(local, SqliteSnapshotConnector(data_dir, paths.zotero_snapshots))
+
+        library = LibraryService(sessions, paths, jobs, zotero_connector)
+        worker.register("sync", library.run_sync_job)
         secrets = secrets if secrets is not None else SecretStore.from_env()
 
         def remote_parser(engine: str):

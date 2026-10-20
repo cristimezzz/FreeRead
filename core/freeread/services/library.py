@@ -1,7 +1,10 @@
 """文献库：Zotero 同步与手动导入 PDF。见 docs/01-architecture.md §5.1。
 
 - Zotero 条目以 zotero_key 为外部主键 upsert；Zotero 端消失的条目标记 archived，不物理删除。
-- M1 每次全量拉取（本机 47 条约 1.4 s），增量同步在 M2。
+- 数据源由设置决定：本地 API，或 zotero.sqlite 快照（Zotero 没运行时），见 docs/m2/zotero-sync.md。
+- 增量同步：数据源支持时只拉上次版本之后变化的条目，另取一次现存 key 列表，不在其中的归档；
+  没有上次版本、版本为 0（没用 Zotero 云同步时版本不增长）、距上次全量超过 FULL_SYNC_EVERY、
+  用户要求完全同步、或数据源取不到 key 列表时做全量。
 - 每个 PDF 按 sha256 去重为一个 document（doc_id = d_ + sha256 前 16 位），待解析的建 parse 任务。
 - Zotero 附件原地引用；手动导入的 PDF 复制到 documents/<doc_id>/source.pdf。
 """
@@ -12,6 +15,7 @@ import json
 import shutil
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -37,6 +41,8 @@ from freeread.infra.jobs.worker import JobContext
 from freeread.infra.zotero.base import Collection, Item, ZoteroConnector
 
 ZOTERO_LOCAL_SOURCE = "zotero_local"
+SOURCE_LABELS = {"zotero_local": "本地 API", "zotero_sqlite": "数据库快照"}
+FULL_SYNC_EVERY = timedelta(days=7)
 PDF_MAGIC = b"%PDF-"
 HASH_CHUNK = 1 << 20
 
@@ -95,8 +101,17 @@ class ItemPage(BaseModel):
     total: int
 
 
+class SyncStateOut(BaseModel):
+    source: str
+    last_version: int | None
+    last_synced_at: str | None
+    last_full_sync_at: str | None
+
+
 @dataclass
 class SyncResult:
+    source: str = ZOTERO_LOCAL_SOURCE
+    full: bool = True
     added: int = 0
     updated: int = 0
     archived: int = 0
@@ -106,8 +121,9 @@ class SyncResult:
     parse_jobs: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
+        how = f"{'全量' if self.full else '增量'}（{SOURCE_LABELS.get(self.source, self.source)}）"
         return (
-            f"新增 {self.added}，更新 {self.updated}，归档 {self.archived}，"
+            f"{how}：新增 {self.added}，更新 {self.updated}，归档 {self.archived}，"
             f"缺失文件 {self.missing_files}，移除附件 {self.removed_files}，"
             f"待解析 {len(self.parse_jobs)}"
         )
@@ -162,23 +178,38 @@ class LibraryService:
 
     # ------------------------------------------------------------ 任务
 
-    def request_sync(self, collection_key: str | None = None) -> JobOut:
+    def request_sync(self, collection_key: str | None = None, full: bool = False) -> JobOut:
         """建 sync 任务；已有排队中 / 运行中的 sync 时直接返回它。"""
         active = self._jobs.list([JobStatus.QUEUED, JobStatus.RUNNING], kind="sync", limit=1)
         if active:
             return active[0]
-        return self._jobs.enqueue("sync", {"collection_key": collection_key})
+        return self._jobs.enqueue("sync", {"collection_key": collection_key, "full": full})
 
     async def run_sync_job(self, ctx: JobContext) -> None:
-        result = await self.sync_zotero(ctx.job.payload.get("collection_key"), ctx.report)
+        payload = ctx.job.payload
+        result = await self.sync_zotero(
+            payload.get("collection_key"), ctx.report, full=bool(payload.get("full"))
+        )
         await ctx.report(1.0, result.summary())
+
+    def sync_states(self) -> list[SyncStateOut]:
+        with self._sessions() as s:
+            return [
+                SyncStateOut.model_validate(r, from_attributes=True)
+                for r in s.scalars(select(SyncStateRow).order_by(SyncStateRow.source))
+            ]
 
     # ------------------------------------------------------------ Zotero 同步
 
     async def sync_zotero(
-        self, collection_key: str | None = None, progress: Progress | None = None
+        self,
+        collection_key: str | None = None,
+        progress: Progress | None = None,
+        *,
+        full: bool = False,
     ) -> SyncResult:
-        """全量同步元数据；只为 collection_key（含子分类）下的条目建解析任务，None 表示全部。"""
+        """同步元数据（能增量时增量）；只为 collection_key（含子分类）下的条目建解析任务，
+        None 表示全部。full=True 强制全量。"""
 
         async def report(p: float, msg: str) -> None:
             if progress:
@@ -187,9 +218,17 @@ class LibraryService:
         connector = self.connector_factory()
         try:
             await report(0.05, "读取 Zotero 分类")
+            # 第一次读取时才确定数据源（auto 模式下本地 API 连不上会换成快照）
             collections = await connector.list_collections()
-            await report(0.2, "读取 Zotero 条目")
-            items = await connector.list_items()
+            source = getattr(connector, "source_id", ZOTERO_LOCAL_SOURCE)
+            since = None if full else self._since(source, connector)
+            live: set[str] | None = None
+            if since is not None:
+                live = await connector.list_keys()
+                if live is None:  # 数据源查不到删除：这次做全量
+                    since = None
+            await report(0.2, "读取 Zotero 条目" if since is None else "读取变化的条目")
+            items = await connector.list_items(since)
             await report(0.5, "解析附件路径")
             resolved = []
             missing = 0
@@ -212,10 +251,30 @@ class LibraryService:
 
         await report(0.6, "写入文献库")
         result = await asyncio.to_thread(
-            self._apply_sync, collections, resolved, collection_key, version
+            self._apply_sync,
+            collections,
+            resolved,
+            collection_key,
+            version,
+            source=source,
+            full=since is None,
+            live_keys=live,
         )
         result.missing_files = missing
         return result
+
+    def _since(self, source: str, connector: ZoteroConnector) -> int | None:
+        """可以增量时返回上次同步的库版本，否则 None（全量）。"""
+        if not getattr(connector, "incremental", False):
+            return None
+        with self._sessions() as s:
+            state = s.get(SyncStateRow, source)
+            if state is None or not state.last_version or not state.last_full_sync_at:
+                return None
+            last_full = datetime.fromisoformat(state.last_full_sync_at)
+            if datetime.now(UTC) - last_full > FULL_SYNC_EVERY:
+                return None
+            return state.last_version
 
     def _apply_sync(
         self,
@@ -223,8 +282,12 @@ class LibraryService:
         resolved: list[_ResolvedItem],
         collection_key: str | None,
         library_version: int | None,
+        *,
+        source: str = ZOTERO_LOCAL_SOURCE,
+        full: bool = True,
+        live_keys: set[str] | None = None,
     ) -> SyncResult:
-        result = SyncResult(collections=len(collections))
+        result = SyncResult(source=source, full=full, collections=len(collections))
         to_parse: set[str] = set()
         hashes = self._hash_attachments(resolved)
         with self._sessions.begin() as s:
@@ -255,11 +318,8 @@ class LibraryService:
                 for tag in dict.fromkeys(item.tags):
                     s.add(ItemTagRow(item_id=row.id, tag=tag))
 
-                in_scope = scope is None or bool(scope & set(item.collection_keys))
                 for att_key, path in r.pdfs:
-                    doc_id = self._upsert_attachment(s, row.id, att_key, path, hashes[att_key])
-                    if in_scope:
-                        to_parse.add(doc_id)
+                    self._upsert_attachment(s, row.id, att_key, path, hashes[att_key])
                 # Zotero 里已删除（或文件已不在本地）的 PDF 附件不再挂在条目下，否则会打开到 404
                 result.removed_files += s.execute(
                     delete(AttachmentRow).where(
@@ -268,22 +328,51 @@ class LibraryService:
                     )
                 ).rowcount
 
+            # Zotero 端删除（或移入回收站）的条目：全量时是这次没看到的，增量时是不在现存 key 里的
+            alive = seen if full else (live_keys or set()) | seen
             stale = s.scalars(
                 select(ItemRow).where(
                     ItemRow.zotero_key.is_not(None),
-                    ItemRow.zotero_key.not_in(seen),
+                    ItemRow.zotero_key.not_in(alive),
                     ItemRow.status == "active",
                 )
             ).all()
             for row in stale:
                 row.status = "archived"
             result.archived = len(stale)
+            if not full:  # 增量时没变的条目不在 resolved 里，被删的附件要单独清掉
+                result.removed_files += s.execute(
+                    delete(AttachmentRow).where(
+                        AttachmentRow.zotero_key.is_not(None),
+                        AttachmentRow.zotero_key.not_in(alive),
+                    )
+                ).rowcount
 
+            # 范围内（全部或该分类及子分类）现有条目的 PDF 都检查一遍是否需要解析：
+            # 增量时没变化的条目不在 resolved 里，但"同步此分类"仍要为它们建解析任务
+            docs = (
+                select(AttachmentRow.doc_id)
+                .join(ItemRow, ItemRow.id == AttachmentRow.item_id)
+                .where(
+                    ItemRow.zotero_key.is_not(None),
+                    ItemRow.status == "active",
+                    AttachmentRow.doc_id.is_not(None),
+                )
+            )
+            if scope is not None:
+                docs = docs.join(ItemCollectionRow, ItemCollectionRow.item_id == ItemRow.id).where(
+                    ItemCollectionRow.collection_id.in_([col_ids[k] for k in scope])
+                )
+            to_parse.update(s.scalars(docs).all())
+
+            previous = s.get(SyncStateRow, source)
+            now = utcnow()
             s.merge(
                 SyncStateRow(
-                    source=ZOTERO_LOCAL_SOURCE,
+                    source=source,
                     last_version=library_version,
-                    last_synced_at=utcnow(),
+                    last_synced_at=now,
+                    last_full_sync_at=now if full else (previous and previous.last_full_sync_at),
                 )
             )
         result.parse_jobs = self._enqueue_parse(sorted(to_parse))

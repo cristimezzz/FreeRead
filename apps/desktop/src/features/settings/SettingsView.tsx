@@ -7,6 +7,7 @@ import { Button, IconButton, Progress, Segmented, Select, Switch, TextField } fr
 import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
 import { SETTINGS_SECTIONS } from "./sections";
+import { ZoteroSection } from "./ZoteroSection";
 
 type Provider = Schemas["ProviderConfig"];
 type Engine = Schemas["EngineOut"];
@@ -460,6 +461,8 @@ export function SettingsView() {
             添加服务
           </Button>
         </Group>
+
+        <ZoteroSection settings={settings} update={update} Group={Group} Row={Row} title={sectionTitle("zotero")} />
 
         <Group id="parse" title={sectionTitle("parse")}>
           <Row title="高质量解析引擎" desc="导入后先用快速模式秒级出可读版本，再在后台用高质量引擎升级">

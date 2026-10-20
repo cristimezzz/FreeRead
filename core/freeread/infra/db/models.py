@@ -86,6 +86,8 @@ class SyncStateRow(Base):
     source: Mapped[str] = mapped_column(String, primary_key=True)
     last_version: Mapped[int | None] = mapped_column(Integer)
     last_synced_at: Mapped[str | None] = mapped_column(String)
+    # 上次全量同步：增量同步定期（7 天）退回全量，补上增量看不到的变化（如移入回收站）
+    last_full_sync_at: Mapped[str | None] = mapped_column(String)
 
 
 # ---------------------------------------------------------------- 文档与块

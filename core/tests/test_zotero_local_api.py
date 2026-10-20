@@ -173,3 +173,55 @@ async def test_standalone_pdf_venue_and_library_version(tmp_path):
     assert solo.collection_keys == ["COLL0001"] and solo.tags == ["zh"]
     assert solo.extra == {"standalone": True}
     assert [a.key for a in solo.attachments] == ["SOLO0001"]
+
+
+async def test_incremental_items_fetch_parents_of_changed_attachments(tmp_path):
+    """since 只作用于普通条目；只变了附件的条目按 itemKey 补读，并带上完整附件列表。"""
+    atts = attachments(tmp_path)
+    atts[1]["version"] = 9  # 只有这个附件在版本 8 之后变了
+    seen: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url)
+        p = request.url.params
+        if p.get("format") == "versions":
+            keys = {r["key"]: r["version"] for r in [*ITEMS, *atts]}
+            return httpx.Response(200, json=keys, headers={"Total-Results": str(len(keys))})
+        if p.get("itemType") == "attachment":
+            rows = atts
+        elif p.get("itemKey"):
+            rows = [r for r in ITEMS if r["key"] in p["itemKey"].split(",")]
+        else:
+            rows = [r for r in ITEMS if r["version"] > int(p.get("since", -1))]
+        return httpx.Response(
+            200, json=rows, headers={"Total-Results": str(len(rows)), "Last-Modified-Version": "9"}
+        )
+
+    async with LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/",
+        data_dir=tmp_path,
+        transport=httpx.MockTransport(handler),
+    ) as c:
+        items = await c.list_items(since_version=8)
+        assert [i.key for i in items] == ["PAPER001"]
+        assert [a.key for a in items[0].attachments] == ["ATT00001", "ATT00002"]
+        assert any(u.params.get("itemKey") == "PAPER001" for u in seen)
+        assert (
+            next(u for u in seen if u.params.get("itemType") == "attachment").params.get("since")
+            is None
+        )
+        assert await c.list_keys() == {"PAPER001", "NOTE0001", "ATT00001", "ATT00002"}
+        assert c.library_version == 9
+
+
+async def test_list_keys_unsupported_or_truncated(tmp_path):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.params.get("format") == "versions":
+            return httpx.Response(200, json={"A": 1}, headers={"Total-Results": "2"})
+        return httpx.Response(404)
+
+    async with LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/",
+        transport=httpx.MockTransport(handler),
+    ) as c:
+        assert await c.list_keys() is None  # 被截断

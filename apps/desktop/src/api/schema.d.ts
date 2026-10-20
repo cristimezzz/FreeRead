@@ -155,9 +155,30 @@ export interface paths {
         put?: never;
         /**
          * Sync
-         * @description 从 Zotero 本地 API 同步，返回 sync 任务（进度见 /jobs/stream）。
+         * @description 从 Zotero 同步（本地 API 或数据库快照，见设置 zotero.source），返回 sync 任务
+         *     （进度见 /jobs/stream）。
          */
         post: operations["sync_library_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/library/sync/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sync State
+         * @description 各数据源上次同步的库版本与时间。
+         */
+        get: operations["sync_state_library_sync_state_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -946,6 +967,13 @@ export interface components {
              *     }
              */
             glossary: components["schemas"]["GlossarySettings"];
+            /**
+             * @default {
+             *       "source": "auto",
+             *       "data_dir": ""
+             *     }
+             */
+            zotero: components["schemas"]["ZoteroSettings"];
         };
         /** Appearance */
         Appearance: {
@@ -1575,6 +1603,22 @@ export interface components {
         SyncRequest: {
             /** Collection Key */
             collection_key?: string | null;
+            /**
+             * Full
+             * @default false
+             */
+            full: boolean;
+        };
+        /** SyncStateOut */
+        SyncStateOut: {
+            /** Source */
+            source: string;
+            /** Last Version */
+            last_version: number | null;
+            /** Last Synced At */
+            last_synced_at: string | null;
+            /** Last Full Sync At */
+            last_full_sync_at: string | null;
         };
         /**
          * TaskKind
@@ -1720,6 +1764,20 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ZoteroSettings */
+        ZoteroSettings: {
+            /**
+             * Source
+             * @default auto
+             * @enum {string}
+             */
+            source: "auto" | "local_api" | "sqlite";
+            /**
+             * Data Dir
+             * @default
+             */
+            data_dir: string;
         };
     };
     responses: never;
@@ -2019,6 +2077,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sync_state_library_sync_state_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SyncStateOut"][];
                 };
             };
             /** @description Validation Error */
