@@ -215,6 +215,29 @@ async def test_job_chain_fast_then_hq(ctx, tmp_path, fake_mineru):
     assert parse_job.status == JobStatus.DONE and "23 个块" in parse_job.message
 
 
+async def test_manual_reparse_with_hq_engine(ctx, tmp_path, fake_mineru):
+    from freeread.infra.jobs.worker import JobContext
+
+    _, doc_id = import_synthetic(ctx, tmp_path)
+    await ctx.parse.run(doc_id, "pymupdf", noop)
+    await ctx.parse.run(doc_id, "mineru", noop)
+    assert FakeHQParser.calls == 1
+
+    job = ctx.parse.request_parse(doc_id, "mineru")
+    assert job.kind == "parse_hq" and job.payload["force"] is True
+    assert ctx.parse.request_parse(doc_id, "mineru").id == job.id  # 已在排队：复用
+    await ctx.parse.run_parse_hq_job(JobContext(job, ctx.jobs))
+    # 已经是 MinerU 结果也要真的重新解析，而不是返回缓存
+    assert FakeHQParser.calls == 2
+    assert ctx.parse.get(doc_id).parser_engine == "mineru"
+
+    # 指定快速模式重新解析：低等级引擎也能覆盖高等级结果（用户明确要求）
+    fast = ctx.parse.request_parse(doc_id, "pymupdf")
+    assert fast.kind == "parse"
+    await ctx.parse.run_parse_job(JobContext(fast, ctx.jobs))
+    assert ctx.parse.get(doc_id).parser_engine == "pymupdf"
+
+
 async def test_chain_respects_settings(ctx, tmp_path, fake_mineru):
     _, doc_id = import_synthetic(ctx, tmp_path)
     settings = ctx.settings.get()

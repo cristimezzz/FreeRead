@@ -187,7 +187,19 @@ class ParseService:
         spec = self.registry.get(engine)
         _ensure_available(spec)
         kind = "parse_hq" if spec.heavy else "parse"
-        return self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine, "force": True})
+        payload = {"doc_id": doc_id, "engine": engine, "force": True}
+        # 连点或重复请求：同一引擎已在排队就复用，不重复解析（运行中的不算，用户可能要重来）
+        with self._sessions() as s:
+            job_id = s.scalar(
+                select(JobRow.id).where(
+                    JobRow.kind == kind,
+                    JobRow.status == JobStatus.QUEUED,
+                    JobRow.payload["doc_id"].as_string() == doc_id,
+                    JobRow.payload["engine"].as_string() == engine,
+                )
+            )
+        existing = self._jobs.get(job_id) if job_id else None
+        return existing or self._jobs.enqueue(kind, payload)
 
     def enqueue_renormalize(self) -> list[str]:
         """启动时调用：Normalizer 升级后，为 IR 版本过旧且有原生输出的文档建非强制解析任务。

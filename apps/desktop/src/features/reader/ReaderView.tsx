@@ -13,6 +13,7 @@ import { SearchPanel } from "./SearchPanel";
 import { SummaryPanel } from "../summary/SummaryPanel";
 import { useSummary } from "../summary/useSummary";
 import { QaPanel } from "../qa/QaPanel";
+import { ReparseDialog } from "./ReparseDialog";
 import { useQa } from "../qa/useQa";
 
 type Layout = "pdf" | "split" | "reflow";
@@ -90,6 +91,15 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const settings = useApp((s) => s.settings);
   const toast = useApp((s) => s.toast);
   const jobs = useApp((s) => s.jobs);
+  const [reparseOpen, setReparseOpen] = useState(false);
+  // 本文最近一次完成的解析任务：用同一引擎重新解析时引擎和版本号都不变，靠它触发重新拉 IR
+  const parsedAt = Object.values(jobs).reduce(
+    (m, j) =>
+      (j.kind === "parse" || j.kind === "parse_hq") && j.payload.doc_id === docId && j.status === "done" && (j.finished_at ?? "") > m
+        ? (j.finished_at ?? "")
+        : m,
+    "",
+  );
   const navigate = useApp((s) => s.navigate);
 
   const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) =>
@@ -118,7 +128,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
       setStatus(s);
       if (s.parse_status !== "ready") return;
       // 只有解析结果变了才重新拉 IR；嵌入状态之类的变化也会发 document 事件
-      const parseKey = [s.parser_engine, s.parser_version, s.normalizer_version].join("|");
+      const parseKey = [s.parser_engine, s.parser_version, s.normalizer_version, parsedAt].join("|");
       if (parseKey === loadedParse.current) return;
       try {
         const ir = (await (await rawFetch(`/documents/${docId}/ir`)).json()) as Document;
@@ -136,7 +146,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
     };
     // doc 只用于记录升级前的版本，不作为依赖
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [docId, version, toast]);
+  }, [docId, version, parsedAt, toast]);
 
   const index = useMemo(() => (doc ? buildPageIndex(doc.blocks) : new Map()), [doc]);
   const byId = useMemo(() => new Map(doc?.blocks.map((b) => [b.id, b]) ?? []), [doc]);
@@ -246,10 +256,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
     ? Math.round(Math.min(Math.max(PANE_MIN, panesW - PANE_MIN), Math.max(PANE_MIN, prefs.split * panesW)))
     : 0;
 
+  const parsingEngine = parsing?.payload.engine as string | undefined;
   const statusText = parsing
-    ? parsing.kind === "parse_hq"
-      ? "正在用高质量引擎升级…"
-      : "正在解析…"
+    ? parsing.payload.force && parsingEngine
+      ? `正在用 ${ENGINE_LABEL[parsingEngine] ?? parsingEngine} 重新解析…`
+      : parsing.kind === "parse_hq"
+        ? "正在用高质量引擎升级…"
+        : "正在解析…"
     : status?.parse_status === "failed"
       ? "解析失败，只能阅读原版"
       : doc
@@ -272,7 +285,25 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             {statusText}
           </span>
         )}
+        {status && (
+          <Button
+            variant="ghost"
+            small
+            icon="sync"
+            disabled={Boolean(parsing)}
+            title={parsing ? "正在解析，完成后可以重新解析" : "换一个解析引擎重新解析本文"}
+            onClick={() => setReparseOpen(true)}
+          >
+            重新解析
+          </Button>
+        )}
       </header>
+      <ReparseDialog
+        open={reparseOpen}
+        docId={docId}
+        current={status?.parser_engine ?? undefined}
+        onClose={() => setReparseOpen(false)}
+      />
       <div className="reader-toolbar" role="toolbar" aria-label="阅读工具">
         <div className="tool-group">
           <span className="lbl">视图</span>
