@@ -771,6 +771,8 @@ export interface components {
             filename: string;
             /** Parse Status */
             parse_status: string | null;
+            /** File Exists */
+            file_exists: boolean;
         };
         /** DocumentOut */
         DocumentOut: {

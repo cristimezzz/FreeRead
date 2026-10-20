@@ -4,9 +4,10 @@ import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
 import { Icon } from "../../components/icons";
 import { Button, Progress } from "../../components/ui";
-import { formatAuthors, ItemList } from "./ItemList";
+import { defaultDoc, formatAuthors, ItemList } from "./ItemList";
 
 type Item = Schemas["ItemOut"];
+type Doc = Schemas["DocRef"];
 const PAGE = 100;
 const MAX_PAGE = 500; // 服务端单页上限
 
@@ -111,14 +112,16 @@ export function LibraryView() {
     if (paths.length) bumpLibrary();
   };
 
-  const open = (item: Item) => {
-    const doc = item.documents.find((d) => d.parse_status === "ready") ?? item.documents[0];
+  const open = (item: Item, picked?: Doc) => {
+    const doc = picked ?? defaultDoc(item);
     if (!doc?.doc_id) {
-      toast("这个条目没有可用的 PDF 附件");
+      toast(item.documents.length ? "这个条目的 PDF 文件已不存在，请重新从 Zotero 同步" : "这个条目没有可用的 PDF 附件");
       return;
     }
+    // 一个条目有多个 PDF 时标题后附文件名，区分正在读的是哪一个
+    const title = item.documents.length > 1 ? `${item.title} · ${doc.filename}` : item.title;
     const byline = [formatAuthors(item.authors), item.year, item.venue].filter(Boolean).join(" · ");
-    navigate({ name: "reader", docId: doc.doc_id, itemId: item.id, title: item.title, byline });
+    navigate({ name: "reader", docId: doc.doc_id, itemId: item.id, title, byline });
   };
 
   const collection = collections.find((c) => c.id === selected);

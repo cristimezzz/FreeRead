@@ -2692,6 +2692,10 @@
               }
             ],
             "title": "Parse Status"
+          },
+          "file_exists": {
+            "type": "boolean",
+            "title": "File Exists"
           }
         },
         "type": "object",
@@ -2699,7 +2703,8 @@
           "attachment_id",
           "doc_id",
           "filename",
-          "parse_status"
+          "parse_status",
+          "file_exists"
         ],
         "title": "DocRef"
       },
