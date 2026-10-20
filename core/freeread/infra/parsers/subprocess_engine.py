@@ -12,6 +12,7 @@ import asyncio
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from freeread.infra.parsers.base import ParserCaps, ProgressCb, RawLayout
@@ -41,6 +42,11 @@ def venv_python(venv: Path) -> Path:
     return venv / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
 
+# 设置里的解析设备（settings.parse_device）→ 引擎读取的环境变量值
+DEVICE_ENV_VARS = ("MINERU_DEVICE_MODE", "DOCLING_DEVICE")
+DEVICE_VALUES = {"gpu": "cuda", "cpu": "cpu"}
+
+
 def engine_python(engine: str) -> Path:
     env = os.environ.get(f"FREEREAD_{engine.upper()}_PYTHON")
     if env:
@@ -48,10 +54,18 @@ def engine_python(engine: str) -> Path:
     return venv_python(engines_root() / engine)
 
 
-def engine_env() -> dict[str, str]:
-    """模型与缓存统一放到 <engines_root>/cache/，并关闭遥测。与 scripts/engines/env.sh 保持一致。"""
+def engine_env(device: str = "auto") -> dict[str, str]:
+    """模型与缓存统一放到 <engines_root>/cache/，并关闭遥测。与 scripts/engines/env.sh 保持一致。
+
+    device：auto（引擎自行检测，有 CUDA 用 GPU）/ gpu / cpu。
+    """
     cache = Path(os.environ.get("ENGINE_CACHE", engines_root() / "cache"))
     env = dict(os.environ)
+    # 继承来的设备变量不能盖过用户在设置里的选择
+    for var in DEVICE_ENV_VARS:
+        env.pop(var, None)
+    if device in DEVICE_VALUES:
+        env.update(dict.fromkeys(DEVICE_ENV_VARS, DEVICE_VALUES[device]))
     env.update(
         {
             "ENGINE_CACHE": str(cache),
@@ -76,11 +90,18 @@ def engine_command(
 
 
 class SubprocessParser:
-    def __init__(self, name: str, caps: ParserCaps, extra_args: list[str] | None = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        caps: ParserCaps,
+        extra_args: list[str] | None = None,
+        device: Callable[[], str] | None = None,
+    ) -> None:
         self.name = name
         self.version = "subprocess"
         self._caps = caps
         self._extra = extra_args or []
+        self._device = device or (lambda: "auto")
 
     def capabilities(self) -> ParserCaps:
         return self._caps
@@ -91,7 +112,7 @@ class SubprocessParser:
         with (out_dir / "engine.log").open("wb") as log:
             proc = await asyncio.create_subprocess_exec(
                 *engine_command(self.name, pdf, out_dir, self._extra),
-                env=engine_env(),
+                env=engine_env(self._device()),
                 stdout=log,
                 stderr=asyncio.subprocess.STDOUT,
             )

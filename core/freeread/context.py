@@ -72,7 +72,10 @@ class AppContext:
         if FROZEN:
             set_engines_root(paths.engines)
         registry = ParserRegistry(
-            paths.logs, remote_parser, lambda engine: secrets.get(PARSER_KEY_PREFIX + engine)
+            paths.logs,
+            remote_parser,
+            lambda engine: secrets.get(PARSER_KEY_PREFIX + engine),
+            device=lambda: settings.get().parse_device,
         )
         parse = ParseService(sessions, paths, jobs, bus, settings, registry)
         parse.has_key = lambda engine: secrets.has(PARSER_KEY_PREFIX + engine)

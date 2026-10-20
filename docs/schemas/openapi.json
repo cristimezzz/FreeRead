@@ -2572,6 +2572,16 @@
               }
             }
           },
+          "parse_device": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "gpu",
+              "cpu"
+            ],
+            "title": "Parse Device",
+            "default": "auto"
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ProviderConfig"

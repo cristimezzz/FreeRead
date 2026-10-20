@@ -477,6 +477,18 @@ export function SettingsView() {
               onValue={(parse_engine) => update({ parse_engine })}
             />
           </Row>
+          <Row title="解析设备" desc="只影响在本机运行的 MinerU 和 Docling。GPU 需要 NVIDIA 显卡；改动从下一次解析开始生效">
+            <Segmented
+              label="解析设备"
+              value={settings.parse_device}
+              options={[
+                { value: "auto", label: "自动" },
+                { value: "gpu", label: "GPU" },
+                { value: "cpu", label: "CPU" },
+              ]}
+              onValue={(parse_device) => update({ parse_device })}
+            />
+          </Row>
           <p className="set-hint">
             MinerU 和 Docling 可以在本机运行，也可以调用自部署或云端服务：MinerU 支持 mineru-api 与
             mineru.net，Docling 支持 docling-serve。局域网地址无需确认；公网地址要先允许上传 PDF。

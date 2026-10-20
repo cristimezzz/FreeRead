@@ -14,6 +14,7 @@ def test_settings_defaults(client):
     s = client.get("/settings").json()
     assert s["target_lang"] == "zh-CN"
     assert s["parse_engine"] == "auto"
+    assert s["parse_device"] == "auto"
     assert s["appearance"]["theme_mode"] == "system"
     assert s["appearance"]["seed_color"] == "#D97757"
     assert s["providers"] == [] and s["routes"] == {}
@@ -47,6 +48,8 @@ def test_settings_validation(client):
     assert client.put("/settings", json=legacy).json()["appearance"]["seed_color"] == "#D97757"
     bad_color = s | {"appearance": s["appearance"] | {"seed_color": "red"}}
     assert client.put("/settings", json=bad_color).status_code == 422
+    assert client.put("/settings", json=s | {"parse_device": "tpu"}).status_code == 422
+    assert client.put("/settings", json=s | {"parse_device": "gpu"}).json()["parse_device"] == "gpu"
 
 
 def test_settings_invalid_stored_value_falls_back_to_default(client):
