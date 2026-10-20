@@ -5,6 +5,7 @@ import { ContextMenu, installDefaultMenu } from "../components/ContextMenu";
 import { BrandMark } from "../components/icons";
 import { Sidebar } from "../components/Sidebar";
 import { Snackbar } from "../components/Snackbar";
+import { Titlebar } from "../components/Titlebar";
 import { Progress } from "../components/ui";
 import { JobsBar } from "../features/jobs/JobsBar";
 import { LibraryView } from "../features/library/LibraryView";
@@ -70,6 +71,8 @@ export default function App() {
 
   if (boot.state !== "ready") {
     return (
+      <>
+      <Titlebar />
       <div className="boot">
         <BrandMark size={56} />
         <div className="boot-name serif">FreeRead</div>
@@ -89,11 +92,13 @@ export default function App() {
           </div>
         )}
       </div>
+      </>
     );
   }
 
   return (
     <div className="app">
+      <Titlebar />
       <Sidebar />
       <main className="main">
         {view.name === "library" && <LibraryView />}

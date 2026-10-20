@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 应用图标源文件：与侧栏 BrandMark 同一个图形（陶土底 + 白色打开的书）。
+       改完后在 apps/desktop 下运行 `npx tauri icon src-tauri/icons/app-icon.svg` 重新生成各尺寸。 -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E38A6B"/>
+      <stop offset="1" stop-color="#C9644A"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0.18"/>
+      <stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#sheen)"/>
+  <g transform="translate(512 530) scale(23) translate(-12 -12)" fill="#fff" stroke="#fff"
+     stroke-width="1.2" stroke-linejoin="round">
+    <path d="M11.2 6.3C9.3 5 7 4.5 3.5 4.5v13.1c3.4 0 5.8.5 7.7 1.8z"/>
+    <path d="M12.8 6.3C14.7 5 17 4.5 20.5 4.5v13.1c-3.4 0-5.8.5-7.7 1.8z" fill-opacity="0.82" stroke-opacity="0.82"/>
+  </g>
+</svg>

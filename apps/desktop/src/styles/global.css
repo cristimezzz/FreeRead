@@ -268,6 +268,127 @@ select {
   font-size: 13px;
 }
 
+/* 选择框：自绘下拉箭头（两段渐变拼成的 V），跟随主题色 */
+select {
+  appearance: none;
+  padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink3) 50%),
+    linear-gradient(135deg, var(--ink3) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 52%, calc(100% - 11px) 52%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  cursor: pointer;
+}
+
+select:hover:not(:focus):not(:disabled) {
+  border-color: var(--ink3);
+}
+
+/* 可定制的原生选择框（WebView2 / Chromium）：弹出层用纸面样式并带展开动画；
+   其他 WebView 退回上面的系统弹出层 */
+@supports (appearance: base-select) {
+  select,
+  ::picker(select) {
+    appearance: base-select;
+  }
+
+  select {
+    display: inline-flex;
+    align-items: center;
+    padding-right: 10px;
+    background-image: none;
+  }
+
+  select::picker-icon {
+    content: "";
+    width: 7px;
+    height: 7px;
+    margin: -3px 2px 0 auto;
+    border-right: 1.5px solid var(--ink3);
+    border-bottom: 1.5px solid var(--ink3);
+    transform: rotate(45deg);
+    transition: transform var(--dur) var(--ease), margin var(--dur) var(--ease);
+  }
+
+  select:open::picker-icon {
+    margin-top: 3px;
+    transform: rotate(225deg);
+  }
+
+  ::picker(select) {
+    min-width: anchor-size(width);
+    max-height: min(320px, 50vh);
+    margin: 4px 0;
+    padding: 4px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.12), 0 2px 6px rgb(0 0 0 / 0.06);
+    transform-origin: top center;
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.96);
+    transition: opacity var(--dur-fast) var(--ease-exit), transform var(--dur-fast) var(--ease-exit),
+      overlay var(--dur-fast) allow-discrete, display var(--dur-fast) allow-discrete;
+  }
+
+  ::picker(select):popover-open {
+    opacity: 1;
+    transform: none;
+    transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease), overlay var(--dur) allow-discrete,
+      display var(--dur) allow-discrete;
+  }
+
+  @starting-style {
+    ::picker(select):popover-open {
+      opacity: 0;
+      transform: translateY(-4px) scaleY(0.96);
+    }
+  }
+
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  }
+
+  select option:hover,
+  select option:focus {
+    outline: 0;
+    background: color-mix(in srgb, var(--ink) 7%, transparent);
+  }
+
+  select option:checked,
+  select option:checked:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  select option::checkmark {
+    order: 1;
+    margin-left: auto;
+    content: "✓";
+    font-size: 12px;
+  }
+
+  select option:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  select option:disabled:hover {
+    background: none;
+  }
+}
+
 .inp.mono {
   font-size: 12.5px;
 }
@@ -676,6 +797,61 @@ input[type="range"] {
 .app {
   display: flex;
   height: 100%;
+}
+
+/* 自绘标题栏（Titlebar.tsx）：透明拖动条盖在窗口顶部，侧栏底色一直延伸到顶；
+   主区让出这条高度，免得工具栏按钮被拖动区挡住 */
+:root {
+  --titlebar-h: 36px;
+}
+
+.titlebar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 25;
+  display: flex;
+  justify-content: flex-end;
+  height: var(--titlebar-h);
+  user-select: none;
+}
+
+:root[data-titlebar] .main {
+  padding-top: var(--titlebar-h);
+}
+
+.titlebar-controls {
+  display: flex;
+}
+
+.winbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: var(--titlebar-h);
+  border: 0;
+  background: none;
+  color: var(--ink2);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+
+.winbtn:hover {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  color: var(--ink);
+}
+
+.winbtn:active {
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+}
+
+.winbtn.close:hover,
+.winbtn.close:active {
+  background: #c42b1c;
+  color: #fff;
+}
+
+.winbtn:focus-visible {
+  outline-offset: -2px;
 }
 
 .main {
