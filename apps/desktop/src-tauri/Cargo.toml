@@ -34,6 +34,14 @@ windows-sys = { version = "0.60", features = [
     "Win32_System_Threading",
 ] }
 
+# 开发构建：只给本 crate 留行号（panic 回溯够用），依赖不生成调试信息。
+# 调试信息是 Windows 上编译和链接的大头（PDB 很大）；要在调试器里单步依赖时临时改回 debug = true。
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]
 codegen-units = 1

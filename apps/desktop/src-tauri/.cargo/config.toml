@@ -1,0 +1,5 @@
+# 构建加速（docs/build-speed.md）。
+# Windows：用 Rust 自带的 lld 代替 MSVC link.exe，链接（每次增量构建都要做）快得多；
+# 它随 rustup 安装，不需要额外装工具。遇到链接问题时删掉这一段即可回到 link.exe。
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
