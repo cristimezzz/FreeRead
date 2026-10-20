@@ -8,6 +8,8 @@ import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components
 import { useTranslations } from "../translate/useTranslations";
 import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
+import { KgPanel } from "../kg/KgPanel";
+import { useKg } from "../kg/useKg";
 import { blockAt, buildPageIndex, primaryAnchor } from "./locate";
 import { type PdfMark, PdfView } from "./PdfView";
 import { AnnotationsPanel } from "../annotations/AnnotationsPanel";
@@ -83,7 +85,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const prevDoc = useRef<Document | null>(null);
   const loadedParse = useRef<string | null>(null);
   // 右侧面板：文内搜索、总结、问答、术语表共用一个位置
-  type Side = "search" | "summary" | "qa" | "glossary" | "notes";
+  type Side = "search" | "summary" | "qa" | "glossary" | "kg" | "notes";
   const [side, setSide] = useState<Side | null>(null);
   const toggleSide = (panel: Side) => setSide((cur) => (cur === panel ? null : panel));
   // 关闭时保留最后一个面板播放退出动画
@@ -197,6 +199,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   // 两个功能都可能先问隐私确认：同一时间只会有一个在等
   const qa = useQa(docId, lang, side === "qa");
   const glossary = useGlossary(docId, lang, side === "glossary");
+  const kg = useKg(docId, side === "kg");
   const ann = useAnnotations(docId, irVersion);
   const wholeMarks = useMemo(
     () => Object.fromEntries(Object.entries(ann.wholeBlocks).map(([id, a]) => [id, a.color])),
@@ -233,12 +236,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
     },
     [byId],
   );
-  // 翻译、总结、问答、术语抽取都可能先问隐私确认：取第一个在等的
+  // 翻译、总结、问答、术语抽取、图谱抽取都可能先问隐私确认：取第一个在等的
   const asking = [
     { label: "翻译", ...translation },
     { label: "总结", ...summary },
     { label: "问答", ...qa },
     { label: "术语抽取", ...glossary },
+    { label: "图谱抽取", ...kg },
   ].find((f) => f.consent);
   const consentFor = asking?.label ?? null;
   const consent = asking?.consent ?? null;
@@ -465,6 +469,9 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             >
               术语
             </Button>
+            <Button variant="ghost" small icon="graph" pressed={side === "kg"} onClick={() => toggleSide("kg")}>
+              图谱
+            </Button>
             <Button variant="ghost" small icon="edit" pressed={side === "notes"} onClick={() => toggleSide("notes")}>
               批注{ann.items.length ? ` ${ann.items.length}` : ""}
             </Button>
@@ -540,6 +547,14 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                 />
               )}
               {shownSide === "glossary" && <GlossaryPanel state={glossary} onClose={() => setSide(null)} />}
+              {shownSide === "kg" && (
+                <KgPanel
+                  state={kg}
+                  blockText={(id) => blockPreview(byId.get(id))}
+                  onPick={jumpTo}
+                  onClose={() => setSide(null)}
+                />
+              )}
               {shownSide === "notes" && (
                 <AnnotationsPanel
                   state={ann}

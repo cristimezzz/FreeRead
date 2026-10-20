@@ -40,6 +40,7 @@ ROUTE_FALLBACK: dict[TaskKind, TaskKind] = {
     TaskKind.SUMMARIZE: TaskKind.TRANSLATE,
     TaskKind.QA: TaskKind.SUMMARIZE,
     TaskKind.GLOSSARY: TaskKind.TRANSLATE,
+    TaskKind.KG_EXTRACT: TaskKind.SUMMARIZE,
 }
 
 ProviderFactory = Callable[[ProviderConfig, str | None], Provider]

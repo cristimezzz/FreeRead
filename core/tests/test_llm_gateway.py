@@ -164,6 +164,10 @@ async def test_stream_retries_before_first_chunk(gateway):
 
 
 async def test_unconfigured_task_raises(ctx, gateway):
+    # 只剩嵌入路由时，对话类任务沿回退链也找不到模型（不会落到嵌入模型上）
+    settings = ctx.settings.get()
+    embed_only = {TaskKind.EMBED: settings.routes[TaskKind.EMBED]}
+    ctx.settings.put(settings.model_copy(update={"routes": embed_only}))
     with pytest.raises(RouteNotConfigured, match="kg_extract"):
         await gateway.complete(TaskKind.KG_EXTRACT, MSGS, prompt_id="kg@1")
     with pytest.raises(RouteNotConfigured):
@@ -174,6 +178,7 @@ def test_summarize_and_qa_fall_back_to_translate_route(gateway):
     translate = gateway.route(TaskKind.TRANSLATE)
     assert gateway.route(TaskKind.SUMMARIZE) == translate
     assert gateway.route(TaskKind.QA) == translate
+    assert gateway.route(TaskKind.KG_EXTRACT) == translate
 
 
 async def test_missing_key_raises(ctx, fake):

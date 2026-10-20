@@ -168,3 +168,41 @@ def qa_responder(model: str, messages: list[Message]) -> str:
         return "论文中没有找到相关内容。"
     first, second = ids[0], ids[min(1, len(ids) - 1)]
     return f"根据原文，第一点见此处 [{first}]。另外还有一点 [{second}][b_9999]。"
+
+
+_ACRONYM_RE = re.compile(r"\b[A-Z][A-Za-z]*[A-Z][A-Za-z0-9-]*\b")
+_PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+
+
+def kg_responder(model: str, messages: list[Message]) -> str:
+    """看得懂 kg_extract / kg_resolve 提示词的确定性回复（--fake 评测用）。
+
+    抽取：每个块里的缩写词（两个以上大写字母）当作 Concept；同一块里有百分数时，
+    第一个缩写 achieves 指标 "score"，数值取第一个百分数。判定：一律回答不是同一个。
+    """
+    system, user = messages[0].content, messages[-1].content
+    if '"answers"' in system:
+        ids = re.findall(r"^\s*(\d+)\. ", user, re.MULTILINE)
+        return json.dumps({"answers": [{"id": int(i), "relation": "different"} for i in ids]})
+    if '"entities"' not in system:
+        return _echo(model, messages)
+    entities: dict[str, dict] = {}
+    relations = []
+    for bid, text in _BLOCK_LINE_RE.findall(user):
+        names = list(dict.fromkeys(_ACRONYM_RE.findall(text)))[:4]
+        for n in names:
+            entities.setdefault(n, {"id": n, "type": "Concept", "name": n, "block_ids": []})
+            entities[n]["block_ids"].append(bid)
+        pct = _PERCENT_RE.search(text)
+        if names and pct:
+            entities.setdefault("score", {"id": "score", "type": "Metric", "name": "score"})
+            relations.append(
+                {
+                    "src": names[0],
+                    "dst": "score",
+                    "type": "achieves",
+                    "block_id": bid,
+                    "attrs": {"metric": "score", "value": pct.group(1)},
+                }
+            )
+    return json.dumps({"entities": list(entities.values()), "relations": relations})

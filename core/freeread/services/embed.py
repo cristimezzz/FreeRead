@@ -105,6 +105,8 @@ class EmbedService:
         self.index = index or SqliteVecIndex()
         self._embedders: dict[str, LocalEmbedder] = {}
         self._lock = threading.Lock()  # 索引清空 / 重排队与写向量互斥
+        # 一篇文档嵌入完成后调用（图谱自动抽取挂在这里）
+        self.on_embedded: Callable[[str], object] | None = None
 
     # ------------------------------------------------------------ 来源
 
@@ -292,6 +294,21 @@ class EmbedService:
             await asyncio.to_thread(self._set_status, doc_id, "failed")
             raise
         await ctx.report(1.0, f"{n_chunks} 个片段，新计算 {n_new}")
+        if self.on_embedded:
+            try:
+                await asyncio.to_thread(self.on_embedded, doc_id)
+            except Exception:  # 后续任务排队失败不影响嵌入本身
+                log.warning("on_embedded hook failed for %s", doc_id, exc_info=True)
+
+    async def embed_texts(self, texts: list[str]) -> tuple[str, list[list[float]]] | None:
+        """嵌入任意短文本（如图谱实体名），返回 (模型 key, 向量)；来源不可用时返回 None。"""
+        backend = self.try_backend()
+        if backend is None or not texts:
+            return None
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), 32):
+            vectors += await backend.embed(texts[start : start + 32], "passage")
+        return backend.key, vectors
 
     async def _embed(self, doc_id: str, backend: Backend, ctx: JobContext) -> tuple[int, int]:
         blocks, titles = await asyncio.to_thread(self._load_blocks, doc_id)

@@ -23,6 +23,7 @@ from freeread.services.annotations import AnnotationService
 from freeread.services.embed import EmbedService
 from freeread.services.export import ExportService
 from freeread.services.glossary import GlossaryService
+from freeread.services.kg import KGService
 from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
@@ -48,6 +49,7 @@ class AppContext:
     llm: DefaultGateway
     translate: TranslateService
     glossary: GlossaryService
+    kg: KGService
     embed: EmbedService
     search: SearchService
     summary: SummaryService
@@ -115,6 +117,9 @@ class AppContext:
         worker.register("glossary_extract", glossary.run_extract_job, concurrency=1)
         translate = TranslateService(sessions, settings, llm, prompts, jobs=jobs, glossary=glossary)
         worker.register("translate_doc", translate.run_doc_job, concurrency=1)
+        kg = KGService(sessions, paths, jobs, bus, settings, llm, prompts, embed.embed_texts)
+        worker.register("kg_extract", kg.run_extract_job, concurrency=1)
+        embed.on_embedded = kg.enqueue_auto
         return cls(
             paths=paths,
             engine=engine,
@@ -130,6 +135,7 @@ class AppContext:
             llm=llm,
             translate=translate,
             glossary=glossary,
+            kg=kg,
             embed=embed,
             search=search,
             summary=summary,

@@ -103,6 +103,11 @@ class GlossarySettings(_Strict):
     auto_extract: bool = False
 
 
+class KGSettings(_Strict):
+    # 嵌入完成后自动抽取知识图谱（每个章节组一次大模型调用）
+    auto: bool = False
+
+
 class AppSettings(_Strict):
     appearance: Appearance = Appearance()
     target_lang: str = "zh-CN"
@@ -117,6 +122,7 @@ class AppSettings(_Strict):
     consented_providers: list[str] = []
     embedding: EmbeddingSettings = EmbeddingSettings()
     glossary: GlossarySettings = GlossarySettings()
+    kg: KGSettings = KGSettings()
     zotero: ZoteroSettings = ZoteroSettings()
 
     @model_validator(mode="after")
