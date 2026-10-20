@@ -97,6 +97,8 @@ class AppSettings(_Strict):
     # auto：先 PyMuPDF 快速模式，MinerU 可用时再升级（ADR-0003）
     parse_engine: Literal["auto", "pymupdf", "mineru", "docling"] = "auto"
     parsers: ParserServices = ParserServices()
+    # 本机 MinerU / Docling 的运行设备；auto 由引擎自行检测（有 CUDA 用 GPU），API 模式不受影响
+    parse_device: Literal["auto", "gpu", "cpu"] = "auto"
     providers: list[ProviderConfig] = []
     routes: dict[TaskKind, ModelRoute] = {}
     # 用户已同意向其发送文档内容的 provider（architecture §10）

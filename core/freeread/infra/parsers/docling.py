@@ -7,6 +7,7 @@
 import html as htmllib
 import json
 import re
+from collections.abc import Callable
 
 from freeread.domain.ir.models import BlockType
 from freeread.infra.parsers.base import ParserCaps, RawLayout
@@ -40,9 +41,11 @@ LABEL_MAP = {
 DROP_LABELS = {"page_header", "page_footer"}
 
 
-def docling_parser() -> SubprocessParser:
+def docling_parser(device: Callable[[], str] | None = None) -> SubprocessParser:
     return SubprocessParser(
-        "docling", ParserCaps(formulas=True, tables=True, ocr=True, needs_gpu=False)
+        "docling",
+        ParserCaps(formulas=True, tables=True, ocr=True, needs_gpu=False),
+        device=device,
     )
 
 

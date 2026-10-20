@@ -11,6 +11,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from collections.abc import Callable
 from itertools import count
 from pathlib import Path
 
@@ -34,7 +35,7 @@ class ResidentEngineParser:
         caps: ParserCaps,
         command: list[str],
         *,
-        env: dict[str, str] | None = None,
+        env: dict[str, str] | Callable[[], dict[str, str]] | None = None,
         log_path: Path | None = None,
         options: dict | None = None,
         idle_timeout: float = DEFAULT_IDLE_TIMEOUT,
@@ -48,6 +49,7 @@ class ResidentEngineParser:
         self._options = options or {}
         self._idle_timeout = idle_timeout
         self._proc: asyncio.subprocess.Process | None = None
+        self._proc_env: dict[str, str] | None = None
         self._log_file = None
         self._lock = asyncio.Lock()
         self._ids = count(1)
@@ -66,9 +68,14 @@ class ResidentEngineParser:
                 self._idle_task.cancel()
                 self._idle_task = None
             try:
+                env = self._current_env()
+                if self.running and env != self._proc_env:
+                    # 设置变了（如解析设备）：环境变量只在启动时生效，重启 worker
+                    log.info("%s worker environment changed, restarting", self.name)
+                    await self._stop()
                 if not self.running:
                     progress(0.0, f"{self.name}: 启动解析引擎")
-                    await self._start()
+                    await self._start(env)
                 progress(0.05, f"{self.name}: 解析中")
                 version = await self._request(pdf, out_dir)
             except BaseException:
@@ -79,17 +86,21 @@ class ResidentEngineParser:
         progress(1.0, f"{self.name}: done")
         return RawLayout(engine=self.name, engine_version=version, raw_dir=out_dir, data=None)
 
-    async def _start(self) -> None:
+    def _current_env(self) -> dict[str, str] | None:
+        return self._env() if callable(self._env) else self._env
+
+    async def _start(self, env: dict[str, str] | None) -> None:
         if self._log_path:
             self._log_path.parent.mkdir(parents=True, exist_ok=True)
             self._log_file = self._log_path.open("ab")
         self._proc = await asyncio.create_subprocess_exec(
             *self._command,
-            env=self._env,
+            env=env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=self._log_file or asyncio.subprocess.DEVNULL,
         )
+        self._proc_env = env
         msg = await asyncio.wait_for(self._read(), READY_TIMEOUT)
         if msg.get("event") != "ready":
             raise WorkerError(f"{self.name} worker: unexpected first message {msg}")
@@ -148,13 +159,16 @@ class ResidentEngineParser:
         await self._stop()
 
 
-def mineru_resident(log_dir: Path | None = None) -> ResidentEngineParser:
+def mineru_resident(
+    log_dir: Path | None = None, device: Callable[[], str] | None = None
+) -> ResidentEngineParser:
+    device = device or (lambda: "auto")
     script = scripts_dir() / "mineru_worker.py"
     return ResidentEngineParser(
         "mineru",
         ParserCaps(formulas=True, tables=True, ocr=True, needs_gpu=False),
         [str(engine_python("mineru")), str(script)],
-        env=engine_env(),
+        env=lambda: engine_env(device()),
         log_path=log_dir / "mineru-worker.log" if log_dir else None,
         options={"effort": "medium"},
     )

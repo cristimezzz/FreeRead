@@ -45,8 +45,10 @@ class ParserRegistry:
         log_dir: Path | None = None,
         remote: "Callable[[str], RemoteParser | None] | None" = None,
         secret: Callable[[str], str | None] | None = None,
+        device: Callable[[], str] | None = None,
     ) -> None:
-        """remote(engine)：该引擎处于 API 模式时返回其配置，否则 None；secret(engine)：API Key。"""
+        """remote(engine)：该引擎处于 API 模式时返回其配置，否则 None；secret(engine)：API Key；
+        device()：本机引擎的运行设备（auto / gpu / cpu）。"""
         from freeread.infra.parsers.docling import DoclingNormalizer, docling_parser
         from freeread.infra.parsers.docling_api import DoclingServeParser
         from freeread.infra.parsers.mineru import MinerUNormalizer
@@ -60,7 +62,7 @@ class ParserRegistry:
 
         def mineru_local() -> Parser:
             if self._mineru is None:
-                self._mineru = mineru_resident(log_dir)
+                self._mineru = mineru_resident(log_dir, device)
             return self._mineru
 
         def api_parser(engine: str, cfg: "RemoteParser") -> Parser:
@@ -106,7 +108,9 @@ class ParserRegistry:
                 lambda: True,
                 heavy=False,
             ),
-            "docling": heavy("docling", "Docling", 1, docling_parser, DoclingNormalizer()),
+            "docling": heavy(
+                "docling", "Docling", 1, lambda: docling_parser(device), DoclingNormalizer()
+            ),
             "mineru": heavy("mineru", "MinerU", 2, mineru_local, MinerUNormalizer()),
         }
 

@@ -707,6 +707,12 @@ export interface components {
              */
             parsers: components["schemas"]["ParserServices"];
             /**
+             * Parse Device
+             * @default auto
+             * @enum {string}
+             */
+            parse_device: "auto" | "gpu" | "cpu";
+            /**
              * Providers
              * @default []
              */
