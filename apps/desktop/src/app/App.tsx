@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { connect } from "../api/client";
 import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
+import { ContextMenu, installDefaultMenu } from "../components/ContextMenu";
 import { BrandMark } from "../components/icons";
 import { Sidebar } from "../components/Sidebar";
 import { Snackbar } from "../components/Snackbar";
+import { Titlebar } from "../components/Titlebar";
 import { Progress } from "../components/ui";
 import { JobsBar } from "../features/jobs/JobsBar";
 import { LibraryView } from "../features/library/LibraryView";
@@ -54,6 +56,9 @@ export default function App() {
     };
   }, []);
 
+  // 屏蔽 WebView 默认右键菜单（启动页也一样）
+  useEffect(() => installDefaultMenu((m) => useApp.getState().toast(m)), []);
+
   // 跟随系统深浅色
   useEffect(() => {
     if (!settings || settings.appearance.theme_mode !== "system") return;
@@ -66,6 +71,8 @@ export default function App() {
 
   if (boot.state !== "ready") {
     return (
+      <>
+      <Titlebar />
       <div className="boot">
         <BrandMark size={56} />
         <div className="boot-name serif">FreeRead</div>
@@ -85,11 +92,13 @@ export default function App() {
           </div>
         )}
       </div>
+      </>
     );
   }
 
   return (
     <div className="app">
+      <Titlebar />
       <Sidebar />
       <main className="main">
         {view.name === "library" && <LibraryView />}
@@ -98,6 +107,7 @@ export default function App() {
         <JobsBar />
       </main>
       <Snackbar />
+      <ContextMenu />
     </div>
   );
 }

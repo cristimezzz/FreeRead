@@ -277,6 +277,18 @@ async def test_import_file_title_falls_back_to_filename(ctx, tmp_path):
     assert ctx.library.get_item(item_id).title == "Smith2020 - Deep Things"
 
 
+async def test_archive_hides_item_and_reimport_restores(ctx, tmp_path):
+    src = write_pdf(tmp_path / "paper.pdf", "hello")
+    item_id, _ = ctx.library.import_file(src)
+    assert ctx.library.archive_item(item_id)
+    assert ctx.library.list_items().total == 0
+    assert ctx.library.get_item(item_id).status == "archived"
+    assert not ctx.library.archive_item("nope")
+
+    assert ctx.library.import_file(src) == (item_id, True)
+    assert [i.id for i in ctx.library.list_items().items] == [item_id]
+
+
 def test_import_file_rejects_non_pdf(ctx, tmp_path):
     txt = tmp_path / "notes.pdf"
     txt.write_text("not a pdf")
@@ -342,6 +354,14 @@ def test_import_file_via_api(client, tmp_path):
     assert resp.json()["item"]["documents"][0]["parse_status"] == "pending"
     bad = client.post("/library/import-file", json={"path": str(tmp_path / "nope.pdf")})
     assert bad.status_code == 400
+
+
+def test_archive_via_api(client, tmp_path):
+    src = write_pdf(tmp_path / "paper.pdf", "content")
+    item_id = client.post("/library/import-file", json={"path": str(src)}).json()["item"]["id"]
+    assert client.post(f"/library/items/{item_id}/archive").status_code == 204
+    assert client.get("/library/items").json()["total"] == 0
+    assert client.post("/library/items/nope/archive").status_code == 404
 
 
 def test_item_collections_cascade(ctx):

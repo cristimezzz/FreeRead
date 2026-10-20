@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel
 
 from freeread.api.deps import Ctx
@@ -60,6 +60,14 @@ def get_item(ctx: Ctx, item_id: str) -> ItemDetail:
     if item is None:
         raise HTTPException(404, "item not found")
     return item
+
+
+@router.post("/items/{item_id}/archive", status_code=204)
+def archive_item(ctx: Ctx, item_id: str) -> Response:
+    """从文献库移除（归档）条目；文件与解析结果保留，重新导入同一 PDF 会恢复。"""
+    if not ctx.library.archive_item(item_id):
+        raise HTTPException(404, "item not found")
+    return Response(status_code=204)
 
 
 @router.post("/sync", response_model=JobOut, status_code=202)

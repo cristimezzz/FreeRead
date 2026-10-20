@@ -18,6 +18,11 @@ const PATHS = {
   delete: ["M4 7h16", "M10 11v6M14 11v6", "M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12", "M9 7V4h6v3"],
   search: ["M17.5 11a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z", "m20 20-4.2-4.2"],
   close: ["M6 6l12 12M18 6 6 18"],
+  // 窗口按钮（自绘标题栏）
+  winMin: ["M6.5 12h11"],
+  winMax: ["M7 7h10v10H7z"],
+  winRestore: ["M7 9h8v8H7z", "M9.5 9V7H17v7.5h-2"],
+  winClose: ["M7 7l10 10M17 7 7 17"],
   summary: ["M5 6h14M5 11h14M5 16h9"],
   qa: ["M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z"],
   send: ["M12 19V5", "m5 12 7-7 7 7"],
@@ -25,6 +30,8 @@ const PATHS = {
   glossary: ["M6 4h11a1 1 0 0 1 1 1v15H7a2 2 0 0 1-2-2V5a1 1 0 0 1 1-1z", "M5 18a2 2 0 0 1 2-2h11", "M9 8h5M9 11h3"],
   edit: ["M4 20h4L19 9l-4-4L4 16z", "m13.5 6.5 4 4"],
   alert: ["M20.5 12a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0z", "M12 8v5M12 16h.01"],
+  copy: ["M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z", "M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"],
+  external: ["M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"],
 } as const;
 
 export type IconName = keyof typeof PATHS;
@@ -58,9 +65,10 @@ export function BrandMark({ size }: { size?: number }) {
       style={size ? { width: size, height: size, borderRadius: Math.round(size * 0.27) } : undefined}
       aria-hidden="true"
     >
-      <svg width="58%" height="58%" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 5.5C4 4.7 4.7 4 5.5 4H11v16H5.5c-.8 0-1.5-.7-1.5-1.5z" />
-        <path d="M13 4h5.5c.8 0 1.5.7 1.5 1.5v13c0 .8-.7 1.5-1.5 1.5H13z" />
+      {/* 与应用图标（src-tauri/icons/app-icon.svg）同一个图形 */}
+      <svg width="64%" height="64%" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth={1.2} strokeLinejoin="round">
+        <path d="M11.2 6.3C9.3 5 7 4.5 3.5 4.5v13.1c3.4 0 5.8.5 7.7 1.8z" />
+        <path d="M12.8 6.3C14.7 5 17 4.5 20.5 4.5v13.1c-3.4 0-5.8.5-7.7 1.8z" opacity={0.82} />
       </svg>
     </span>
   );
