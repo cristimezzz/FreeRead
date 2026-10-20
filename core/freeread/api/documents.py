@@ -13,6 +13,10 @@ from freeread.services.parse import DocumentOut, EngineOut, EngineUnavailableErr
 router = APIRouter(tags=["documents"])
 
 ASSET_NAME_RE = re.compile(r"^a_\d{4,}\.png$")
+# IR 与图表图片在重新解析后原地替换（同一 URL、同名 a_0000.png）。不带 Cache-Control 时
+# WebView 会按 Last-Modified 启发式缓存（旧文件越旧缓存越久），升级后仍显示快速模式的结果；
+# no-cache 要求每次向本机 Core 重新验证。
+REVALIDATE = {"Cache-Control": "no-cache"}
 
 
 class ParseRequest(BaseModel):
@@ -48,7 +52,7 @@ def get_ir(ctx: Ctx, doc_id: str):
     path = ctx.parse.ir_path(doc_id)
     if not path.is_file():
         raise HTTPException(409, f"document not parsed yet ({doc.parse_status})")
-    return FileResponse(path, media_type="application/json")
+    return FileResponse(path, media_type="application/json", headers=REVALIDATE)
 
 
 @router.get(
@@ -76,7 +80,7 @@ def get_asset(ctx: Ctx, doc_id: str, name: str):
     path = ctx.parse.asset_path(doc_id, name)
     if not path.is_file():
         raise HTTPException(404, "asset not found")
-    return FileResponse(path, media_type="image/png")
+    return FileResponse(path, media_type="image/png", headers=REVALIDATE)
 
 
 @router.post("/documents/{doc_id}/parse", response_model=JobOut, status_code=202)
