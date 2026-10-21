@@ -8,6 +8,23 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react()],
 
+  build: {
+    rolldownOptions: {
+      output: {
+        // 大依赖拆成独立 chunk，主 chunk 只留应用代码和 React
+        codeSplitting: {
+          groups: [
+            { name: "pdfjs", test: /node_modules[\\/]pdfjs-dist/ },
+            { name: "katex", test: /node_modules[\\/]katex/ },
+            { name: "react", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
+          ],
+        },
+      },
+    },
+    // 桌面应用从本地加载，不在乎首屏体积；three（KgScene）与 pdfjs 单块就在 600 kB 上下
+    chunkSizeWarningLimit: 1000,
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

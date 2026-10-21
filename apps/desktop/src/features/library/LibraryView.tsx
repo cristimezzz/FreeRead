@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
@@ -34,7 +35,6 @@ function citation(item: Item): string {
 async function revealInZotero(key: string): Promise<void> {
   const url = `zotero://select/library/items/${key}`;
   if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
     await invoke("plugin:shell|open", { path: url });
   } else {
     window.open(url);
