@@ -1409,6 +1409,7 @@ input[type="range"] {
 }
 
 .reader-panes {
+  position: relative;
   display: flex;
   flex: 1;
   min-width: 0;
@@ -2510,16 +2511,161 @@ body.resizing .reader-pane {
   padding: 10px 14px;
 }
 
-/* 3d-force-graph 的悬停提示 */
-.kg-cloud .scene-tooltip {
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface) !important;
-  color: var(--ink) !important;
-  font-family: inherit !important;
-  font-size: 12px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.kg-cloud-away {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 120px;
+}
+
+.kg-cloud-away .search-note {
+  margin: 0;
+}
+
+/* 展开：铺满阅读区（原版 / 重排之上），侧栏的图例和详情卡不动 */
+.kg-stage {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  padding: 12px;
+  background: var(--bg);
+  animation: fade-in var(--dur) var(--ease);
+}
+
+.kg-stage-inner {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.kg-stage-inner .kg-cloud {
+  margin: 0;
+}
+
+.kg-stage-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+}
+
+/* three.js 画布与 CSS2D 文字层（features/kg/KgScene.ts） */
+.kg3-canvas {
+  display: block;
+  touch-action: none;
+}
+
+.kg3-overlay {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.kg3-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  margin-top: 3px;
+  padding: 1px 7px 1px 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 0 0 1px var(--line);
+  pointer-events: none;
+  user-select: none;
+}
+
+.kg3-label.is-focus,
+.kg3-label.is-selected {
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 0 0 1.5px var(--accent);
+}
+
+.kg3-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.kg3-edge {
+  padding: 0 6px;
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink2);
+  font: inherit;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.kg3-edge:hover,
+.kg3-edge:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.kg3-edge.is-lit {
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12px;
+}
+
+.kg3-edge.is-selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--btn-ink);
+}
+
+.kg3-edge.is-stale {
+  text-decoration: line-through;
+}
+
+/* 线型图例 */
+.kg-linehint {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+  padding: 0 24px 8px;
+  color: var(--ink3);
+  font-size: 11.5px;
+}
+
+.kg-linehint span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kg-line {
+  display: inline-block;
+  width: 18px;
+  border-top: 2px solid var(--ink3);
+}
+
+.kg-line[data-style="dashed"] {
+  border-top-style: dashed;
+}
+
+.kg-line[data-style="dotted"] {
+  border-top-style: dotted;
 }
 
 .kg-card {

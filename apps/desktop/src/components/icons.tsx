@@ -38,6 +38,8 @@ const PATHS = {
   alert: ["M20.5 12a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0z", "M12 8v5M12 16h.01"],
   copy: ["M9 9h10a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V10a1 1 0 0 1 1-1z", "M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"],
   external: ["M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"],
+  expand: ["M14 4h6v6", "M10 20H4v-6", "M20 4l-6.5 6.5", "M4 20l6.5-6.5"],
+  collapse: ["M20 10h-6V4", "M4 14h6v6", "M14 10l6.5-6.5", "M10 14l-6.5 6.5"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

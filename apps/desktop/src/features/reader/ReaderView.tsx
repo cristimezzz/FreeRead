@@ -200,6 +200,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const qa = useQa(docId, lang, side === "qa");
   const glossary = useGlossary(docId, lang, side === "glossary");
   const kg = useKg(docId, side === "kg");
+  // 图谱云图展开后铺满阅读区（覆盖原版 / 重排），离开图谱面板时收起
+  const [kgExpanded, setKgExpanded] = useState(false);
+  const [kgStage, setKgStage] = useState<HTMLDivElement | null>(null);
+  const showKgStage = side === "kg" && kgExpanded;
+  useEffect(() => {
+    if (side !== "kg") setKgExpanded(false);
+  }, [side]);
   const ann = useAnnotations(docId, irVersion);
   const wholeMarks = useMemo(
     () => Object.fromEntries(Object.entries(ann.wholeBlocks).map(([id, a]) => [id, a.color])),
@@ -480,6 +487,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
       </div>
       <div className="reader" ref={readerEl}>
         <div className="reader-panes" ref={panesEl}>
+          {showKgStage && <div className="kg-stage" ref={setKgStage} />}
           {layout !== "reflow" && (
             <PdfView
               docId={docId}
@@ -550,6 +558,9 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               {shownSide === "kg" && (
                 <KgPanel
                   state={kg}
+                  expanded={showKgStage}
+                  stage={showKgStage ? kgStage : null}
+                  onExpand={setKgExpanded}
                   blockText={(id) => blockPreview(byId.get(id))}
                   onPick={jumpTo}
                   onClose={() => setSide(null)}

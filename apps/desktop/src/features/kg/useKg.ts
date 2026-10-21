@@ -45,11 +45,12 @@ export interface CloudNode {
   id: string;
   name: string;
   type: string;
-  val: number; // 节点体积（3d-force-graph 按 val 的立方根定半径）
+  val: number; // 1 + score，决定球的大小（layout.nodeRadius）
 }
 
 export interface CloudLink {
-  id: string;
+  id: string; // 第一条关系的 id（选中时打开它）
+  ids: string[]; // 合并进这条线的所有关系
   source: string;
   target: string;
   type: string;
@@ -57,7 +58,10 @@ export interface CloudLink {
   stale: boolean;
 }
 
-/** 图谱 → 云图数据。隐藏的类型连同它们的连线一起去掉；同一对实体之间的多条关系各画一条。 */
+/**
+ * 图谱 → 云图数据。隐藏的类型连同它们的连线一起去掉。
+ * 同一对实体之间同类型的关系（出自不同的块）合成一条线，标签写"使用 ×3"；数值结果各自一条。
+ */
 export function toCloudData(
   graph: Pick<KgGraph, "entities" | "relations"> | null,
   hidden: ReadonlySet<string> = new Set(),
@@ -67,16 +71,28 @@ export function toCloudData(
     .filter((e) => !hidden.has(e.type))
     .map((e) => ({ id: e.id, name: e.name, type: e.type, val: 1 + e.score }));
   const shown = new Set(nodes.map((n) => n.id));
-  const links = graph.relations
-    .filter((r) => shown.has(r.src_id) && shown.has(r.dst_id))
-    .map((r) => ({
+  const byKey = new Map<string, CloudLink>();
+  for (const r of graph.relations) {
+    if (!shown.has(r.src_id) || !shown.has(r.dst_id)) continue;
+    const label = r.type === "achieves" ? formatValue(r) : (RELATION_LABEL[r.type] ?? r.type);
+    const key = `${r.src_id}|${r.dst_id}|${r.type}|${r.type === "achieves" ? label : ""}`;
+    const prev = byKey.get(key);
+    if (prev) {
+      prev.ids.push(r.id);
+      prev.stale = prev.stale && r.status === "stale";
+      continue;
+    }
+    byKey.set(key, {
       id: r.id,
+      ids: [r.id],
       source: r.src_id,
       target: r.dst_id,
       type: r.type,
-      label: r.type === "achieves" ? formatValue(r) : (RELATION_LABEL[r.type] ?? r.type),
+      label,
       stale: r.status === "stale",
-    }));
+    });
+  }
+  const links = [...byKey.values()].map((l) => (l.ids.length > 1 ? { ...l, label: `${l.label} ×${l.ids.length}` } : l));
   return { nodes, links };
 }
 

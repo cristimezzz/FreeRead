@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button, IconButton, Progress } from "../../components/ui";
 import { KgCloud, type Selection } from "./KgCloud";
 import {
@@ -17,6 +18,10 @@ interface Props {
   blockText?: (id: string) => string | undefined;
   onPick: (blockId: string) => void;
   onClose: () => void;
+  /** 展开后云图铺满阅读区：覆盖层元素由 ReaderView 提供 */
+  expanded: boolean;
+  stage: HTMLElement | null;
+  onExpand: (expanded: boolean) => void;
 }
 
 type CiteProps = { blockText?: (id: string) => string | undefined; onPick: (id: string) => void };
@@ -89,8 +94,14 @@ function EntityCard({
   );
 }
 
-/** 选中关系：两端、数值、原文摘句、出处。 */
-function RelationCard({ r, onSelect, ...cite }: CiteProps & { r: KgRelation; onSelect: (s: Selection) => void }) {
+/** 选中关系：两端、数值、原文摘句、出处。同一对实体同类型的多条关系（出自不同的块）一起列出处。 */
+function RelationCard({
+  rs,
+  onSelect,
+  ...cite
+}: CiteProps & { rs: KgRelation[]; onSelect: (s: Selection) => void }) {
+  const r = rs[0];
+  const quotes = rs.filter((x) => x.evidence).slice(0, 3);
   const a = r.attrs as { dataset?: string; setting?: string };
   return (
     <>
@@ -110,23 +121,64 @@ function RelationCard({ r, onSelect, ...cite }: CiteProps & { r: KgRelation; onS
           {a.setting && <span className="kg-card-dim"> · {a.setting}</span>}
         </p>
       )}
-      {r.evidence && <blockquote className="kg-card-quote">{r.evidence}</blockquote>}
+      {quotes.map((x) => (
+        <blockquote key={x.id} className="kg-card-quote">
+          {x.evidence}
+        </blockquote>
+      ))}
       <p className="kg-card-cites">
         <span className="kg-card-dim">出处</span>
-        <Cite id={r.block_id} {...cite} />
-        {r.status === "stale" && <span className="gl-badge kg-stale">出处已失效</span>}
+        {rs.map((x) => (
+          <Cite key={x.id} id={x.block_id} {...cite} />
+        ))}
+        {rs.every((x) => x.status === "stale") && <span className="gl-badge kg-stale">出处已失效</span>}
       </p>
     </>
   );
 }
 
-export function KgPanel({ state, blockText, onPick, onClose }: Props) {
+/** 线型图例：与 layout.LINE_STYLE 一致。 */
+function LineHint() {
+  return (
+    <p className="kg-linehint">
+      <span>
+        <i className="kg-line" data-style="solid" />
+        提出 / 改进 / 取得
+      </span>
+      <span>
+        <i className="kg-line" data-style="dashed" />
+        使用 / 属于 / 评估于
+      </span>
+      <span>
+        <i className="kg-line" data-style="dotted" />
+        对比
+      </span>
+    </p>
+  );
+}
+
+export function KgPanel({ state, blockText, onPick: pick, onClose, expanded, stage, onExpand }: Props) {
   const { graph, job, extracting, extract } = state;
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<Selection>(null);
   const entities = graph?.entities ?? [];
   const relations = graph?.relations ?? [];
+  const all = useMemo(() => toCloudData(graph), [graph]);
   const data = useMemo(() => toCloudData(graph, hidden), [graph, hidden]);
+  // 展开时点出处：先收起，再跳到原文
+  const onPick = (id: string) => {
+    if (expanded) onExpand(false);
+    pick(id);
+  };
+
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onExpand(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded, onExpand]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const e of entities) c[e.type] = (c[e.type] ?? 0) + 1;
@@ -135,7 +187,17 @@ export function KgPanel({ state, blockText, onPick, onClose }: Props) {
 
   const doneMessage = job?.status === "done" && !extracting ? job.message : "";
   const entity = selected?.kind === "node" ? entities.find((e) => e.id === selected.id) : undefined;
-  const relation = selected?.kind === "link" ? relations.find((r) => r.id === selected.id) : undefined;
+  // 关系按"合并后的线"选中：线的 id 是组里第一条关系
+  const select = (s: Selection) =>
+    setSelected(
+      s?.kind === "link" ? { kind: "link", id: all.links.find((l) => l.ids.includes(s.id))?.id ?? s.id } : s,
+    );
+  const group = useMemo(() => {
+    if (selected?.kind !== "link") return [];
+    const ids = all.links.find((l) => l.id === selected.id)?.ids ?? [selected.id];
+    return relations.filter((r) => ids.includes(r.id));
+  }, [selected, all, relations]);
+  const relation = group[0];
   const toggle = (t: string) => {
     const next = new Set(hidden);
     if (next.has(t)) next.delete(t);
@@ -148,6 +210,13 @@ export function KgPanel({ state, blockText, onPick, onClose }: Props) {
     <aside className="side-panel kg-panel" aria-label="知识图谱">
       <div className="side-panel-head">
         <h2 className="serif">图谱</h2>
+        {entities.length > 0 && (
+          <IconButton
+            icon={expanded ? "collapse" : "expand"}
+            label={expanded ? "收起图谱（Esc）" : "展开图谱到阅读区"}
+            onClick={() => onExpand(!expanded)}
+          />
+        )}
         <IconButton icon="close" label="关闭图谱" onClick={onClose} />
       </div>
       <div className="summary-controls">
@@ -188,14 +257,35 @@ export function KgPanel({ state, blockText, onPick, onClose }: Props) {
               </button>
             ))}
           </div>
-          <KgCloud nodes={data.nodes} links={data.links} selected={selected} onSelect={setSelected} />
+          <LineHint />
+          {expanded && stage ? (
+            <>
+              <div className="kg-cloud kg-cloud-away">
+                <p className="search-note">图谱已在阅读区展开。</p>
+                <Button small icon="collapse" onClick={() => onExpand(false)}>
+                  收起
+                </Button>
+              </div>
+              {createPortal(
+                <div className="kg-stage-inner">
+                  <KgCloud all={all} nodes={data.nodes} links={data.links} selected={selected} onSelect={select} />
+                  <Button small icon="collapse" className="kg-stage-close" onClick={() => onExpand(false)}>
+                    收起（Esc）
+                  </Button>
+                </div>,
+                stage,
+              )}
+            </>
+          ) : (
+            <KgCloud all={all} nodes={data.nodes} links={data.links} selected={selected} onSelect={select} />
+          )}
           <div className="kg-card" data-empty={!entity && !relation ? "" : undefined} aria-live="polite">
             {entity && (
-              <EntityCard e={entity} relations={relations} onSelect={setSelected} blockText={blockText} onPick={onPick} />
+              <EntityCard e={entity} relations={relations} onSelect={select} blockText={blockText} onPick={onPick} />
             )}
-            {relation && <RelationCard r={relation} onSelect={setSelected} blockText={blockText} onPick={onPick} />}
+            {relation && <RelationCard rs={group} onSelect={select} blockText={blockText} onPick={onPick} />}
             {!entity && !relation && (
-              <p className="kg-card-dim">拖动旋转、滚轮缩放；点节点看实体和出处，点连线看关系的原文。</p>
+              <p className="kg-card-dim">拖动旋转、滚轮缩放；悬停节点看它的全部关系，点节点看实体和出处，点关系名看原文。</p>
             )}
           </div>
         </>
