@@ -72,6 +72,17 @@ const ACCENT_INK: Record<"light" | "dark", Record<Contrast, string>> = {
   dark: { standard: "62%", medium: "50%", high: "40%" },
 };
 
+// 图谱实体类型的分类色（--kg-method 等）：按这个顺序相邻两色在色觉障碍下也能区分；
+// 节点总带文字标签和图例，颜色不是唯一的区分方式。深色是单独选的一组，不是自动反色。
+export const KG_COLORS: Record<string, { light: string; dark: string }> = {
+  Method: { light: "#C8613F", dark: "#D26E4A" },
+  Model: { light: "#4F74B8", dark: "#6A8ED1" },
+  Metric: { light: "#B5891C", dark: "#B88A27" },
+  Task: { light: "#9A5BA8", dark: "#A974BC" },
+  Dataset: { light: "#5E8C3A", dark: "#6E984A" },
+  Concept: { light: "#C24D7C", dark: "#CB648D" },
+};
+
 /** 生成 CSS 变量表（纯函数，便于测试）。 */
 export function themeVars(accent: string, dark: boolean, contrast: Contrast): Record<string, string> {
   const tone = dark ? "dark" : "light";
@@ -81,6 +92,7 @@ export function themeVars(accent: string, dark: boolean, contrast: Contrast): Re
   vars["--accent"] = accent;
   vars["--accent-ink"] = `color-mix(in oklab, var(--accent) ${ACCENT_INK[tone][contrast]}, ${dark ? "#fff" : "#000"})`;
   vars["--accent-soft"] = `color-mix(in srgb, var(--accent) ${dark ? 22 : 14}%, transparent)`;
+  for (const [type, colors] of Object.entries(KG_COLORS)) vars[`--kg-${type.toLowerCase()}`] = colors[tone];
   return vars;
 }
 

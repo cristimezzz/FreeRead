@@ -1,4 +1,4 @@
-"""M3：在评测集上跑知识图谱抽取与跨文档消歧，输出统计和人工抽检稿。
+"""M3：在评测集上跑知识图谱抽取（每篇一张图），输出统计和人工抽检稿。
 
 用法（在 core/ 下）：
     # 真实模型（OpenAI 兼容接口），Key 从环境变量读取
@@ -7,11 +7,10 @@
     # 只验证链路（确定性假模型，不联网；输出到 eval-out/m3-kg-fake）
     .venv/Scripts/python ../scripts/m3_kg_eval.py --fake --limit 3
 
-所有文档导入同一个数据目录，跨文档消歧在文档之间真实发生（各篇的抽取并发，消歧和写入按完成顺序串行）。
 每次运行先清空图谱（保留解析结果和模型回复缓存），统计只算本次运行的调用；警告（组失败、重试）写进 run.log。
-已下载内置嵌入模型时用它找消歧候选（--models-dir），否则只做别名精确合并。输出：
-- eval-out/m3-kg/<doc_id>.md：数值结果（achieves）与出处原文对照、其他关系与摘句，供人工抽检；
-- eval-out/m3-kg/report.md：每篇统计、全库合并情况、模型判定过的实体对。
+输出：
+- eval-out/m3-kg/<doc_id>.md：数值结果（achieves）与出处原文对照、其他关系与摘句、实体（按重要性），供人工抽检；
+- eval-out/m3-kg/report.md：每篇实体 / 关系数、精简掉的实体数、丢弃统计。
 --jobs / --record / --replay / --extra-body 同 m2_summary_eval.py。
 """
 
@@ -22,12 +21,11 @@ import re
 import sys
 import time
 from collections import Counter
-from pathlib import Path
 
 from sqlalchemy import delete, update
 
-from freeread.config import default_data_dir
 from freeread.context import AppContext
+from freeread.domain.kg.extract import MAX_ENTITIES, prune
 from freeread.eval.runner import (
     MISSING_PDF,
     ROOT,
@@ -42,15 +40,11 @@ from freeread.infra.db.base import utcnow
 from freeread.infra.db.models import (
     BlockRow,
     DocumentRow,
-    KGAliasRow,
-    KGDistinctRow,
     KGEntityRow,
     KGMentionRow,
     KGRelationRow,
     LLMCallRow,
 )
-from freeread.infra.embedding.local import LocalEmbedder
-from freeread.infra.embedding.registry import DEFAULT_MODEL, MODELS
 from freeread.infra.llm.fake import kg_responder
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.llm.secrets import SecretStore
@@ -65,19 +59,7 @@ class _Progress:
         pass
 
 
-def local_embed_fn(models_dir: Path):
-    embedder = LocalEmbedder(MODELS[DEFAULT_MODEL], models_dir)
-    if not embedder.is_downloaded():
-        return None
-
-    async def embed(texts: list[str]):
-        vectors = await asyncio.to_thread(embedder.embed, texts, "passage")
-        return embedder.spec.key, vectors
-
-    return embed
-
-
-async def run_doc(ctx: AppContext, entry: dict, args, sem, lock, judged: list) -> dict:
+async def run_doc(ctx: AppContext, entry: dict, args, sem) -> dict:
     row = {"doc_id": entry["doc_id"], "title": entry.get("title", "")}
     async with sem:
         doc_id = await import_and_parse(ctx, entry, args.engine)
@@ -86,31 +68,10 @@ async def run_doc(ctx: AppContext, entry: dict, args, sem, lock, judged: list) -
         prompt = ctx.prompts.get(kg_mod.PROMPT_ID)
         started = time.perf_counter()
         try:
-            graph = await ctx.kg._extract(doc_id, prompt, _Progress())
+            graph = prune(await ctx.kg._extract(doc_id, prompt, _Progress()))
         except Exception as e:  # noqa: BLE001  单篇失败只记录，不中断整批
             return row | {"error": f"{type(e).__name__}: {e}"}
-    async with lock:  # 消歧要看到前面文档写入的实体
-        original = ctx.kg._judge
-
-        async def logged(doc, g, pairs):
-            out = await original(doc, g, pairs)
-            existing = ctx.kg._entities_by_id([eid for _, eid in pairs])
-            for i, eid in pairs:
-                other = existing.get(eid)
-                judged.append(
-                    (g.entities[i].type.value, g.entities[i].name, other.name if other else eid,
-                     i in out)
-                )  # fmt: skip
-            return out
-
-        ctx.kg._judge = logged
-        try:
-            matches, vectors, merged = await ctx.kg._resolve(doc_id, graph)
-        finally:
-            ctx.kg._judge = original
-        await asyncio.to_thread(
-            ctx.kg._store, doc_id, graph, matches, vectors, f"eval/{args.model}+{prompt.ref}"
-        )
+        await asyncio.to_thread(ctx.kg._store, doc_id, graph, f"eval/{args.model}+{prompt.ref}")
     stats = graph.stats
     types = Counter(e.type.value for e in graph.entities)
     rels = Counter(r.type.value for r in graph.relations)
@@ -121,7 +82,7 @@ async def run_doc(ctx: AppContext, entry: dict, args, sem, lock, judged: list) -
         "achieves": rels["achieves"],
         "types": types,
         "rel_types": rels,
-        "merged": merged,
+        "pruned": stats["pruned"],
         "failed_groups": stats["failed_groups"],
         "dropped_values": stats["unverified_values"],
         "no_source": stats["no_source"],
@@ -156,14 +117,13 @@ def review_markdown(ctx: AppContext, doc_id: str, title: str) -> str:
     lines += ["", f"## 其他关系（{len(others)}）", ""]
     for r in others:
         lines.append(
-            f"- {r.src_name} ({r.src_type}) —{r.type}→ {r.dst_name} ({r.dst_type}) "
-            f"[{r.block_id}] conf={r.confidence}" + (f"：“{r.evidence}”" if r.evidence else "")
+            f"- {r.src_name} —{r.type}→ {r.dst_name} [{r.block_id}] conf={r.confidence}"
+            + (f"：“{r.evidence}”" if r.evidence else "")
         )
-    lines += ["", "## 实体", ""]
+    lines += ["", "## 实体（按重要性）", ""]
     for e in g.entities:
         alias = f"（{'、'.join(e.aliases)}）" if e.aliases else ""
-        shared = f" · {e.doc_count} 篇" if e.doc_count > 1 else ""
-        lines.append(f"- [{e.type}] {e.name}{alias}{shared}")
+        lines.append(f"- [{e.type}] {e.name}{alias} · {e.score}")
     return "\n".join(lines) + "\n"
 
 
@@ -197,7 +157,7 @@ def _warning_kind(message: str) -> str:
 def reset_graph(ctx: AppContext) -> None:
     """清空上一次运行留下的图谱（保留解析结果和模型回复缓存），让每次运行都从空库开始。"""
     with ctx.sessions.begin() as s:
-        for row in (KGRelationRow, KGMentionRow, KGDistinctRow, KGAliasRow, KGEntityRow):
+        for row in (KGRelationRow, KGMentionRow, KGEntityRow):
             s.execute(delete(row))
         s.execute(update(DocumentRow).values(kg_status="pending"))
 
@@ -205,7 +165,6 @@ def reset_graph(ctx: AppContext) -> None:
 def report(
     ctx: AppContext,
     rows: list[dict],
-    judged: list,
     args,
     elapsed: float,
     run_started: str,
@@ -227,15 +186,7 @@ def report(
             )
             .all()
         )
-        mention_docs: dict[str, set[str]] = {}
-        for m in s.query(KGMentionRow):
-            mention_docs.setdefault(m.entity_id, set()).add(m.doc_id)
-        shared = sorted(
-            ((len(d), s.get(KGEntityRow, eid)) for eid, d in mention_docs.items() if len(d) > 1),
-            key=lambda x: -x[0],
-        )
-        shared_lines = [f"- [{e.type}] {e.name} · {n} 篇" for n, e in shared[:60]]
-        # 全库检查：每条关系的出处块都存在
+        # 检查：每条关系的出处块都存在
         block_ids = {(b.doc_id, b.block_id) for b in s.query(BlockRow.doc_id, BlockRow.block_id)}
         rel_rows = s.query(KGRelationRow).all()
         valid = sum((r.doc_id, r.source_block_id) in block_ids for r in rel_rows)
@@ -247,10 +198,13 @@ def report(
     lines = [
         "# M3 图谱抽取评测",
         "",
-        f"- 模型：{model}；解析：{args.engine}；嵌入候选：{'内置 e5' if ctx.kg.embed_texts else '无'}",
+        f"- 模型：{model}；解析：{args.engine}",
         f"- 文档：{len(ok)} / {len(rows)} 篇；总耗时 {elapsed:.0f} s（--jobs {args.jobs}，组并发 {kg_mod.CONCURRENCY}）",
         f"- 调用 {len(calls)} 次（缓存命中 {sum(c.cache_hit for c in calls)}），输入 {in_tok} / 输出 {out_tok} token",
-        f"- 全库：{n_entities} 个实体、{n_relations} 条关系；**出处块存在 {valid} / {len(rel_rows)}**",
+        (
+            f"- 合计：{n_entities} 个实体（每篇最多 {MAX_ENTITIES}，精简掉 {total('pruned')} 个）、"
+            f"{n_relations} 条关系；**出处块存在 {valid} / {len(rel_rows)}**"
+        ),
         f"- 实体类型：{dict(types.most_common())}",
         f"- 关系类型：{dict(rel_types.most_common())}",
         (
@@ -258,12 +212,8 @@ def report(
             f"关系不合法 {total('bad_relations')}、实体不合法或无出处 {total('bad_entities')}；"
             f"摘句核对不上（已清空）{total('unsupported_evidence')}；失败的组 {total('failed_groups')}"
         ),
-        (
-            f"- 跨文档：与已有实体合并 {total('merged')} 次；出现在 2 篇以上的实体 {len(shared)} 个；"
-            f"模型判定 {len(judged)} 对，判为同一个 {sum(j[3] for j in judged)} 对"
-        ),
         "",
-        "| doc_id | 标题 | 实体 | 关系 | 数值结果 | 合并 | 丢弃数值 | 失败组 | 耗时 s |",
+        "| doc_id | 标题 | 实体 | 关系 | 数值结果 | 精简 | 丢弃数值 | 失败组 | 耗时 s |",
         "|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
@@ -274,22 +224,13 @@ def report(
             continue
         lines.append(
             f"| {r['doc_id']} | {r['title'][:40]} | {r['entities']} | {r['relations']} | "
-            f"{r['achieves']} | {r['merged']} | {r['dropped_values']} | {r['failed_groups']} | "
+            f"{r['achieves']} | {r['pruned']} | {r['dropped_values']} | {r['failed_groups']} | "
             f"{r['seconds']} |"
         )
     if warnings:
         kinds = Counter(_warning_kind(r.getMessage()) for r in warnings)
         lines += ["", f"## 警告（{len(warnings)} 条，全文见 run.log）", ""]
         lines += [f"- {n} × {k}" for k, n in kinds.most_common(20)]
-    lines += ["", "## 出现在多篇文献里的实体（前 60）", "", *shared_lines]
-    lines += [
-        "",
-        "## 模型判定过的实体对",
-        "",
-        "| 类型 | 新实体 | 已有实体 | 判为同一个 |",
-        "|---|---|---|---|",
-    ]
-    lines += [f"| {t} | {a} | {b} | {'是' if same else '否'} |" for t, a, b, same in judged]
     return "\n".join(lines) + "\n"
 
 
@@ -297,8 +238,6 @@ async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     add_common_args(ap, OUT)
     ap.add_argument("--group-jobs", type=int, default=3, help="一篇内同时调用的组数（默认 3）")
-    ap.add_argument("--models-dir", type=Path, default=default_data_dir() / "models")
-    ap.add_argument("--no-embed", action="store_true", help="不用嵌入找候选，只做别名精确合并")
     args = ap.parse_args()
     resolve_dirs(args, OUT)
     key = api_key(args)
@@ -315,21 +254,20 @@ async def main() -> int:
     configure(ctx, args, TaskKind.KG_EXTRACT, kg_responder)
     if args.extra_body:
         ctx.kg.llm_opts = args.extra_body
-    ctx.kg.embed_texts = None if args.no_embed else local_embed_fn(args.models_dir)
     reset_graph(ctx)
 
     entries = manifest_entries(args)
-    sem, lock, judged = asyncio.Semaphore(args.jobs), asyncio.Lock(), []
+    sem = asyncio.Semaphore(args.jobs)
     run_started = utcnow()
     started = time.perf_counter()
-    rows = await asyncio.gather(*(run_doc(ctx, e, args, sem, lock, judged) for e in entries))
+    rows = await asyncio.gather(*(run_doc(ctx, e, args, sem) for e in entries))
     elapsed = time.perf_counter() - started
     for r in rows:
         if "doc" in r:
             (args.out / f"{r['doc_id']}.md").write_text(
                 review_markdown(ctx, r["doc"], r["title"]), "utf-8"
             )
-    text = report(ctx, list(rows), judged, args, elapsed, run_started, collect.records)
+    text = report(ctx, list(rows), args, elapsed, run_started, collect.records)
     (args.out / "report.md").write_text(text, "utf-8")
     print(text)
     ctx.close()

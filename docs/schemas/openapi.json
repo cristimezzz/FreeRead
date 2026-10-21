@@ -2313,7 +2313,7 @@
           "kg"
         ],
         "summary": "Extract Graph",
-        "description": "排队抽取（已有同一文档的任务时返回它）。重新抽取只替换该文档的提及和关系。",
+        "description": "排队抽取（已有同一文档的任务时返回它）。重新抽取整体替换这篇的图。",
         "operationId": "extract_graph_documents__doc_id__kg_extract_post",
         "parameters": [
           {
@@ -2372,7 +2372,7 @@
           "kg"
         ],
         "summary": "Doc Graph",
-        "description": "本篇的实体（含在本篇出现的块）和关系（含出处块）；用户删除的关系不返回。",
+        "description": "本篇的实体（含出现的块）和关系（含出处块），实体按重要性排序。",
         "operationId": "doc_graph_documents__doc_id__kg_get",
         "parameters": [
           {
@@ -2408,607 +2408,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DocGraphOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/entities": {
-      "get": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Search Entities",
-        "description": "按名称 / 别名搜索全库实体（合并时选目标用）。",
-        "operationId": "search_entities_kg_entities_get",
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 200,
-              "default": "",
-              "title": "Q"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/EntityType"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Type"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 100,
-              "minimum": 1,
-              "default": 20,
-              "title": "Limit"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/EntityOut"
-                  },
-                  "title": "Response Search Entities Kg Entities Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/entities/{entity_id}": {
-      "get": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Entity Detail",
-        "description": "实体在全库的提及和关系，带文献标题。",
-        "operationId": "entity_detail_kg_entities__entity_id__get",
-        "parameters": [
-          {
-            "name": "entity_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Entity Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityDetailOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "patch": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Update Entity",
-        "operationId": "update_entity_kg_entities__entity_id__patch",
-        "parameters": [
-          {
-            "name": "entity_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Entity Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EntityPatch"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/entities/{entity_id}/merge": {
-      "post": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Merge Entities",
-        "description": "把 source_ids 并入这个实体。",
-        "operationId": "merge_entities_kg_entities__entity_id__merge_post",
-        "parameters": [
-          {
-            "name": "entity_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Entity Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/entities/{entity_id}/split": {
-      "post": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Split Entity",
-        "description": "把选中的别名拆成新实体，返回新实体。",
-        "operationId": "split_entity_kg_entities__entity_id__split_post",
-        "parameters": [
-          {
-            "name": "entity_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Entity Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SplitIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/suggestions/{suggestion_id}/accept": {
-      "post": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Accept Suggestion",
-        "description": "确认合并建议：把建议里的实体并入候选实体，返回合并后的实体。",
-        "operationId": "accept_suggestion_kg_suggestions__suggestion_id__accept_post",
-        "parameters": [
-          {
-            "name": "suggestion_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Suggestion Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EntityOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/suggestions/{suggestion_id}/dismiss": {
-      "post": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Dismiss Suggestion",
-        "description": "否决合并建议：记为不是同一个，以后不再建议。",
-        "operationId": "dismiss_suggestion_kg_suggestions__suggestion_id__dismiss_post",
-        "parameters": [
-          {
-            "name": "suggestion_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Suggestion Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/relations/{relation_id}": {
-      "delete": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Reject Relation",
-        "description": "删除一条关系（标记 rejected，重新抽取不会加回）。",
-        "operationId": "reject_relation_kg_relations__relation_id__delete",
-        "parameters": [
-          {
-            "name": "relation_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Relation Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/kg/subgraph": {
-      "get": {
-        "tags": [
-          "kg"
-        ],
-        "summary": "Subgraph",
-        "description": "按文档或实体（一跳）取子图。",
-        "operationId": "subgraph_kg_subgraph_get",
-        "parameters": [
-          {
-            "name": "doc_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Doc Id"
-            }
-          },
-          {
-            "name": "entity_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Entity Id"
-            }
-          },
-          {
-            "name": "x-freeread-token",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Freeread-Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubgraphOut"
                 }
               }
             }
@@ -4631,14 +4030,6 @@
             },
             "type": "array",
             "title": "Relations"
-          },
-          "suggestions": {
-            "items": {
-              "$ref": "#/components/schemas/SuggestionOut"
-            },
-            "type": "array",
-            "title": "Suggestions",
-            "default": []
           }
         },
         "type": "object",
@@ -5029,34 +4420,6 @@
         ],
         "title": "EngineOut"
       },
-      "EntityDetailOut": {
-        "properties": {
-          "entity": {
-            "$ref": "#/components/schemas/EntityOut"
-          },
-          "mentions": {
-            "items": {
-              "$ref": "#/components/schemas/MentionOut"
-            },
-            "type": "array",
-            "title": "Mentions"
-          },
-          "relations": {
-            "items": {
-              "$ref": "#/components/schemas/RelationOut"
-            },
-            "type": "array",
-            "title": "Relations"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entity",
-          "mentions",
-          "relations"
-        ],
-        "title": "EntityDetailOut"
-      },
       "EntityOut": {
         "properties": {
           "id": {
@@ -5075,10 +4438,6 @@
             "type": "string",
             "title": "Description"
           },
-          "origin": {
-            "type": "string",
-            "title": "Origin"
-          },
           "aliases": {
             "items": {
               "type": "string"
@@ -5091,13 +4450,11 @@
               "type": "string"
             },
             "type": "array",
-            "title": "Block Ids",
-            "default": []
+            "title": "Block Ids"
           },
-          "doc_count": {
+          "score": {
             "type": "integer",
-            "title": "Doc Count",
-            "default": 0
+            "title": "Score"
           }
         },
         "type": "object",
@@ -5106,64 +4463,11 @@
           "type",
           "name",
           "description",
-          "origin",
-          "aliases"
+          "aliases",
+          "block_ids",
+          "score"
         ],
         "title": "EntityOut"
-      },
-      "EntityPatch": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 200,
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "type": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EntityType"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          }
-        },
-        "type": "object",
-        "title": "EntityPatch"
-      },
-      "EntityType": {
-        "type": "string",
-        "enum": [
-          "Task",
-          "Method",
-          "Dataset",
-          "Metric",
-          "Model",
-          "Concept",
-          "Claim"
-        ],
-        "title": "EntityType"
       },
       "ExportResult": {
         "properties": {
@@ -5701,51 +5005,6 @@
         ],
         "title": "KeyIn"
       },
-      "MentionOut": {
-        "properties": {
-          "doc_id": {
-            "type": "string",
-            "title": "Doc Id"
-          },
-          "doc_title": {
-            "type": "string",
-            "title": "Doc Title"
-          },
-          "block_id": {
-            "type": "string",
-            "title": "Block Id"
-          },
-          "surface": {
-            "type": "string",
-            "title": "Surface"
-          }
-        },
-        "type": "object",
-        "required": [
-          "doc_id",
-          "doc_title",
-          "block_id",
-          "surface"
-        ],
-        "title": "MentionOut"
-      },
-      "MergeIn": {
-        "properties": {
-          "source_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "minItems": 1,
-            "title": "Source Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "source_ids"
-        ],
-        "title": "MergeIn"
-      },
       "ModelRoute": {
         "properties": {
           "provider_id": {
@@ -6123,10 +5382,6 @@
             "type": "string",
             "title": "Src Name"
           },
-          "src_type": {
-            "type": "string",
-            "title": "Src Type"
-          },
           "dst_id": {
             "type": "string",
             "title": "Dst Id"
@@ -6135,23 +5390,10 @@
             "type": "string",
             "title": "Dst Name"
           },
-          "dst_type": {
-            "type": "string",
-            "title": "Dst Type"
-          },
           "attrs": {
             "additionalProperties": true,
             "type": "object",
             "title": "Attrs"
-          },
-          "doc_id": {
-            "type": "string",
-            "title": "Doc Id"
-          },
-          "doc_title": {
-            "type": "string",
-            "title": "Doc Title",
-            "default": ""
           },
           "block_id": {
             "type": "string",
@@ -6176,12 +5418,9 @@
           "type",
           "src_id",
           "src_name",
-          "src_type",
           "dst_id",
           "dst_name",
-          "dst_type",
           "attrs",
-          "doc_id",
           "block_id",
           "evidence",
           "confidence",
@@ -6323,74 +5562,6 @@
           "hits"
         ],
         "title": "SearchResponse"
-      },
-      "SplitIn": {
-        "properties": {
-          "aliases": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "minItems": 1,
-            "title": "Aliases"
-          }
-        },
-        "type": "object",
-        "required": [
-          "aliases"
-        ],
-        "title": "SplitIn"
-      },
-      "SubgraphOut": {
-        "properties": {
-          "entities": {
-            "items": {
-              "$ref": "#/components/schemas/EntityOut"
-            },
-            "type": "array",
-            "title": "Entities"
-          },
-          "relations": {
-            "items": {
-              "$ref": "#/components/schemas/RelationOut"
-            },
-            "type": "array",
-            "title": "Relations"
-          }
-        },
-        "type": "object",
-        "required": [
-          "entities",
-          "relations"
-        ],
-        "title": "SubgraphOut"
-      },
-      "SuggestionOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "score": {
-            "type": "number",
-            "title": "Score"
-          },
-          "entity": {
-            "$ref": "#/components/schemas/EntityOut"
-          },
-          "candidate": {
-            "$ref": "#/components/schemas/EntityOut"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "score",
-          "entity",
-          "candidate"
-        ],
-        "title": "SuggestionOut",
-        "description": "可能重复：确认后把 entity 并入 candidate。"
       },
       "SummaryOut": {
         "properties": {

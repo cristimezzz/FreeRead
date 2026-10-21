@@ -117,7 +117,7 @@ class AppContext:
         worker.register("glossary_extract", glossary.run_extract_job, concurrency=1)
         translate = TranslateService(sessions, settings, llm, prompts, jobs=jobs, glossary=glossary)
         worker.register("translate_doc", translate.run_doc_job, concurrency=1)
-        kg = KGService(sessions, paths, jobs, bus, settings, llm, prompts, embed.embed_texts)
+        kg = KGService(sessions, paths, jobs, bus, settings, llm, prompts)
         worker.register("kg_extract", kg.run_extract_job, concurrency=1)
         embed.on_embedded = kg.enqueue_auto
         return cls(

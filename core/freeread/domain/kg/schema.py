@@ -10,7 +10,6 @@ class EntityType(StrEnum):
     METRIC = "Metric"
     MODEL = "Model"
     CONCEPT = "Concept"
-    CLAIM = "Claim"
 
 
 class RelationType(StrEnum):
@@ -20,7 +19,6 @@ class RelationType(StrEnum):
     EVALUATED_ON = "evaluated_on"
     ACHIEVES = "achieves"
     COMPARES_WITH = "compares_with"
-    CONTRADICTS = "contradicts"
     PART_OF = "part_of"
 
 
