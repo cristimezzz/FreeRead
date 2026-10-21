@@ -1692,11 +1692,6 @@ body.resizing .reader-pane {
   font-weight: 500;
 }
 
-.qa-head h2 {
-  flex: none;
-  margin-right: 10px;
-}
-
 .convsel {
   flex: 1;
   min-width: 0;
@@ -1851,90 +1846,84 @@ body.resizing .reader-pane {
   color: var(--accent-ink);
 }
 
-/* 问答：提问是浅底小卡片，回答直接排成衬线正文，不加气泡 */
-.qa-messages {
+/* 问答：卡片铺满阅读区（features/qa/QaBoard.tsx）。卡片按问答树排开；收起的卡片只有 AI 标题，
+   展开的卡片里提问是浅底小块、回答直接排成衬线正文。当前一支用墨色，当前卡片用强调色。 */
+.qa-stage {
+  padding: 0;
+}
+
+.qa-board {
+  position: relative;
   display: flex;
   flex: 1;
-  flex-direction: column;
-  gap: 20px;
-  overflow: auto;
-  padding: 12px 24px 16px;
-}
-
-.qa-messages > .search-note {
-  margin: 0;
-}
-
-.qa-turn {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.qa-turn.enter,
-.fade-in {
-  animation: rise-in var(--dur-slow) var(--ease) both;
-}
-
-.qa-question {
-  align-self: flex-end;
-  max-width: 86%;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--bg2);
-  color: var(--ink);
-  font-size: 14px;
-  white-space: pre-wrap;
-}
-
-.qa-answer {
-  font-family: var(--font-serif);
-  font-size: 15.5px;
-  line-height: 1.72;
-  color: var(--ink);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.qa-answer.untraced {
-  color: var(--ink2);
-}
-
-.qa-answer .search-note {
-  margin: 0;
-  font-family: var(--font-ui);
-}
-
-.qa-panel > .search-note {
-  margin: 0 24px 8px;
-}
-
-/* 问答树（features/qa/QaCanvas.tsx）：侧栏顶部一条矮画布，展开后铺满阅读区。
-   当前路径用墨色，当前节点用强调色，其他分支退到 ink3。 */
-.qa-canvas {
-  position: relative;
-  flex: none;
-  height: 168px;
-  margin: 0 16px 4px;
+  min-width: 0;
   overflow: hidden;
+}
+
+.qa-board-bar {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  padding: 4px 6px 4px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--bg2);
+  background: var(--surface);
+}
+
+.qa-board-bar h2 {
+  flex: none;
+  margin: 0 8px 0 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.qa-board-notes {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: min(520px, calc(100% - 24px));
+  pointer-events: none;
+}
+
+.qa-board-notes .search-note {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  pointer-events: auto;
+}
+
+.qa-return {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  z-index: 5;
+  transform: translateX(-50%);
+  animation: fade-in var(--dur) var(--ease);
+}
+
+.qa-canvas {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  background: var(--bg);
   cursor: grab;
   touch-action: none;
-  user-select: none;
-  animation: fade-in var(--dur) var(--ease);
 }
 
 .qa-canvas.dragging {
   cursor: grabbing;
-}
-
-.qa-canvas.fill {
-  flex: 1;
-  height: auto;
-  margin: 0;
+  user-select: none;
 }
 
 .qa-canvas-layer {
@@ -1962,114 +1951,156 @@ body.resizing .reader-pane {
 }
 
 .qa-canvas path.on {
-  stroke: var(--ink2);
+  stroke: var(--ink3);
   stroke-width: 1.6;
 }
 
-.qa-node {
+.qa-slot {
   position: absolute;
-  padding: 0 10px;
+  transition: left var(--dur) var(--ease), top var(--dur) var(--ease);
+}
+
+.qa-canvas.dragging .qa-slot {
+  transition: none;
+}
+
+/* 收起的卡片：只有标题 */
+.qa-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 14px;
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 12px;
   background: var(--surface);
-  color: var(--ink3);
-  font-size: 12px;
-  line-height: 1.3;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 1.35;
   text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   cursor: pointer;
   transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease);
 }
 
-.qa-node:hover {
+.qa-card:hover {
   border-color: var(--line2);
   color: var(--ink);
 }
 
-.qa-node.onpath {
+.qa-card.onpath {
   border-color: var(--ink3);
   color: var(--ink);
 }
 
-.qa-node.active {
+.qa-card.active {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
   color: var(--ink);
 }
 
-.qa-node.anchored {
-  border-left: 3px solid var(--accent-soft);
+.qa-card-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.qa-node.anchored.active {
-  border-left-color: var(--accent);
+.qa-card-mark {
+  flex: none;
+  color: var(--accent);
+  font-size: 12px;
 }
 
-.qa-node.pending {
-  border-style: dashed;
-  cursor: default;
-  animation: qa-pulse 1.4s var(--ease) infinite alternate;
-}
-
-@keyframes qa-pulse {
-  from {
-    opacity: 0.55;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.qa-stage-inner {
+/* 展开的卡片：完整的一问一答、操作、输入框 */
+.qa-card.expanded {
   flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  height: auto;
+  padding: 14px 16px 12px;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), 0 8px 28px rgb(20 20 19 / 0.08);
+  color: var(--ink);
+  font-size: 14px;
+  cursor: auto;
+  animation: rise-in var(--dur) var(--ease) both;
 }
 
-.qa-messages {
-  position: relative;
+.qa-card.expanded.draft {
+  border-style: dashed;
 }
 
-/* 同级分支切换：‹ 2 / 3 › */
-.qa-branch-switch {
+.qa-card.expanded.pending {
+  border-style: dashed;
+}
+
+.qa-card-head {
   display: flex;
   align-items: center;
-  align-self: flex-end;
-  gap: 2px;
-  margin-bottom: -12px;
-  color: var(--ink3);
+  gap: 8px;
+  color: var(--ink2);
   font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
-.qa-branch-switch button {
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 6px;
-  background: none;
-  color: inherit;
-  font-size: 15px;
-  line-height: 1;
-  cursor: pointer;
+.qa-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 55vh;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.qa-branch-switch button:hover:not(:disabled) {
-  background: var(--hover);
+.qa-question {
+  align-self: flex-end;
+  max-width: 90%;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg2);
   color: var(--ink);
+  font-size: 14px;
+  white-space: pre-wrap;
 }
 
-.qa-branch-switch button:disabled {
-  opacity: 0.35;
-  cursor: default;
+.qa-answer {
+  font-family: var(--font-serif);
+  font-size: 15.5px;
+  line-height: 1.72;
+  color: var(--ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 
-/* 就此追问的选段：父回答里淡下划线，引用的原话显示在问题上方 */
+.qa-answer.untraced {
+  color: var(--ink2);
+}
+
+.qa-answer .search-note {
+  margin: 0;
+  font-family: var(--font-ui);
+}
+
+.qa-card-body > .search-note {
+  margin: 0;
+}
+
+.composer.qa-card-composer {
+  margin: 0;
+}
+
+/* 就此追问的选段：父回答里强调色下划线，引用的原话显示在问题上方 */
 .qa-quote {
   align-self: flex-end;
-  max-width: 86%;
-  margin-bottom: -14px;
+  max-width: 90%;
+  margin-bottom: -8px;
   padding-left: 10px;
   border-left: 2px solid var(--accent);
   color: var(--ink2);
@@ -2096,7 +2127,7 @@ body.resizing .reader-pane {
 
 .qa-sel-pop {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   padding: 5px 10px;
   border: 0;
   border-radius: 8px;
@@ -2109,19 +2140,17 @@ body.resizing .reader-pane {
   animation: fade-in var(--dur-fast) var(--ease);
 }
 
-/* 每个回答下的操作：平时淡出，悬停这一轮时显示 */
 .qa-actions {
   display: flex;
-  gap: 12px;
-  margin-top: -12px;
-  opacity: 0;
-  transition: opacity var(--dur-fast) var(--ease);
+  align-items: center;
+  gap: 14px;
 }
 
-.qa-turn:hover .qa-actions,
-.qa-turn:focus-within .qa-actions,
-.qa-turn:last-child .qa-actions {
-  opacity: 1;
+.qa-actions-hint {
+  flex: 1;
+  color: var(--ink3);
+  font-size: 12px;
+  text-align: right;
 }
 
 .qa-link {

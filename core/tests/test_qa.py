@@ -72,6 +72,20 @@ def test_validate_answer_normalizes_in_place_and_drops_unknown_ids():
     assert strip_markers("结论 [b_0012][b_0013]。") == "结论。"
 
 
+def test_split_title_takes_only_a_final_title_line():
+    from freeread.services.qa import _split_title
+
+    assert _split_title("结论[b_0001]。\n\n**标题**：「核心贡献[b_0001]」") == (
+        "结论[b_0001]。",
+        "核心贡献",
+    )
+    assert _split_title("结论。\nTitle: Main idea") == ("结论。", "Main idea")
+    mid = "标题：这一行在正文中间\n正文继续。"
+    assert _split_title(mid) == (mid, "")
+    assert _split_title("没有标题。") == ("没有标题。", "")
+    assert len(_split_title("答。\n标题：" + "很" * 40)[1]) == 16
+
+
 def CB(i, type_="paragraph", section="s1", text="word " * 20):
     return ContextBlock(f"b_{i:04d}", type_, section, text)
 
@@ -131,8 +145,11 @@ async def test_ask_streams_validates_saves_and_threads_history(ctx, tmp_path):
         "[b_" not in prompt.split("此前这一支的对话")[1].split("检索到的原文")[0]
     )  # 历史去掉了标记
 
+    # 卡片标题：模型末行的"标题：…"，不留在回答里；对话标题取第一张卡片的标题
+    assert first.title == "What doe要点" and "标题" not in first.answer
+    assert "标题：" in raw
     detail = ctx.qa.get_session(session.id)
-    assert detail.title == "What does the benchmark measure?" and detail.turns == 2
+    assert detail.title == "What doe要点" and detail.turns == 2
     assert [n.id for n in detail.nodes] == [first.id, second.id]
     assert ctx.qa.list_sessions(doc_id)[0].turns == 2
     with ctx.sessions() as s:

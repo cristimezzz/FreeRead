@@ -1573,6 +1573,8 @@ export interface components {
             parent_id: string | null;
             /** Question */
             question: string;
+            /** Title */
+            title: string;
             /** Answer */
             answer: string;
             /** Citations */

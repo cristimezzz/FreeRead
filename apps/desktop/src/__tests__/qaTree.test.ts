@@ -26,16 +26,34 @@ describe("qa tree", () => {
     expect(latestLeaf(tree, "a")).toBe("a1");
   });
 
-  it("lays out leaves in columns with parents centred and no overlaps", () => {
-    const { pos, cols, rows } = layoutTree(tree);
-    expect(cols).toBe(4);
-    expect(rows).toBe(3);
-    expect(pos.get("a1")).toEqual({ x: 0, y: 2 });
-    expect(pos.get("a")).toEqual({ x: 0, y: 1 });
-    expect(pos.get("b")).toEqual({ x: 1, y: 1 });
-    expect(pos.get("r1")).toEqual({ x: 0.5, y: 0 });
-    const seen = new Set([...pos.values()].map((p) => `${p.x},${p.y}`));
-    expect(seen.size).toBe(pos.size);
+  const gap = { x: 20, y: 30 };
+  const overlaps = (pos: Map<string, { x: number; y: number; w: number; h: number }>) => {
+    const ps = [...pos.values()];
+    return ps.some((p, i) =>
+      ps.some((q, j) => i < j && p.x < q.x + q.w && q.x < p.x + p.w && p.y < q.y + q.h && q.y < p.y + p.h),
+    );
+  };
+
+  it("lays out equal cards with parents centred over their subtree", () => {
+    const { pos, width, height } = layoutTree(tree, () => ({ w: 100, h: 40 }), gap);
+    expect(pos.get("r1")).toMatchObject({ x: 60, y: 0 });
+    expect(pos.get("a")).toMatchObject({ x: 0, y: 70 });
+    expect(pos.get("b")).toMatchObject({ x: 120, y: 70 });
+    expect(pos.get("a1")).toMatchObject({ x: 0, y: 140 });
+    expect(pos.get("r2")).toMatchObject({ x: 240, y: 0 });
+    expect(width).toBe(460);
+    expect(height).toBe(180);
+    expect(overlaps(pos)).toBe(false);
+  });
+
+  it("makes room for the expanded card: wider subtree, taller row", () => {
+    const size = (id: string) => (id === "a" ? { w: 300, h: 200 } : { w: 100, h: 40 });
+    const { pos } = layoutTree(tree, size, gap);
+    expect(pos.get("a")).toMatchObject({ x: 0, y: 70, w: 300, h: 200 });
+    expect(pos.get("a1")).toMatchObject({ x: 100, y: 300 });
+    expect(pos.get("b")).toMatchObject({ x: 320 });
+    expect(pos.get("r1")).toMatchObject({ x: 160 });
+    expect(overlaps(pos)).toBe(false);
   });
 
   it("finds anchors in the answer ignoring citation markers and whitespace", () => {

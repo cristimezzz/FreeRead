@@ -360,6 +360,8 @@ class QANodeRow(Base):
     session_id: Mapped[str] = mapped_column(ForeignKey("qa_sessions.id", ondelete="CASCADE"))
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("qa_nodes.id", ondelete="SET NULL"))
     question: Mapped[str] = mapped_column(Text)
+    # 模型起的短标题（问答树卡片）；M3 之前的节点为空
+    title: Mapped[str] = mapped_column(Text, default="")
     answer: Mapped[str] = mapped_column(Text)
     citations: Mapped[list[str]] = mapped_column(JSON, default=list)
     # invalid_ids / out_of_context / context_ids / modes / elapsed_ms

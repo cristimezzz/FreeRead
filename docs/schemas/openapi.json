@@ -5309,6 +5309,10 @@
             "type": "string",
             "title": "Question"
           },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
           "answer": {
             "type": "string",
             "title": "Answer"
@@ -5368,6 +5372,7 @@
           "session_id",
           "parent_id",
           "question",
+          "title",
           "answer",
           "citations",
           "untraced",

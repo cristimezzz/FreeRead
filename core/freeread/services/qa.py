@@ -4,7 +4,7 @@
 1. 检索：当前问题（追问时拼上父节点问题与选中的文字）→ SearchService 混合检索 top-k 块；
 2. 上下文：命中块加同章节邻块、摘要，按预算截断（domain/qa/context.py）；
 3. 生成：qa_answer@N，要求每个论断后用 [b_xxxx] 标注出处；流式输出；
-4. 校验：不存在的编号从正文删除（domain/qa/citations.py），存库与展示的引用 100% 存在；
+4. 校验：先取出末行"标题：…"作为卡片标题（没有则为空，界面退回问题），再把不存在的编号从正文删除（domain/qa/citations.py），存库与展示的引用 100% 存在；
 5. 存库：qa_sessions / qa_nodes，parent_id 指向父节点；重答（regenerate）跳过缓存。
 按需调用；和翻译、总结一样要先确认向该 provider 发送文档内容。
 """
@@ -41,7 +41,13 @@ HISTORY_TURNS = 3
 HISTORY_ANSWER_CHARS = 600
 ANCHOR_CHARS = 500
 TITLE_CHARS = 40
+NODE_TITLE_CHARS = 16
 _MARKER_RE = re.compile(r"\[(b_\d+)\]")
+# 回答末行的卡片标题：标题：xxx（容忍 **标题**: / Title:）
+_TITLE_LINE_RE = re.compile(
+    r"(?:\A|\n)[ \t]*(?:\*\*)?(?:标题|Title)(?:\*\*)?[ \t]*[:：][ \t]*(.+?)[ \t]*\Z",
+    re.IGNORECASE,
+)
 
 
 class QAError(PreflightError):
@@ -53,6 +59,8 @@ class QANodeOut(BaseModel):
     session_id: str
     parent_id: str | None
     question: str
+    # 模型给这一问一答起的短标题（问答树卡片用）；为空时界面用问题代替
+    title: str
     # 引用写成 [b_0012]，都已校验存在于该文档
     answer: str
     citations: list[str]
@@ -247,7 +255,7 @@ class QAService:
             if chunk.delta:
                 parts.append(chunk.delta)
                 yield "delta", QADelta(text=chunk.delta)
-        raw = "".join(parts).strip()
+        raw, node_title = _split_title("".join(parts).strip())
         if not raw:
             raise QAError("bad_output", "模型没有返回内容")
 
@@ -265,6 +273,7 @@ class QAService:
             parent_id,
             {"text": anchor} if anchor else None,
             question,
+            node_title,
             checked.text,
             checked.citations,
             stats,
@@ -279,6 +288,7 @@ class QAService:
         parent_id: str | None,
         anchor: dict[str, Any] | None,
         question: str,
+        title: str,
         answer: str,
         citations: list[str],
         stats: dict[str, Any],
@@ -291,6 +301,7 @@ class QAService:
                 parent_id=parent_id,
                 anchor=anchor,
                 question=question,
+                title=title,
                 answer=answer,
                 citations=citations,
                 stats=stats,
@@ -301,7 +312,7 @@ class QAService:
             s.flush()  # 填上 created_at
             session = s.get(QASessionRow, session_id)
             if session is not None:
-                session.title = session.title or _title(question)
+                session.title = session.title or title or _title(question)
                 session.updated_at = row.created_at
             return _node_out(row)
 
@@ -318,6 +329,15 @@ def _ancestors(by_id: dict[str, QANodeOut], node_id: str | None) -> list[QANodeO
         chain.append(by_id[node_id])
         node_id = by_id[node_id].parent_id
     return chain[::-1]
+
+
+def _split_title(raw: str) -> tuple[str, str]:
+    """取出回答末行的"标题：…"，返回（去掉标题行的回答，标题）。没有标题行时标题为空。"""
+    m = _TITLE_LINE_RE.search(raw)
+    if m is None:
+        return raw, ""
+    title = _MARKER_RE.sub("", m.group(1)).strip().strip("\"'“”「」《》*").strip()
+    return raw[: m.start()].rstrip(), title[:NODE_TITLE_CHARS]
 
 
 def _title(question: str) -> str:
@@ -342,6 +362,7 @@ def _node_out(row: QANodeRow) -> QANodeOut:
         session_id=row.session_id,
         parent_id=row.parent_id,
         question=row.question,
+        title=row.title,
         answer=row.answer,
         citations=list(row.citations or []),
         untraced=not row.citations,

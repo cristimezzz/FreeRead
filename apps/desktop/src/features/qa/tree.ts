@@ -64,38 +64,77 @@ export function latestLeaf<T extends TreeItem>(tree: Tree<T>, id: string): strin
   }
 }
 
-export interface LayoutPos {
-  /** 列（叶子从左到右依次编号，父节点居中于首尾子节点） */
+export interface Size {
+  w: number;
+  h: number;
+}
+
+export interface LayoutPos extends Size {
+  /** 卡片左上角（像素） */
   x: number;
-  /** 深度，根为 0 */
   y: number;
 }
 
 export interface TreeLayout {
   pos: Map<string, LayoutPos>;
-  /** 列数（最右列 + 1）与层数 */
-  cols: number;
-  rows: number;
+  width: number;
+  height: number;
 }
 
-/** 整齐树布局（自上而下）：叶子各占一列，父节点在子节点中间；各个根依次排开。 */
-export function layoutTree<T extends TreeItem>(tree: Tree<T>): TreeLayout {
-  const pos = new Map<string, LayoutPos>();
-  let col = 0;
-  let rows = 0;
-  const place = (n: T, depth: number) => {
-    rows = Math.max(rows, depth + 1);
-    const kids = (tree.children.get(n.id) ?? []).filter((k) => !pos.has(k.id));
-    pos.set(n.id, { x: 0, y: depth }); // 先占位，防环
-    if (!kids.length) {
-      pos.set(n.id, { x: col++, y: depth });
-      return;
-    }
-    for (const k of kids) place(k, depth + 1);
-    const first = pos.get(kids[0].id)!.x;
-    const last = pos.get(kids[kids.length - 1].id)!.x;
-    pos.set(n.id, { x: (first + last) / 2, y: depth });
+/**
+ * 整齐树布局（自上而下，像素）：卡片大小各不相同（展开的那张更宽更高）。
+ * 子树宽 = max(自身宽, 子树宽之和 + 间距)；节点居中于自己的子树，子节点在其下居中排开；
+ * 每一层的高度取这一层最高的卡片，各个根依次排开。
+ */
+export function layoutTree<T extends TreeItem>(
+  tree: Tree<T>,
+  size: (id: string) => Size,
+  gap: { x: number; y: number } = { x: 20, y: 36 },
+): TreeLayout {
+  const kids = new Map<string, T[]>();
+  const span = new Map<string, number>();
+  const seen = new Set<string>();
+  // 先算子树宽（顺带去环）
+  const measure = (n: T): number => {
+    seen.add(n.id);
+    const ks = (tree.children.get(n.id) ?? []).filter((k) => !seen.has(k.id));
+    kids.set(n.id, ks);
+    const inner = ks.reduce((sum, k) => sum + measure(k), 0) + gap.x * Math.max(0, ks.length - 1);
+    const s = Math.max(size(n.id).w, inner);
+    span.set(n.id, s);
+    return s;
   };
-  for (const r of tree.roots) place(r, 0);
-  return { pos, cols: col, rows };
+  const roots = tree.roots.filter((r) => !seen.has(r.id));
+  for (const r of roots) measure(r);
+
+  const pos = new Map<string, LayoutPos>();
+  const rowH: number[] = [];
+  const depthOf = new Map<string, number>();
+  const place = (n: T, left: number, depth: number) => {
+    const s = span.get(n.id)!;
+    const { w, h } = size(n.id);
+    pos.set(n.id, { x: left + (s - w) / 2, y: 0, w, h });
+    depthOf.set(n.id, depth);
+    rowH[depth] = Math.max(rowH[depth] ?? 0, h);
+    const ks = kids.get(n.id)!;
+    const inner = ks.reduce((sum, k) => sum + span.get(k.id)!, 0) + gap.x * Math.max(0, ks.length - 1);
+    let x = left + (s - inner) / 2;
+    for (const k of ks) {
+      place(k, x, depth + 1);
+      x += span.get(k.id)! + gap.x;
+    }
+  };
+  let left = 0;
+  for (const r of roots) {
+    place(r, left, 0);
+    left += span.get(r.id)! + gap.x;
+  }
+  const rowY: number[] = [];
+  let y = 0;
+  for (let d = 0; d < rowH.length; d++) {
+    rowY[d] = y;
+    y += rowH[d] + gap.y;
+  }
+  for (const [id, p] of pos) p.y = rowY[depthOf.get(id)!];
+  return { pos, width: Math.max(0, left - gap.x), height: Math.max(0, y - gap.y) };
 }

@@ -1,4 +1,4 @@
-"""qa tree: qa_nodes.anchor, index on parent_id; old linear sessions become one chain
+"""qa tree: qa_nodes.anchor and title, index on parent_id; old linear sessions become one chain
 
 Revision ID: 0011
 Revises: 0010
@@ -37,6 +37,7 @@ def _chain_orphans() -> None:
 def upgrade() -> None:
     with op.batch_alter_table("qa_nodes", schema=None) as batch_op:
         batch_op.add_column(sa.Column("anchor", sa.JSON(), nullable=True))
+        batch_op.add_column(sa.Column("title", sa.Text(), nullable=False, server_default=""))
         batch_op.create_index(
             "ix_qa_nodes_session_id_parent_id", ["session_id", "parent_id"], unique=False
         )
@@ -46,4 +47,5 @@ def upgrade() -> None:
 def downgrade() -> None:
     with op.batch_alter_table("qa_nodes", schema=None) as batch_op:
         batch_op.drop_index("ix_qa_nodes_session_id_parent_id")
+        batch_op.drop_column("title")
         batch_op.drop_column("anchor")
