@@ -1,6 +1,10 @@
 // 连接 Core Service（Python sidecar）。见 docs/01-architecture.md §3。
 // 在 Tauri 里从 core_info 命令取端口和会话 token；单独用浏览器开发时
 // （vite dev + 手动启动的 freeread-core）从 VITE_CORE_URL / VITE_CORE_TOKEN 读取。
+// @tauri-apps/api 静态导入即可：Titlebar 已静态引入它，且模块加载时不碰 Tauri 运行时，浏览器模式下也安全。
+
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 export interface CoreInfo {
   baseUrl: string;
@@ -18,7 +22,6 @@ export const isTauri = () => typeof window !== "undefined" && "__TAURI_INTERNALS
 
 export async function getCoreInfo(): Promise<CoreInfo> {
   if (isTauri()) {
-    const { invoke } = await import("@tauri-apps/api/core");
     const info = await invoke<TauriCoreInfo>("core_info");
     return { baseUrl: `http://127.0.0.1:${info.port}`, token: info.token, spawnedAtMs: info.spawnedAtMs };
   }
@@ -42,7 +45,6 @@ export type CoreExitSource = (onExit: (exit: CoreExit) => void) => Promise<() =>
 
 /** Tauri 模式：先订阅事件再查状态，订阅前就已退出的情况也不会漏掉。 */
 const tauriExitSource: CoreExitSource = async (onExit) => {
-  const [{ listen }, { invoke }] = await Promise.all([import("@tauri-apps/api/event"), import("@tauri-apps/api/core")]);
   let fired = false;
   const once = (exit: CoreExit) => {
     if (fired) return;

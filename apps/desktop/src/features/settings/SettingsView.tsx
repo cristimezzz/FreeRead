@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
@@ -202,7 +203,6 @@ export function SettingsView() {
   const setKey = async (id: string, key: string | null) => {
     try {
       if (isTauri()) {
-        const { invoke } = await import("@tauri-apps/api/core");
         if (key) await invoke("set_api_key", { providerId: id, key });
         else await invoke("delete_api_key", { providerId: id });
       }
@@ -239,7 +239,6 @@ export function SettingsView() {
   const setParserKey = async (engine: RemoteEngine, key: string | null) => {
     try {
       if (isTauri()) {
-        const { invoke } = await import("@tauri-apps/api/core");
         if (key) await invoke("set_api_key", { providerId: `parser-${engine}`, key });
         else await invoke("delete_api_key", { providerId: `parser-${engine}` });
       }
