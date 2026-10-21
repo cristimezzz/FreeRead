@@ -3098,13 +3098,65 @@
         }
       }
     },
+    "/qa/nodes/{node_id}": {
+      "delete": {
+        "tags": [
+          "qa"
+        ],
+        "summary": "Delete Node",
+        "description": "删除节点及其整棵子树。",
+        "operationId": "delete_node_qa_nodes__node_id__delete",
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Id"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/qa/sessions/{session_id}/ask": {
       "post": {
         "tags": [
           "qa"
         ],
         "summary": "Ask",
-        "description": "SSE 事件：\n- `context`：QAContextOut，送给模型的原文块与检索方式（没有 vector 表示语义索引未建）；\n- `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；\n- `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；\n- `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /\n  consent_required / no_text / bad_output / llm_error；\n- `done`：结束。",
+        "description": "SSE 事件：\n- `context`：QAContextOut，送给模型的原文块与检索方式（没有 vector 表示语义索引未建）；\n- `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；\n- `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；\n- `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /\n  consent_required / bad_request（parent_id 不在该对话）/ no_text / bad_output / llm_error；\n- `done`：结束。",
         "operationId": "ask_qa_sessions__session_id__ask_post",
         "parameters": [
           {
@@ -3951,6 +4003,34 @@
               }
             ],
             "title": "Lang"
+          },
+          "parent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Id"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "regenerate": {
+            "type": "boolean",
+            "title": "Regenerate",
+            "default": false
           }
         },
         "type": "object",
@@ -5265,6 +5345,18 @@
             ],
             "title": "Status"
           },
+          "anchor": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
           "created_at": {
             "type": "string",
             "title": "Created At"
@@ -5283,6 +5375,7 @@
           "model",
           "prompt_version",
           "status",
+          "anchor",
           "created_at"
         ],
         "title": "QANodeOut"

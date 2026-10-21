@@ -801,6 +801,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/qa/nodes/{node_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Node
+         * @description 删除节点及其整棵子树。
+         */
+        delete: operations["delete_node_qa_nodes__node_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/qa/sessions/{session_id}/ask": {
         parameters: {
             query?: never;
@@ -817,7 +837,7 @@ export interface paths {
          *     - `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；
          *     - `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；
          *     - `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /
-         *       consent_required / no_text / bad_output / llm_error；
+         *       consent_required / bad_request（parent_id 不在该对话）/ no_text / bad_output / llm_error；
          *     - `done`：结束。
          */
         post: operations["ask_qa_sessions__session_id__ask_post"];
@@ -1072,6 +1092,15 @@ export interface components {
             question: string;
             /** Lang */
             lang?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Anchor */
+            anchor?: string | null;
+            /**
+             * Regenerate
+             * @default false
+             */
+            regenerate: boolean;
         };
         /**
          * CollectionOut
@@ -1563,6 +1592,10 @@ export interface components {
              * @enum {string}
              */
             status: "ok" | "stale";
+            /** Anchor */
+            anchor: {
+                [key: string]: unknown;
+            } | null;
             /** Created At */
             created_at: string;
         };
@@ -3550,6 +3583,37 @@ export interface operations {
             };
             path: {
                 session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_node_qa_nodes__node_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path: {
+                node_id: string;
             };
             cookie?: never;
         };

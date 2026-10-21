@@ -207,6 +207,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   useEffect(() => {
     if (side !== "kg") setKgExpanded(false);
   }, [side]);
+  // 问答树同样可以展开铺满阅读区
+  const [qaExpanded, setQaExpanded] = useState(false);
+  const [qaStage, setQaStage] = useState<HTMLDivElement | null>(null);
+  const showQaStage = side === "qa" && qaExpanded;
+  useEffect(() => {
+    if (side !== "qa") setQaExpanded(false);
+  }, [side]);
   const ann = useAnnotations(docId, irVersion);
   const wholeMarks = useMemo(
     () => Object.fromEntries(Object.entries(ann.wholeBlocks).map(([id, a]) => [id, a.color])),
@@ -488,6 +495,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
       <div className="reader" ref={readerEl}>
         <div className="reader-panes" ref={panesEl}>
           {showKgStage && <div className="kg-stage" ref={setKgStage} />}
+          {showQaStage && <div className="kg-stage" ref={setQaStage} />}
           {layout !== "reflow" && (
             <PdfView
               docId={docId}
@@ -579,8 +587,14 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               {shownSide === "qa" && (
                 <QaPanel
                   state={qa}
+                  expanded={showQaStage}
+                  stage={showQaStage ? qaStage : null}
+                  onExpand={setQaExpanded}
                   blockText={(id) => blockPreview(byId.get(id))}
-                  onPick={jumpTo}
+                  onPick={(id) => {
+                    setQaExpanded(false);
+                    jumpTo(id);
+                  }}
                   onClose={() => setSide(null)}
                 />
               )}

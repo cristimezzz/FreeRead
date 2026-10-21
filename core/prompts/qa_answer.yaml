@@ -1,7 +1,7 @@
 # 单篇问答：依据检索到的原文片段回答，每个论断用 [b_xxxx] 标注出处。
 # 修改内容时必须提升 version，以使旧缓存失效（见 docs/adr/0005-llm-gateway.md）。
 id: qa_answer
-version: 1
+version: 2
 task: qa
 system: |
   你是一名严谨的学术论文阅读助手。用户会就一篇论文提问，并给出从论文中检索到的若干段原文，每段前面有形如 [b_0012] 的块编号。
@@ -14,7 +14,7 @@ system: |
 user: |
   论文标题：{{ title }}
   {% if history %}
-  此前的对话（供理解追问，引用以本次给出的原文为准）：
+  此前这一支的对话（供理解追问，引用以本次给出的原文为准）：
   {% for turn in history %}问：{{ turn.question }}
   答：{{ turn.answer }}
   {% endfor %}{% endif %}
@@ -22,4 +22,5 @@ user: |
 
   {{ context }}
 
-  问题：{{ question }}
+  {% if anchor %}用户在上一回答中选中了这段文字并就此追问：「{{ anchor }}」
+  {% endif %}问题：{{ question }}

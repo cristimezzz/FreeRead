@@ -1,4 +1,4 @@
-"""M2 单篇问答：答案引用校验、上下文组装、QAService、重新解析后的引用迁移、API。"""
+"""单篇问答：答案引用校验、上下文组装、QAService（含问答树）、重新解析后的引用迁移、API。"""
 
 import json
 import shutil
@@ -122,12 +122,14 @@ async def test_ask_streams_validates_saves_and_threads_history(ctx, tmp_path):
     raw = "".join(p.text for k, p in events if k == "delta")
     assert "[b_9999]" in raw  # 流式文本是未校验的原文
 
-    events = await collect(ctx.qa.ask(session.id, "And the limitations?"))
+    events = await collect(ctx.qa.ask(session.id, "And the limitations?", parent_id=first.id))
     second = events[-1][1]
     assert second.parent_id == first.id
     prompt = fake.calls[-1][1][-1].content
-    assert "此前的对话" in prompt and "What does the benchmark measure?" in prompt
-    assert "[b_" not in prompt.split("此前的对话")[1].split("检索到的原文")[0]  # 历史去掉了标记
+    assert "此前这一支的对话" in prompt and "What does the benchmark measure?" in prompt
+    assert (
+        "[b_" not in prompt.split("此前这一支的对话")[1].split("检索到的原文")[0]
+    )  # 历史去掉了标记
 
     detail = ctx.qa.get_session(session.id)
     assert detail.title == "What does the benchmark measure?" and detail.turns == 2
@@ -141,6 +143,54 @@ async def test_ask_streams_validates_saves_and_threads_history(ctx, tmp_path):
     with ctx.sessions() as s:
         assert s.scalars(select(QANodeRow)).all() == []  # 级联删除
     assert ctx.qa.list_sessions(doc_id) == []
+
+
+async def test_tree_branches_see_only_their_ancestors(ctx, tmp_path):
+    fake = FakeProvider("p1", responder=qa_responder)
+    configure(ctx, fake)
+    doc_id = await parsed_doc(ctx, tmp_path)
+    session = ctx.qa.create_session(doc_id)
+
+    async def ask(q, **kw):
+        return (await collect(ctx.qa.ask(session.id, q, **kw)))[-1][1]
+
+    def history():
+        prompt = fake.calls[-1][1][-1].content
+        return prompt.split("检索到的原文")[0]
+
+    root = await ask("Root question about the benchmark?")
+    a = await ask("Child A about accuracy?", parent_id=root.id)
+    b = await ask("Child B about limitations?", parent_id=root.id)  # 另起：与 A 同级
+    assert a.parent_id == b.parent_id == root.id
+    assert "Root question" in history() and "Child A" not in history()  # 兄弟分支不可见
+
+    await ask("Grandchild under A?", parent_id=a.id)
+    assert "Root question" in history() and "Child A" in history() and "Child B" not in history()
+
+    other = await ask("A brand new topic?")  # 新话题：新的根
+    assert other.parent_id is None and "此前这一支的对话" not in history()
+
+    # 就此追问：选中的文字存进节点、写进提示词
+    spawned = await ask("这是什么意思？", parent_id=root.id, anchor="  第一点\n 见此处 ")
+    assert spawned.anchor == {"text": "第一点 见此处"}
+    assert "选中了这段文字并就此追问：「第一点 见此处」" in fake.calls[-1][1][-1].content
+
+    # 重答：同一问题、同一父节点，不走缓存（否则会拿回同一个缓存结果、不调用模型）
+    n_calls = len(fake.calls)
+    again = await ask(a.question, parent_id=root.id, regenerate=True)
+    assert len(fake.calls) == n_calls + 1 and again.parent_id == root.id and again.id != a.id
+
+    # 不属于本对话的父节点
+    elsewhere = ctx.qa.create_session(doc_id)
+    with pytest.raises(PreflightError) as e:
+        await collect(ctx.qa.ask(elsewhere.id, "Q?", parent_id=root.id))
+    assert e.value.code == "bad_request"
+
+    # 删除子树：A 与它的孙节点一起删掉，其余不动
+    assert ctx.qa.delete_node(a.id) == 2
+    left = {n.id for n in ctx.qa.get_session(session.id).nodes}
+    assert a.id not in left and {root.id, b.id, other.id, spawned.id, again.id} == left
+    assert ctx.qa.delete_node(a.id) == 0
 
 
 async def test_unanswerable_and_preflight(ctx, tmp_path):
@@ -172,7 +222,7 @@ async def test_reparse_migrates_answer_markers(ctx, tmp_path):
         assert f"[{b}]" not in after.answer and after.status == "stale"
 
     # 真实重新解析：块 ID 不变，引用保留
-    node = (await collect(ctx.qa.ask(session.id, "benchmark")))[-1][1]
+    node = (await collect(ctx.qa.ask(session.id, "benchmark", parent_id=node.id)))[-1][1]
 
     async def noop(*_):
         pass
@@ -214,6 +264,20 @@ def test_qa_api(client, tmp_path):
 
     detail = client.get(f"/qa/sessions/{sid}").json()
     assert detail["turns"] == 1 and detail["nodes"][0]["id"] == answer["id"]
+
+    body = {"question": "Why?", "parent_id": answer["id"], "anchor": "第一点"}
+    child = sse_events(client.post(f"/qa/sessions/{sid}/ask", json=body).text)[-2][1]
+    assert child["parent_id"] == answer["id"] and child["anchor"] == {"text": "第一点"}
+    bad = sse_events(
+        client.post(f"/qa/sessions/{sid}/ask", json={"question": "q", "parent_id": "x"}).text
+    )
+    assert bad[0] == (
+        "error",
+        {"code": "bad_request", "message": bad[0][1]["message"], "provider_id": None},
+    )
+    assert client.delete(f"/qa/nodes/{answer['id']}").status_code == 204  # 连同子节点
+    assert client.get(f"/qa/sessions/{sid}").json()["nodes"] == []
+    assert client.delete(f"/qa/nodes/{answer['id']}").status_code == 404
     assert client.post(f"/qa/sessions/{sid}/ask", json={"question": ""}).status_code == 422
     assert client.post("/qa/sessions/nope/ask", json={"question": "q"}).status_code == 404
     assert client.get("/qa/sessions/nope").status_code == 404

@@ -1703,6 +1703,9 @@ body.resizing .reader-pane {
   max-width: 220px;
   height: 34px;
   padding: 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   border-color: var(--line);
   background: none;
   color: var(--ink2);
@@ -1905,6 +1908,264 @@ body.resizing .reader-pane {
 
 .qa-panel > .search-note {
   margin: 0 24px 8px;
+}
+
+/* 问答树（features/qa/QaCanvas.tsx）：侧栏顶部一条矮画布，展开后铺满阅读区。
+   当前路径用墨色，当前节点用强调色，其他分支退到 ink3。 */
+.qa-canvas {
+  position: relative;
+  flex: none;
+  height: 168px;
+  margin: 0 16px 4px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg2);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  animation: fade-in var(--dur) var(--ease);
+}
+
+.qa-canvas.dragging {
+  cursor: grabbing;
+}
+
+.qa-canvas.fill {
+  flex: 1;
+  height: auto;
+  margin: 0;
+}
+
+.qa-canvas-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  transition: transform var(--dur) var(--ease);
+}
+
+.qa-canvas.dragging .qa-canvas-layer {
+  transition: none;
+}
+
+.qa-canvas svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+
+.qa-canvas path {
+  fill: none;
+  stroke: var(--line2);
+  stroke-width: 1.2;
+}
+
+.qa-canvas path.on {
+  stroke: var(--ink2);
+  stroke-width: 1.6;
+}
+
+.qa-node {
+  position: absolute;
+  padding: 0 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink3);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.qa-node:hover {
+  border-color: var(--line2);
+  color: var(--ink);
+}
+
+.qa-node.onpath {
+  border-color: var(--ink3);
+  color: var(--ink);
+}
+
+.qa-node.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  color: var(--ink);
+}
+
+.qa-node.anchored {
+  border-left: 3px solid var(--accent-soft);
+}
+
+.qa-node.anchored.active {
+  border-left-color: var(--accent);
+}
+
+.qa-node.pending {
+  border-style: dashed;
+  cursor: default;
+  animation: qa-pulse 1.4s var(--ease) infinite alternate;
+}
+
+@keyframes qa-pulse {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.qa-stage-inner {
+  flex-direction: column;
+}
+
+.qa-messages {
+  position: relative;
+}
+
+/* 同级分支切换：‹ 2 / 3 › */
+.qa-branch-switch {
+  display: flex;
+  align-items: center;
+  align-self: flex-end;
+  gap: 2px;
+  margin-bottom: -12px;
+  color: var(--ink3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.qa-branch-switch button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qa-branch-switch button:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.qa-branch-switch button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* 就此追问的选段：父回答里淡下划线，引用的原话显示在问题上方 */
+.qa-quote {
+  align-self: flex-end;
+  max-width: 86%;
+  margin-bottom: -14px;
+  padding-left: 10px;
+  border-left: 2px solid var(--accent);
+  color: var(--ink2);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.qa-anchor {
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.qa-anchor:hover {
+  border-radius: 3px;
+  background: var(--accent-soft);
+}
+
+.qa-sel-pop {
+  position: absolute;
+  z-index: 3;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--btn);
+  color: var(--btn-ink);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transform: translate(-50%, calc(-100% - 6px));
+  animation: fade-in var(--dur-fast) var(--ease);
+}
+
+/* 每个回答下的操作：平时淡出，悬停这一轮时显示 */
+.qa-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: -12px;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.qa-turn:hover .qa-actions,
+.qa-turn:focus-within .qa-actions,
+.qa-turn:last-child .qa-actions {
+  opacity: 1;
+}
+
+.qa-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink3);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.qa-link:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.qa-link.danger:hover:not(:disabled) {
+  color: var(--err);
+}
+
+.qa-link:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.composer-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--ink3);
+  font-size: 12px;
+}
+
+.composer-target > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-target .qa-link {
+  flex: none;
 }
 
 .composer {
