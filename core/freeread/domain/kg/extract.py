@@ -304,3 +304,55 @@ def merge_groups(
                 LocalRelation(src, dst, r.type, r.block_id, r.evidence, r.attrs, r.confidence)
             )
     return out
+
+
+# ------------------------------------------------------------ 精简
+
+MAX_ENTITIES = 60
+MAX_CONCEPTS = 15
+
+
+def entity_scores(graph: DocGraph) -> list[int]:
+    """2 × 关系数 + 提及块数：关系多的是论文的主干。"""
+    degree = Counter(i for r in graph.relations for i in (r.src, r.dst))
+    return [2 * degree[i] + len(e.mentions) for i, e in enumerate(graph.entities)]
+
+
+def prune(
+    graph: DocGraph, max_entities: int = MAX_ENTITIES, max_concepts: int = MAX_CONCEPTS
+) -> DocGraph:
+    """只留下重要的实体：去掉没有关系且只出现一次的，Concept 和总数各有上限（按分数取前几个）。
+
+    去掉的实体连同它的关系一起丢弃，数量记在 stats["pruned"]。
+    """
+    scores = entity_scores(graph)
+    linked = {i for r in graph.relations for i in (r.src, r.dst)}
+    ranked = sorted(
+        (i for i, e in enumerate(graph.entities) if i in linked or len(e.mentions) > 1),
+        key=lambda i: (-scores[i], i),
+    )
+    keep: list[int] = []
+    concepts = 0
+    for i in ranked:
+        if len(keep) >= max_entities:
+            break
+        if graph.entities[i].type is EntityType.CONCEPT:
+            if concepts >= max_concepts:
+                continue
+            concepts += 1
+        keep.append(i)
+    keep.sort()
+    remap = {old: new for new, old in enumerate(keep)}
+    out = DocGraph(
+        [graph.entities[i] for i in keep],
+        [
+            LocalRelation(
+                remap[r.src], remap[r.dst], r.type, r.block_id, r.evidence, r.attrs, r.confidence
+            )
+            for r in graph.relations
+            if r.src in remap and r.dst in remap
+        ],
+        Counter(graph.stats),
+    )
+    out.stats["pruned"] += len(graph.entities) - len(keep)
+    return out

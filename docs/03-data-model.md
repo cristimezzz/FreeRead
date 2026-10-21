@@ -5,7 +5,7 @@
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
-**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations；迁移 `0007_sync_state_full` 给 sync_state 加了 last_full_sync_at；迁移 `0008_kg`（M3）加了 kg_entities、kg_entity_aliases、kg_mentions、kg_relations、kg_distinct；迁移 `0009_kg_merge_suggestions` 加了 kg_merge_suggestions。items_fts 还没有建。
+**实现状态**：迁移 `0001_initial_m1_schema` 建了 13 张表——items、collections、item_collections、item_tags、attachments、sync_state、documents、blocks、translations、jobs、llm_cache、llm_calls、settings；迁移 `0002_embeddings_fts`（M2）加了 embedding_chunks 和 FTS5 表 blocks_fts，向量表 vec_chunks_<dim> 运行时创建；迁移 `0003_summaries` 加了 summaries；迁移 `0004_qa` 加了 qa_sessions、qa_nodes；迁移 `0005_glossary` 加了 glossary_terms；迁移 `0006_annotations` 加了 annotations；迁移 `0007_sync_state_full` 给 sync_state 加了 last_full_sync_at；迁移 `0008_kg`（M3）加了 kg_entities、kg_entity_aliases、kg_mentions、kg_relations、kg_distinct；迁移 `0009_kg_merge_suggestions` 加了 kg_merge_suggestions；迁移 `0010_kg_per_doc` 改成每篇论文一张图：删掉 kg_entity_aliases、kg_distinct、kg_merge_suggestions，kg_entities 归属文档（旧图谱清空，kg_status 回到 pending）。items_fts 还没有建。
 
 ## 1. 总览
 
@@ -16,10 +16,7 @@ items ─┬─< attachments ──1:1── documents ─┬─< blocks ─┬�
        └─< item_tags                      ├─< summaries
                                           ├─< kg_mentions >─ kg_entities
                                           └─< kg_relations(source)
-kg_entities ─< kg_entity_aliases
-kg_entities ─< kg_relations >─ kg_entities
-kg_entities ─< kg_distinct >─ kg_entities
-kg_entities ─< kg_merge_suggestions >─ kg_entities
+documents ─< kg_entities ─< kg_relations >─ kg_entities
 qa_sessions ─< qa_nodes (自引用 parent_id)
 glossary_terms
 jobs
@@ -222,30 +219,24 @@ CREATE VIRTUAL TABLE vec_chunks_384 USING vec0(
 
 ## 6. 知识图谱
 
-M3 实现（迁移 `0008_kg`、`0009_kg_merge_suggestions`，[M3 图谱](m3/kg.md)）。实体全库共享，提及和关系按文档；重新解析时与译文、总结、问答在同一事务里迁移出处块（`services/kg.migrate_kg`）。
+M3 实现（迁移 `0008_kg` → `0010_kg_per_doc`，[M3 图谱](m3/kg.md)）。**每篇论文一张图**：实体属于一篇文档，不跨文档合并；删除文档时它的图级联删除。重新抽取整体替换该文档的图；重新解析时与译文、总结、问答在同一事务里迁移出处块（`services/kg.migrate_kg`）。
+
+`0008` / `0009` 的全库共享实体（别名表、`kg_distinct`、合并建议）在 `0010` 里删掉了，见 kg.md §历史。
 
 ### kg_entities
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | ULID |
-| type | TEXT | Task / Method / Dataset / Metric / Model / Concept / Claim |
+| doc_id | TEXT | FK → documents ON DELETE CASCADE |
+| type | TEXT | Task / Method / Dataset / Metric / Model / Concept |
 | name | TEXT | 规范名 |
 | name_norm | TEXT | 归一化的名称（`domain/kg/normalize.name_norm`） |
+| aliases | JSON | 写法列表（含 name），文档内合并各组结果时得到 |
 | description | TEXT | 一句话说明，可为空 |
-| origin | TEXT | `auto` / `user`（改名、合并、拆分过；重新抽取时不会被回收） |
-| embedding | BLOB NULL | "类型: 名称 — 描述" 的向量（float32 小端），用于找消歧候选；用户编辑后清空，下次抽取补算 |
-| embedding_model | TEXT NULL | 向量来自哪个嵌入模型，只和同一模型的向量比较 |
-| created_at / updated_at | TEXT | |
+| score | INTEGER | 2 × 关系数 + 提及块数：精简时排序，云图里决定节点大小 |
+| created_at | TEXT | |
 
-索引 `ix_kg_entities_type_name_norm`。
-
-### kg_entity_aliases
-| 列 | 说明 |
-|---|---|
-| entity_id | FK → kg_entities ON DELETE CASCADE |
-| alias_norm | 归一化的写法；与 entity_id 联合主键，另有索引 `ix_kg_entity_aliases_alias_norm`。同类型实体的别名精确相同即视为同一实体 |
-| alias | 原文写法 |
-| origin | `auto` / `user` |
+索引 `ix_kg_entities_doc_id_type`。
 
 ### kg_mentions
 | 列 | 说明 |
@@ -254,8 +245,7 @@ M3 实现（迁移 `0008_kg`、`0009_kg_merge_suggestions`，[M3 图谱](m3/kg.m
 | entity_id | FK → kg_entities ON DELETE CASCADE |
 | doc_id | FK → documents ON DELETE CASCADE |
 | block_id | 出现的块；不做外键，重新解析时按块映射迁移，映射不上的删除 |
-| surface, surface_norm | 原文写法（拆分实体时按写法分） |
-| extractor | `provider/model+kg_extract@<版本>` |
+| surface | 原文写法 |
 
 索引 `ix_kg_mentions_doc_id`、`ix_kg_mentions_entity_id`。
 
@@ -263,36 +253,17 @@ M3 实现（迁移 `0008_kg`、`0009_kg_merge_suggestions`，[M3 图谱](m3/kg.m
 | 列 | 类型 | 说明 |
 |---|---|---|
 | id | TEXT PK | ULID |
-| src_id, dst_id | TEXT | FK → kg_entities ON DELETE CASCADE |
-| type | TEXT | proposes / uses / improves_on / evaluated_on / achieves / compares_with / contradicts / part_of |
-| attrs | JSON | `achieves`：`{metric, value, value_text, dataset?, unit?, setting?}`；value 是数值，已核对在出处块里出现；value_text 是显示用的原写法（如 `<50`、`0.07 ± 0.05`） |
 | doc_id | TEXT | FK → documents ON DELETE CASCADE |
+| src_id, dst_id | TEXT | FK → kg_entities ON DELETE CASCADE |
+| type | TEXT | proposes / uses / improves_on / evaluated_on / achieves / compares_with / part_of |
+| attrs | JSON | `achieves`：`{metric, value, value_text, dataset?, unit?, setting?}`；value 是数值，已核对在出处块里出现；value_text 是显示用的原写法（如 `<50`、`0.07 ± 0.05`） |
 | source_block_id | TEXT | 出处块（必填） |
-| src_surface, dst_surface | TEXT | 两端在原文里的写法 |
 | evidence | TEXT | 出处块里的摘句（核对不上时为空） |
 | confidence | REAL | 模型给出，摘句核对不上时打 7 折 |
 | extractor | TEXT | `provider/model+kg_extract@<版本>` |
-| status | TEXT | `ok` / `stale`（重新解析后出处映射不上）/ `rejected`（用户删除；重新抽取不再加回） |
-| created_at | TEXT | |
+| status | TEXT | `ok` / `stale`（重新解析后出处映射不上） |
 
-索引：`ix_kg_relations_src_id_type`、`ix_kg_relations_dst_id_type`、`ix_kg_relations_doc_id`。
-
-### kg_distinct
-`a_id, b_id`（a_id < b_id，联合主键，都 FK → kg_entities ON DELETE CASCADE）：用户拆开的实体对，以及否决过的合并建议。抽取结果里以拆出去的写法出现的提及和关系端点归到拆出来的实体；这对实体不再产生合并建议。
-
-### kg_merge_suggestions
-可能重复的实体对，等用户确认（迁移 `0009`）。跨文档只有别名精确相同才自动合并；嵌入找到的候选经模型判定为同一个的写在这里。
-
-| 列 | 类型 | 说明 |
-|---|---|---|
-| id | TEXT PK | ULID |
-| entity_id | TEXT | FK → kg_entities ON DELETE CASCADE；抽取 doc_id 时产生的实体，确认后并入 candidate_id |
-| candidate_id | TEXT | FK → kg_entities ON DELETE CASCADE；已有实体 |
-| doc_id | TEXT | FK → documents ON DELETE CASCADE；产生建议的文档，重新抽取时先删掉它的建议 |
-| score | REAL | 嵌入余弦相似度 |
-| created_at | TEXT | |
-
-唯一约束 `(entity_id, candidate_id)`，索引 `ix_kg_merge_suggestions_doc_id`。确认或否决后删除这一行。
+索引 `ix_kg_relations_doc_id`。
 
 ## 7. 问答
 
@@ -359,6 +330,6 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 的问答画布会在 
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0009`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0010`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
 - 更换嵌入来源 / 模型时清空向量索引和 embedding_chunks，所有文档 `embed_status` 置回 `pending` 并重新排队（`EmbedService.enqueue_missing`，启动和保存设置时调用）。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。

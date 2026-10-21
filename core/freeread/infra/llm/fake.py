@@ -172,18 +172,16 @@ def qa_responder(model: str, messages: list[Message]) -> str:
 
 _ACRONYM_RE = re.compile(r"\b[A-Z][A-Za-z]*[A-Z][A-Za-z0-9-]*\b")
 _PERCENT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*%")
+_KG_TYPES = ("Method", "Model", "Dataset", "Task", "Concept")
 
 
 def kg_responder(model: str, messages: list[Message]) -> str:
-    """看得懂 kg_extract / kg_resolve 提示词的确定性回复（--fake 评测用）。
+    """看得懂 kg_extract 提示词的确定性回复（--fake 评测用）。
 
-    抽取：每个块里的缩写词（两个以上大写字母）当作 Concept；同一块里有百分数时，
-    第一个缩写 achieves 指标 "score"，数值取第一个百分数。判定：一律回答不是同一个。
+    每个块里的缩写词（两个以上大写字母）当作实体，类型按名称轮换；同一块里第一个缩写 uses
+    其余的；有百分数时，第一个缩写 achieves 指标 "score"，数值取第一个百分数。
     """
     system, user = messages[0].content, messages[-1].content
-    if '"answers"' in system:
-        ids = re.findall(r"^\s*(\d+)\. ", user, re.MULTILINE)
-        return json.dumps({"answers": [{"id": int(i), "relation": "different"} for i in ids]})
     if '"entities"' not in system:
         return _echo(model, messages)
     entities: dict[str, dict] = {}
@@ -191,8 +189,12 @@ def kg_responder(model: str, messages: list[Message]) -> str:
     for bid, text in _BLOCK_LINE_RE.findall(user):
         names = list(dict.fromkeys(_ACRONYM_RE.findall(text)))[:4]
         for n in names:
-            entities.setdefault(n, {"id": n, "type": "Concept", "name": n, "block_ids": []})
+            etype = _KG_TYPES[sum(map(ord, n)) % len(_KG_TYPES)]
+            entities.setdefault(n, {"id": n, "type": etype, "name": n, "block_ids": []})
             entities[n]["block_ids"].append(bid)
+        relations += [
+            {"src": names[0], "dst": n, "type": "uses", "block_id": bid} for n in names[1:]
+        ]
         pct = _PERCENT_RE.search(text)
         if names and pct:
             entities.setdefault("score", {"id": "score", "type": "Metric", "name": "score"})

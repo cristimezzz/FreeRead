@@ -300,16 +300,6 @@ class EmbedService:
             except Exception:  # 后续任务排队失败不影响嵌入本身
                 log.warning("on_embedded hook failed for %s", doc_id, exc_info=True)
 
-    async def embed_texts(self, texts: list[str]) -> tuple[str, list[list[float]]] | None:
-        """嵌入任意短文本（如图谱实体名），返回 (模型 key, 向量)；来源不可用时返回 None。"""
-        backend = self.try_backend()
-        if backend is None or not texts:
-            return None
-        vectors: list[list[float]] = []
-        for start in range(0, len(texts), 32):
-            vectors += await backend.embed(texts[start : start + 32], "passage")
-        return backend.key, vectors
-
     async def _embed(self, doc_id: str, backend: Backend, ctx: JobContext) -> tuple[int, int]:
         blocks, titles = await asyncio.to_thread(self._load_blocks, doc_id)
         chunks = await asyncio.to_thread(build_chunks, blocks, titles, backend.token_len)

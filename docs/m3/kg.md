@@ -1,37 +1,33 @@
-# M3-1：知识图谱抽取、实体消歧、关系出处
+# M3-1：知识图谱抽取、关系出处、3D 云图
 
-- 日期：2026-10-21（DeepSeek 评测后修订）
+- 日期：2026-10-22（改成每篇论文一张图；2026-10-21 的跨文档消歧见 §历史）
 - 关联：[路线图 M3](../04-roadmap.md)、[架构 §5.7A](../01-architecture.md)、[数据模型 §6](../03-data-model.md)、[ADR-0002](../adr/0002-local-first-sqlite.md)
 
 ## 结论速览
 
 | 项目 | 结果 |
 |---|---|
-| 抽取 | 后台任务 `kg_extract`：按章节组（约 2500 token）逐组调用模型，一篇内并发 2；实体 7 类、关系 8 类（固定 schema） |
+| 范围 | **每篇论文一张图**，实体不跨文档合并（用户决定：不需要多论文图谱） |
+| 抽取 | 后台任务 `kg_extract`：按章节组（约 2500 token）逐组调用模型，一篇内并发 2；实体 6 类、关系 7 类（固定 schema） |
+| 精简 | 提示词只要核心实体（每组最多 10 个）；合并后再按重要性精简：去掉没有关系且只出现一次的，Concept 最多 15 个，全篇最多 60 个 |
 | 出处 | 每条关系必须带本组的出处块；摘句不在原文里就清空并降 confidence；`achieves` 的数值必须在出处块里出现，否则丢弃整条 |
-| 消歧 | 只有别名归一化后精确相同才自动合并；嵌入找到的同类候选经模型（`kg_resolve`）判定为同一个的，作为"可能重复"等用户确认或否决；名称里数字不同的不送判定；Claim 不跨文档合并 |
-| 用户编辑 | 改名 / 改类型、合并、拆分（按写法）、删除关系；重新抽取不推翻这些操作 |
 | 重新解析 | 提及和关系的出处块按块映射迁移；映射不上的关系标"出处已失效" |
 | 触发 | 阅读器"图谱"面板手动抽取；设置里"建立语义索引后自动抽取图谱"（默认关） |
 | 模型路由 | `kg_extract` 未单独配置时沿用总结的服务（再回退到翻译）；首次发送前需要确认 |
-| 界面 | 阅读器侧栏"图谱"：可能重复（合并 / 不是）、数值结果、按类型分组的实体、关系与出处跳转、改名 / 合并 / 拆分 / 删除关系 |
+| 界面 | 阅读器侧栏"图谱"：3D 链接云图（3d-force-graph，懒加载），类型图例可开关，点节点 / 连线看详情和出处并跳回原文 |
 
 ## 设计
 
-### 数据（迁移 `0008_kg`）
+### 数据（迁移 `0010_kg_per_doc`）
 
-- `kg_entities`：全库共享。`origin=user` 表示用户改过；向量（float32 小端）和产生它的嵌入模型存在行里，消歧时只和同一模型的向量比较。
-- `kg_entity_aliases`：含规范名，`alias_norm` 精确命中即同一实体。
-- `kg_mentions`：实体在哪篇、哪个块里出现，记原文写法（拆分按写法分）。
-- `kg_relations`：出处 `(doc_id, source_block_id)` 必填；`src_surface` / `dst_surface` 是原文写法；`status` 为 `ok` / `stale` / `rejected`。
-- `kg_distinct`：用户拆开的实体对，以及否决过的合并建议。
-- `kg_merge_suggestions`（迁移 `0009`）：可能重复的实体对（本篇实体 → 已有实体、相似度、产生它的文档）。确认后并入、否决后写 `kg_distinct`，两种情况都删除这一行。
-
-向量没有放进 vec0：维度随嵌入模型变，实体数在万级，按类型取出来用 numpy 暴力算就够。
+- `kg_entities`：属于一篇文档（`doc_id`），别名存成 JSON 列，`score = 2 × 关系数 + 提及块数`。
+- `kg_mentions`：实体在哪个块里出现，记原文写法。
+- `kg_relations`：出处块 `source_block_id` 必填；`status` 为 `ok` / `stale`。
+- 删除文档时它的图级联删除。`0010` 删掉了 `0008` / `0009` 的别名表、`kg_distinct`、合并建议和实体向量，旧图谱清空（`kg_status` 回到 `pending`），需要重新抽取。
 
 ### 名称归一化（`domain/kg/normalize.py`）
 
-NFKC、casefold，希腊字母写成拉丁名，去掉空白、连字符、下划线和撇号，去掉首尾标点和英文所有格。点保留（`GPT-3.5` ≠ `GPT-35`），不做词干化（`Transformer` 与 `Transformers` 库可能不是一个东西）。`全称 (缩写)` 拆成两个别名。
+NFKC、casefold，希腊字母写成拉丁名，去掉空白、连字符、下划线和撇号，去掉首尾标点和英文所有格。点保留（`GPT-3.5` ≠ `GPT-35`），不做词干化。`全称 (缩写)` 拆成两个别名。用于文档内合并各组的实体。
 
 ### 抽取与校验（`domain/kg/extract.py`、`services/kg.py`）
 
@@ -39,80 +35,43 @@ NFKC、casefold，希腊字母写成拉丁名，去掉空白、连字符、下�
 - 每组回复解析失败时不走缓存重试一次；单组失败不影响其他组，全部失败时任务失败，错误信息带第一个失败原因。
 - 服务商返回 401 / 402 / 403（密钥无效、余额不足、无权限）时不再调用剩下的组，整个任务失败并显示服务商的说明（如 `HTTP 402: Insufficient Balance`），不写入部分结果。
 - 实体的提及：模型给出的块，加上别名在本组块里实际出现的位置（拉丁文字按词边界，`BERT` 不命中 `RoBERTa`）。既没有提及也没有关系的实体丢弃。
-- 数值核对按数值比较：`85.30` = `85.3`，`1,234` = `1234`；名称里的数字（`ResNet-50` 的 50、`F1` 的 1）不算，紧挨中文的数字（"为66.5h"、"增加41倍"）算。模型把 85.3% 换算成 0.853 会被丢弃，提示词要求原样抄写。显示用模型给的原写法（`<50`、`0.07 ± 0.05`），核对用其中第一个数。
+- 数值核对按数值比较：`85.30` = `85.3`，`1,234` = `1234`；名称里的数字（`ResNet-50` 的 50、`F1` 的 1）不算，紧挨中文的数字（"为66.5h"、"增加41倍"）算。显示用模型给的原写法（`<50`、`0.07 ± 0.05`），核对用其中第一个数。
 - 摘句核对忽略大小写、所有空白（PDF 换行会在中文里插空格、在英文里吞空格）和连字符写法；用省略号截断的摘句各段按顺序都找得到也算。
 - 同一篇内，同类型且任一别名归一化相同的实体合并；关系按 (src, dst, type, block) 去重。
-- 写入在一个事务里：删除该文档的提及和非 rejected 的关系，再写入新的；之后回收没有提及也没有关系的自动实体。
+- 精简（`extract.prune`）：按 score 排序，去掉没有关系且只出现一次的实体，Concept 最多 15 个、总数最多 60 个；被去掉的实体的关系一并去掉，数量记在任务信息里（"略去 N 个次要实体"）。
+- 写入在一个事务里：删除该文档原有的图，写入新的。
 
-### 消歧（`domain/kg/resolve.py`）
+### 3D 云图（`apps/desktop/src/features/kg/`）
 
-1. 别名精确命中（同类型）：直接用已有实体。
-2. 其余实体嵌入 `"类型: 名称 — 描述"`，在同类型、同一嵌入模型的实体里取余弦最高的 3 个，第一个满足"≥ 0.86 且名称里的数字一致（或一边没有数字）"的作为候选。
-3. 候选对每 40 对一次调用 `kg_resolve@2`，模型要在 same / narrower / broader / related / different 里选一种。**选 same 的也不自动合并**，只写成合并建议，等用户在图谱面板里确认或否决；调用或解析失败不产生建议。否决过的实体对（`kg_distinct`）不再建议。
-4. 嵌入来源不可用时只做第 1 步。用户改名 / 拆分会清空向量，下次抽取时补算；换嵌入模型后旧向量也按需补算。
-5. 用户拆分出来的写法：抽取结果里以这个写法出现的提及和关系端点归到拆出来的实体（`kg_distinct`），新别名也不会再加回原实体。
-
-原计划是"高相似度直接合并、模糊区间交给模型判定后合并"。测量后先改成嵌入只做候选、模型判定后合并；DeepSeek 评测里模型判定的误合并率仍有 10%–40%（见下文），最后改成模型判定也只产生建议。重新抽取时先删掉该文档产生的建议再重新生成；候选是本篇旧的自动实体、随后被回收时，建议级联删除。
-
-### 用户编辑
-
-- 改名：旧名留作别名；改类型、描述。实体变成 `origin=user`，重新抽取时不会被回收。
-- 合并：别名、提及、关系端点都转给目标实体，源实体删除，产生的自环关系删除。
-- 拆分：选中的别名连同以这些写法出现的提及、关系端点拆成新实体，写入 `kg_distinct`。至少要给原实体留一个别名。
-- 删除关系：标 `rejected`，不再显示；重新抽取得到同一条 (src, dst, type, block) 时跳过。
+- `KgCloud.tsx` 用 [3d-force-graph](https://github.com/vasturiano/3d-force-graph)（MIT，带进 three.js）和 three-spritetext；两者在打开图谱时 `import()`，构建时拆成单独的 chunk（约 1.2 MB / gzip 0.3 MB），不打开图谱不加载。
+- 节点：颜色按类型取 `--kg-method` 等令牌（`app/theme.ts` 的 `KG_COLORS`，浅色 / 深色各一组，用 dataviz 校验脚本检查过亮度带、彩度和相邻色在色觉障碍下的区分度）；大小按 score；最重要的 20 个和选中部分显示文字标签，其余悬停可见。
+- 连线：带方向箭头，悬停显示关系名（`achieves` 显示"指标 = 数值"）；出处失效的连线变淡。
+- 交互：拖动旋转、滚轮缩放；点节点镜头飞过去，它和一跳邻居保持原色、其余变淡；点连线只突出两端；点空白取消选中并退回全貌。系统开启"减少动态效果"时镜头直接跳转、力导向模拟提前停止。
+- 面板（`KgPanel.tsx`）：抽取 / 重新抽取按钮与进度、类型图例（点一下隐藏该类，连线一起隐藏）、云图、详情卡。详情卡：实体的类型、描述、别名、出处编号（点击跳到原文块并高亮 PDF）、相连的关系；关系的两端、数值、摘句和出处。
+- 主题切换（`data-theme` 变化）时重新上色。没有 WebGL 时显示一行提示。
 
 ### 提示词
 
-- `kg_extract@2`：输入标题、组标题和 `[b_xxxx] 文本` 行；输出 `{"entities": [{id, type, name, aliases, description, block_ids}], "relations": [{src, dst, type, block_id, evidence, attrs, confidence}]}`。要求 name 不翻译、关系只引用给出的块号、摘句逐字抄写、`achieves` 的数值原样抄写（保留 <、±、%）、表格里每个结果单独一条；没有数值的结果不写成 achieves；幅度、倍数、消融差值要在 setting 里写明。
-- `kg_resolve@2`：成对判定关系类别（same / narrower / broader / related / different），给出细胞系、版本、测量对象等反例。
-
-v1 → v2 的原因见下文 §DeepSeek 评测。
+- `kg_extract@3`：输入标题、组标题和 `[b_xxxx] 文本` 行；输出 `{"entities": [{id, type, name, aliases, description, block_ids}], "relations": [{src, dst, type, block_id, evidence, attrs, confidence}]}`。只抽取读者理解这篇论文必须知道的实体（每组最多 10 个，不要背景里一笔带过的方法、通用术语、人名机构）；name 不翻译、关系只引用给出的块号、摘句逐字抄写、`achieves` 的数值原样抄写（保留 <、±、%），只记本文方法和主要基线的关键结果；幅度、倍数、消融差值要在 setting 里写明。
+- v3 去掉了 Claim 实体和 contradicts 关系（单篇图里很少有用，名字是整句话，在云图里不可读）。
 
 ### 接口
 
 - `POST /documents/{doc_id}/kg/extract` → 202 `JobOut`；同一文档已有任务时返回它；模型不可用时 409，`detail = {code, message, provider_id}`。
-- `GET /documents/{doc_id}/kg` → `{doc_id, kg_status, entities, relations}`：实体含本篇出现的块和出现在几篇文献；不返回 rejected 的关系。
-- `GET /kg/entities?q=&type=&limit=`：按名称 / 别名搜索（合并时选目标）。
-- `GET /kg/entities/{id}`：全库的提及和关系，带文献标题。
-- `PATCH /kg/entities/{id} {name?, type?, description?}`；`POST /kg/entities/{id}/merge {source_ids}`；`POST /kg/entities/{id}/split {aliases}` → 新实体；`DELETE /kg/relations/{id}` → 204。
-- `GET /documents/{doc_id}/kg` 里的 `suggestions`：涉及本篇实体的合并建议（`{id, score, entity, candidate}`）。`POST /kg/suggestions/{id}/accept` → 把 entity 并入 candidate，返回合并后的实体；`POST /kg/suggestions/{id}/dismiss` → 204，记为不是同一个。
-- `GET /kg/subgraph?doc_id=|entity_id=`：本篇子图，或实体加一跳邻居（供下一项图谱浏览视图）。
-- `DocumentOut` 新增 `kg_status`（`pending / extracting / ready / failed`）；已有图谱时重新抽取失败会回到 `ready`。
+- `GET /documents/{doc_id}/kg` → `{doc_id, kg_status, entities, relations}`：实体按 score 降序，含别名、出现的块和 score；关系含两端名称、attrs、出处块、摘句和 status。
+- `DocumentOut.kg_status`：`pending / extracting / ready / failed`；已有图谱时重新抽取失败会回到 `ready`。
 
-## 测量
+## 历史：跨文档消歧（2026-10-20 ～ 10-21，已删除）
 
-`scripts/m3_kg_resolve_eval.py`：用内置 multilingual-e5-small 对 22 对手写名称（10 对同一个、12 对不是同一个）算余弦。
+第一版（迁移 `0008` / `0009`）实体全库共享：别名精确命中自动合并，内置 e5 嵌入找同类候选（余弦 ≥ 0.86），`kg_resolve` 让模型成对判定，判为同一个的作为"可能重复"让用户确认；另有改名、合并、拆分、删除关系。下面的测量和评测是那时做的。数值核对、摘句核对和提示词 v2 的结论仍然适用；消歧部分随功能一起删除（用户决定不需要多论文图谱、只保留每篇最重要的信息）。
 
-| 类型 | A | B | 同一个 | 余弦 | 判定 |
-|---|---|---|---|---|---|
-| Dataset | ImageNet | ILSVRC 2012 | 是 | 0.929 | 送判定 |
-| Dataset | ImageNet | ImageNet-1k | 是 | 0.920 | 送判定 |
-| Model | BERT | Bidirectional Encoder Representations from Transformers | 是 | 0.864 | 送判定 |
-| Method | LSTM | long short-term memory | 是 | 0.891 | 送判定 |
-| Method | self-attention | intra-attention | 是 | 0.955 | 送判定 |
-| Metric | top-1 accuracy | top-1 acc | 是 | 0.973 | 送判定 |
-| Metric | BLEU | BLEU score | 是 | 0.978 | 送判定 |
-| Dataset | COCO | MS COCO | 是 | 0.978 | 送判定 |
-| Method | Transformer | Transformer architecture | 是 | 0.958 | 送判定 |
-| Task | machine translation | 神经机器翻译 | 是 | 0.903 | 送判定 |
-| Model | BERT-base | BERT-large | 否 | 0.966 | 送判定 |
-| Dataset | ImageNet-1k | ImageNet-21k | 否 | 0.973 | 新建 |
-| Model | GPT-2 | GPT-3 | 否 | 0.963 | 新建 |
-| Model | Transformer | Transformer-XL | 否 | 0.963 | 送判定 |
-| Model | ResNet-50 | ResNet-101 | 否 | 0.953 | 新建 |
-| Dataset | CIFAR-10 | CIFAR-100 | 否 | 0.977 | 新建 |
-| Metric | top-1 accuracy | top-5 accuracy | 否 | 0.966 | 新建 |
-| Metric | BLEU | ROUGE-L | 否 | 0.941 | 送判定 |
-| Dataset | WMT14 En-De | WMT14 En-Fr | 否 | 0.987 | 送判定 |
-| Method | dropout | DropConnect | 否 | 0.961 | 送判定 |
-| Model | BERT | RoBERTa | 否 | 0.948 | 送判定 |
-| Task | image classification | object detection | 否 | 0.944 | 送判定 |
+### 嵌入相似度测量
 
-同一个 0.864–0.978，不是同一个 0.941–0.987，两段大面积重叠：如果按 0.95 直接合并，12 对里有 9 对会被误合并。所以嵌入只用来找候选（阈值 0.86，10 对同一个都能进判定），合并与否由模型决定；数字不同的 5 对在送判定前就排除了。
+用内置 multilingual-e5-small 对 22 对手写名称（10 对同一个、12 对不是同一个）算余弦：同一个 0.864–0.978，不是同一个 0.941–0.987，两段大面积重叠（如 BERT-base / BERT-large 0.966、WMT14 En-De / En-Fr 0.987），按相似度直接合并会大量误合并。
 
-## DeepSeek 评测
+### DeepSeek 评测
 
-`scripts/m3_kg_eval.py`，deepseek-chat（`kg_extract@1` / `kg_resolve@1`），评测集 31 篇（PyMuPDF 快速解析），内置 e5 找候选，4 篇并发、每篇 3 组并发。
+`scripts/m3_kg_eval.py`（当时的版本），deepseek-chat（`kg_extract@1` / `kg_resolve@1`），评测集 31 篇（PyMuPDF 快速解析），内置 e5 找候选，4 篇并发、每篇 3 组并发。
 
 | 项目 | 结果 |
 |---|---|
@@ -154,34 +113,29 @@ v1 → v2 的原因见下文 §DeepSeek 评测。
 
 ## 验证
 
-- `core`：268 个测试通过，新增 `tests/test_kg.py` 11 个：
-  - 归一化与缩写拆分；数值解析与核对；判定规则（数字不同不送判定）；
+- `core`：`tests/test_kg.py` 11 个测试：
+  - 归一化与缩写拆分；数值解析与核对；摘句核对；
   - 单组校验：越组块号、未知类型、端点不存在、找不到的数值、编造的摘句；
-  - 抽取任务：实体、提及、关系入库，出处块都存在，结束信息，重新抽取不重复；
-  - 跨文档：精确别名命中自动合并；嵌入候选经模型判定为同一个的只产生建议，两篇文档都能看到；确认后并入、否决后重新抽取不再建议；模型说不同时不建议；
+  - 精简：没有关系且只出现一次的去掉，Concept 和总数上限，被去掉实体的关系一起去掉；
+  - 抽取任务：实体、提及、关系入库，出处块都存在，结束信息（含"略去 N 个次要实体"），重新抽取整体替换；
+  - 两篇文档里同名实体是各自的节点，删除文档时它的图级联删除；
   - 服务商返回 402 时任务失败并报服务商的错误，不再继续调用；
-  - 用户合并 / 拆分 / 改名 / 删除关系后重新抽取不被推翻；
   - 重新解析时出处迁移，映射不上的标 stale；
-  - 自动抽取开关、隐私确认、排队去重；API 状态码。
-- `test_llm_gateway`：`kg_extract` 现在回退到总结的路由，"未配置"的断言改为只剩嵌入路由时对话任务找不到模型。
-- 前端：`tsc`、`vitest` 通过。
-- 浏览器模式（开发版 sidecar、Vite、本地 OpenAI 兼容 mock，mock 复用 `test_kg.responder`；内置 e5 模型）：
-  - 打开 FooNet 论文 → 图谱 → 抽取图谱，弹出"发送文档内容进行图谱抽取？"，允许后出现 `6 个实体、4 条关系（丢弃 1 条原文里找不到的数值）`；
-  - 数值结果 `FooNet · top-1 accuracy = 85.3（ImageNet）`，点出处跳到该段，PDF 上高亮；
-  - 打开 BarNet 论文抽取：`与已有实体合并 3 个`，FooNet、ImageNet（别名 ILSVRC、ImageNet-1k）、top-1 accuracy 显示"2 篇"；
-  - 在 ImageNet 上拆出 ILSVRC，再用"合并到…"搜索 imagenet 并入，恢复原状；
-  - 设置 › 翻译、总结、问答与图谱：图谱抽取的服务、自动抽取开关；打开开关后导入第三篇，解析 → 嵌入 → 抽取图谱自动依次完成。
-  - 改成合并建议后（新数据目录）：BarNet 抽取后出现"可能重复（2）"：ImageNet-1k ⇄ ImageNet、ILSVRC ⇄ ImageNet（内置 e5 余弦 0.967 / 0.949），没有自动合并；对 ILSVRC 点"合并"后 ImageNet 显示别名 ILSVRC、"2 篇"，对 ImageNet-1k 点"不是"后建议消失；重新抽取：ILSVRC 按别名精确合并，ImageNet-1k 不再建议。
+  - 自动抽取开关、隐私确认、排队去重；API 状态码，旧的全库实体接口已不存在。
+- 迁移：`0010` 升级后再降到 `0009`、再升级，表结构正确；已有文档的 `kg_status` 回到 `pending`。
+- 前端：`tsc`、`vitest`（`toCloudData` 的映射与类型隐藏、每个类型都有浅色 / 深色令牌）通过；`vite build` 里 3d-force-graph、three、three-spritetext 是单独的 chunk。
+- `scripts/m3_kg_eval.py --fake --limit 3`：每篇最多 60 个实体（3 篇共 164 个，略去 76 个），出处块存在 425 / 425。
+- 浏览器模式（开发版 sidecar、Vite、本地 OpenAI 兼容 mock 用 `fake.kg_responder`）：评测集论文 d_09b2864c931e924e → 图谱 → 抽取图谱：`60 个实体、172 条关系（略去 33 个次要实体）`，云图显示、图例计数正确；点节点镜头飞过去、邻居高亮、详情卡列出处与关系；点出处跳到参考文献块；点关系看到两端与出处；隐藏"概念"后节点 60 → 49、再显示恢复；深色主题重新上色；点空白取消选中。
 
 ## 遗留
 
 - [x] 用真实模型在评测集上评估抽取质量（DeepSeek，见 §DeepSeek 评测）。
 - [x] 用 deepseek-chat 复测 v2：数值抽取变好；判定的误合并没有减少（见 §DeepSeek 评测）。
 - [x] 跨文档消歧策略：只自动合并别名精确命中，模型判定为同一个的作为"可能重复"让用户确认。
-- [ ] 用 DeepSeek 看合并建议的数量是否适合人工处理（v1 评测里判为同一个的约 4 对 / 篇）；太多时可以按相似度排序、只显示前几条，或在全库视图里集中处理。
+- [ ] 用 DeepSeek 跑一次 v3 提示词：看精简后每篇的实体是否就是论文的核心内容，60 / 15 的上限是否合适。
 - [ ] 评测时降低并发（如 `--jobs 2 --group-jobs 2`），避开限流。
 - [ ] 扫描版 PDF 没有文字层，抽取直接失败；要等 OCR 解析（MinerU）后才能抽取。
 - [ ] 表格里的结果：表格块文本是单元格拼接，模型要从表头推断方法 / 数据集，真实模型上要看效果；可能需要按行组织表格文本。
 - [ ] 长论文的调用次数与章节组数相当，没有做"只抽取实验章节"之类的裁剪。
-- [ ] 全库实体管理（搜索、批量合并、未关联实体清理）放到图谱浏览视图一起做。
-- [ ] 跨文献问答、引用图、图谱浏览视图（Cytoscape.js）：路线图 M3 后续项。
+- [ ] 云图没有键盘操作：详情卡和图例可以用键盘，但选中节点只能用鼠标；可以加一个按名称选实体的下拉框。
+- [ ] 跨文献问答、引用图：路线图 M3 后续项；它们不再能依赖全库共享的实体（本次删除），需要时再设计。
