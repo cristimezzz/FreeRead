@@ -179,6 +179,7 @@ export function SettingsView() {
       kind: "openai_compatible",
       name: "OpenAI 兼容服务",
       base_url: "https://api.openai.com/v1",
+      max_concurrency: 4,
     };
     const routes = settings.routes.translate
       ? settings.routes
@@ -675,6 +676,17 @@ function ProviderCard({ provider, defaultOpen, hasKey, onChange, onKey, onTest, 
               mono
               value={key}
               onValue={setKey}
+            />
+            <TextField
+              label="最大并发"
+              type="number"
+              value={String(provider.max_concurrency)}
+              hint="同时进行的请求数（1–32），所有任务共享；遇到限流（429）时调小"
+              commitOnChange
+              onValue={(v) => {
+                const n = Math.round(Number(v));
+                if (Number.isFinite(n) && n > 0) onChange({ max_concurrency: Math.min(32, n) });
+              }}
             />
           </div>
           <div className="provider-keys">

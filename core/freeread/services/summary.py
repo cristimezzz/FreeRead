@@ -24,7 +24,7 @@ from freeread.domain.summary.grouping import Group, SourceBlock, group_blocks
 from freeread.domain.summary.parse_json import extract_json, json_objects
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import SummaryRow
-from freeread.infra.llm.default_gateway import DefaultGateway
+from freeread.infra.llm.default_gateway import DefaultGateway, TaskLimiter
 from freeread.infra.llm.errors import LLMError
 from freeread.infra.llm.gateway import Message, TaskKind
 from freeread.infra.llm.prompts import Prompt, PromptRegistry
@@ -39,7 +39,6 @@ log = logging.getLogger(__name__)
 
 MAP_PROMPT = "summarize_map"
 REDUCE_PROMPT = "summarize_reduce"
-MAX_CONCURRENCY = 3
 T = TypeVar("T")
 
 
@@ -105,20 +104,20 @@ class SummaryService:
         settings: SettingsService,
         gateway: DefaultGateway,
         prompts: PromptRegistry,
-        max_concurrency: int = MAX_CONCURRENCY,
+        max_concurrency: int | None = None,
     ) -> None:
         self._sessions = sessions
         self._paths = paths
         self._settings = settings
         self._gateway = gateway
         self._prompts = prompts
-        self._sem = asyncio.Semaphore(max_concurrency)
+        self._limit = TaskLimiter(gateway, TaskKind.SUMMARIZE, max_concurrency)
         # 透传给 provider 的额外请求参数（如关闭推理模型的思考）；会进入缓存键。评测脚本用。
         self.llm_opts: dict[str, Any] = {}
 
     def set_concurrency(self, n: int) -> None:
-        """Map 调用的全局并发上限（所有正在生成的总结共享）。"""
-        self._sem = asyncio.Semaphore(max(1, n))
+        """固定 Map 调用的全局并发上限（所有正在生成的总结共享）；默认跟随总结服务的设置。"""
+        self._limit.set(n)
 
     # ------------------------------------------------------------ 查询
 
@@ -252,7 +251,7 @@ class SummaryService:
             target_lang=target, title=title, group_title=group.title, content=group.content
         )
         try:
-            async with self._sem:
+            async with self._limit.semaphore():
                 data = await self._complete_json(
                     doc_id, prompt, messages, lambda text: extract_json(text, "points")
                 )

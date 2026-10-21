@@ -27,7 +27,7 @@ from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import BlockRow, DocumentRow, TranslationRow
 from freeread.infra.jobs.queue import JobOut, JobQueue
 from freeread.infra.jobs.worker import JobContext
-from freeread.infra.llm.default_gateway import DefaultGateway
+from freeread.infra.llm.default_gateway import DefaultGateway, TaskLimiter
 from freeread.infra.llm.errors import LLMError, MissingAPIKey, RouteNotConfigured
 from freeread.infra.llm.gateway import TaskKind
 from freeread.infra.llm.prompts import PromptRegistry
@@ -40,7 +40,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 PROMPT_ID = "translate"
-MAX_CONCURRENCY = 3
 DOC_BATCH = 30  # 整篇翻译每批的块数
 TRANSLATABLE = frozenset(t.value for t in TRANSLATABLE_TYPES)
 LANG_NAMES = {
@@ -114,7 +113,7 @@ class TranslateService:
         settings: SettingsService,
         gateway: DefaultGateway,
         prompts: PromptRegistry,
-        max_concurrency: int = MAX_CONCURRENCY,
+        max_concurrency: int | None = None,
         *,
         jobs: JobQueue | None = None,
         glossary: "GlossaryService | None" = None,
@@ -125,8 +124,8 @@ class TranslateService:
         self._settings = settings
         self._gateway = gateway
         self._prompts = prompts
-        # 全局并发上限：多个请求（多个窗口 / 快速滚动）共享
-        self._sem = asyncio.Semaphore(max_concurrency)
+        # 全局并发上限：多个请求（多个窗口 / 快速滚动）共享；默认跟随翻译服务的设置
+        self._limit = TaskLimiter(gateway, TaskKind.TRANSLATE, max_concurrency)
         # 同一块同一语言正在翻译时，后来的请求等它的结果，不重复调用
         self._inflight: dict[tuple[str, str, str], asyncio.Task[TranslationEvent]] = {}
         self._waiters: Counter[tuple[str, str, str]] = Counter()
@@ -229,7 +228,7 @@ class TranslateService:
             glossary=glossary,
         )
         status, text = "ok", None
-        async with self._sem:
+        async with self._limit.semaphore():
             for attempt in range(2):
                 try:
                     result = await self._gateway.complete(

@@ -39,7 +39,8 @@ log = logging.getLogger(__name__)
 PROMPT_ID = "kg_extract"
 GROUP_TARGET = 2500  # 比总结的 Map 小：输出是逐条的实体 / 关系，组大了容易漏
 GROUP_MAX = 5000
-CONCURRENCY = 2  # 一篇文档内同时调用的组数
+# 一篇文档内同时调用的组数；None 跟随图谱抽取所用服务的并发设置（评测脚本可覆盖）
+CONCURRENCY: int | None = None
 FATAL_STATUS = {401, 402, 403}
 
 T = TypeVar("T")
@@ -179,7 +180,7 @@ class KGService:
         )
         if not groups:
             raise RuntimeError("文档里没有可抽取图谱的正文")
-        sem = asyncio.Semaphore(CONCURRENCY)
+        sem = asyncio.Semaphore(CONCURRENCY or self._gateway.concurrency(TaskKind.KG_EXTRACT))
         done = 0
         errors: list[Exception] = []
         # 401 / 402 / 403（密钥无效、余额不足、无权限）后面的组也一定失败：不再调用，整个任务失败

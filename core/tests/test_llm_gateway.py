@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 from sqlalchemy import select
 
@@ -200,6 +202,75 @@ async def test_embed_caches_per_text(ctx, gateway, fake):
     assert fake.embed_calls == [("m-embed", ["a", "b"]), ("m-embed", ["c"])]
     assert await gateway.embed(["a", "c"]) == [v1[0], v2[1]]
     assert [r.cache_hit for r in calls(ctx)] == [False, False, True]
+
+
+class GatedProvider(FakeProvider):
+    """调用停在 gate 上，记录同时在跑的调用数的峰值。"""
+
+    def __init__(self) -> None:
+        super().__init__("p1")
+        self.gate = asyncio.Event()
+        self.running = self.peak = 0
+
+    async def complete(self, model, messages, **opts):
+        self.running += 1
+        self.peak = max(self.peak, self.running)
+        try:
+            await self.gate.wait()
+            return await super().complete(model, messages, **opts)
+        finally:
+            self.running -= 1
+
+
+def set_provider_concurrency(ctx, n: int) -> None:
+    s = ctx.settings.get()
+    ctx.settings.put(
+        s.model_copy(
+            update={"providers": [s.providers[0].model_copy(update={"max_concurrency": n})]}
+        )
+    )
+
+
+async def run_gated(gateway, gated: GatedProvider, n: int, tag: str) -> None:
+    tasks = [
+        asyncio.create_task(
+            gateway.complete(TaskKind.TRANSLATE, [Message("user", f"{tag}{i}")], prompt_id="t@1")
+        )
+        for i in range(n)
+    ]
+    for _ in range(20):
+        await asyncio.sleep(0)
+    gated.gate.set()
+    await asyncio.gather(*tasks)
+    gated.gate.clear()
+
+
+async def test_provider_max_concurrency_limits_parallel_calls(ctx, gateway):
+    gated = GatedProvider()
+    gateway._factory = lambda config, key: gated
+    set_provider_concurrency(ctx, 2)
+    assert gateway.concurrency(TaskKind.TRANSLATE) == 2
+    await run_gated(gateway, gated, 5, "a")
+    assert gated.peak == 2
+
+    # 改设置后新请求按新上限
+    set_provider_concurrency(ctx, 3)
+    gated.peak = 0
+    await run_gated(gateway, gated, 5, "b")
+    assert gated.peak == 3
+
+
+def test_provider_max_concurrency_default_and_bounds():
+    p = ProviderConfig(id="p1", name="P1", base_url="http://x/v1")
+    assert p.max_concurrency == 4
+    for bad in (0, 33):
+        with pytest.raises(ValueError):
+            ProviderConfig(id="p1", name="P1", base_url="http://x/v1", max_concurrency=bad)
+
+
+def test_unrouted_task_uses_default_concurrency(gateway):
+    assert gateway.concurrency(TaskKind.QA) == 4  # QA → 总结 → 翻译，回退到 p1 的默认值
+    assert gateway.concurrency(TaskKind.KG_EXTRACT) == 4
 
 
 async def test_token_bucket_waits_when_empty(monkeypatch):
