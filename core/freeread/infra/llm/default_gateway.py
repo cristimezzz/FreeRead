@@ -2,7 +2,8 @@
 
 - 路由：每次调用时读设置，TaskKind → (provider, model)；未配置抛 RouteNotConfigured。
 - 缓存：键 sha256(provider|model|prompt_id@version|canonical_input)，读写 llm_cache（命中 hit_count+1）。
-- 限流：每个 provider 一个令牌桶。
+- 限流：每个 provider 一个令牌桶，外加同时进行的请求数上限（设置里每个服务的 max_concurrency）；
+  退避等待不占并发名额，缓存命中不受限。
 - 重试：RetryableError（429 / 5xx / 网络）指数退避，最多 3 次尝试；流式只在首个 chunk 之前重试。
 - 审计：每次成功的调用（含缓存命中）写一行 llm_calls。失败的调用只记日志，不写表。
 """
@@ -24,7 +25,11 @@ from freeread.infra.llm.errors import MissingAPIKey, RetryableError, RouteNotCon
 from freeread.infra.llm.gateway import LLMChunk, LLMResult, Message, Provider, TaskKind, Usage
 from freeread.infra.llm.openai_compatible import DEFAULT_TIMEOUT, OpenAICompatibleProvider
 from freeread.infra.llm.secrets import SecretStore
-from freeread.services.settings import ProviderConfig, SettingsService
+from freeread.services.settings import (
+    DEFAULT_PROVIDER_CONCURRENCY,
+    ProviderConfig,
+    SettingsService,
+)
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +76,26 @@ class TokenBucket:
                 await asyncio.sleep((1 - self._tokens) / self._rate)
 
 
+class TaskLimiter:
+    """一个任务自己的并行度：默认跟随路由到的服务的 max_concurrency，set() 固定下来（评测脚本用）。"""
+
+    def __init__(self, gateway: "DefaultGateway", task: TaskKind, fixed: int | None = None):
+        self._gateway = gateway
+        self._task = task
+        self._fixed = fixed
+        self._current: tuple[int, asyncio.Semaphore] | None = None
+
+    def set(self, n: int | None) -> None:
+        self._fixed = None if n is None else max(1, n)
+
+    def semaphore(self) -> asyncio.Semaphore:
+        # 上限变了就换一个新信号量：进行中的调用在旧的上面自然结束
+        n = self._fixed or self._gateway.concurrency(self._task)
+        if self._current is None or self._current[0] != n:
+            self._current = (n, asyncio.Semaphore(n))
+        return self._current[1]
+
+
 def canonical_input(messages: list[Message], opts: dict[str, Any]) -> str:
     return json.dumps(
         {"messages": [[m.role, m.content] for m in messages], "opts": opts},
@@ -101,6 +126,7 @@ class DefaultGateway:
         self.secrets = secrets
         self._rate, self._burst = rate, burst
         self._buckets: dict[str, TokenBucket] = {}
+        self._limits: dict[str, tuple[int, asyncio.Semaphore]] = {}
         self._http: httpx.AsyncClient | None = None
         self._factory = provider_factory or self._default_factory
         self._sleep = asyncio.sleep  # 测试里替换
@@ -132,6 +158,27 @@ class DefaultGateway:
                 return route.provider_id, route.model
             current = ROUTE_FALLBACK.get(current)
         raise RouteNotConfigured(f"no model configured for task {task.value!r}")
+
+    def _max_concurrency(self, provider_id: str) -> int:
+        config = next((p for p in self._settings.get().providers if p.id == provider_id), None)
+        return config.max_concurrency if config else DEFAULT_PROVIDER_CONCURRENCY
+
+    def concurrency(self, task: TaskKind) -> int:
+        """任务路由到的服务的并发上限；服务据此决定自己的并行度。"""
+        try:
+            provider_id, _ = self.route(task)
+        except RouteNotConfigured:
+            return DEFAULT_PROVIDER_CONCURRENCY
+        return self._max_concurrency(provider_id)
+
+    def _slot(self, provider_id: str) -> asyncio.Semaphore:
+        # 设置改了就换一个新信号量：进行中的请求在旧的上面自然结束
+        n = self._max_concurrency(provider_id)
+        current = self._limits.get(provider_id)
+        if current is None or current[0] != n:
+            current = (n, asyncio.Semaphore(n))
+            self._limits[provider_id] = current
+        return current[1]
 
     def _bucket(self, provider_id: str) -> TokenBucket:
         if provider_id not in self._buckets:
@@ -243,9 +290,10 @@ class DefaultGateway:
 
         provider = self.provider(provider_id)
         for attempt in range(1, MAX_ATTEMPTS + 1):
-            await self._bucket(provider_id).acquire()
             try:
-                result = await provider.complete(model, messages, **opts)
+                async with self._slot(provider_id):
+                    await self._bucket(provider_id).acquire()
+                    result = await provider.complete(model, messages, **opts)
                 break
             except RetryableError as exc:
                 if attempt == MAX_ATTEMPTS:
@@ -279,15 +327,16 @@ class DefaultGateway:
         parts: list[str] = []
         usage: Usage | None = None
         for attempt in range(1, MAX_ATTEMPTS + 1):
-            await self._bucket(provider_id).acquire()
             try:
-                async for chunk in provider.stream(model, messages, **opts):
-                    if chunk.delta:
-                        parts.append(chunk.delta)
-                        yield LLMChunk(delta=chunk.delta)
-                    if chunk.done:
-                        usage = chunk.usage
-                        break
+                async with self._slot(provider_id):
+                    await self._bucket(provider_id).acquire()
+                    async for chunk in provider.stream(model, messages, **opts):
+                        if chunk.delta:
+                            parts.append(chunk.delta)
+                            yield LLMChunk(delta=chunk.delta)
+                        if chunk.done:
+                            usage = chunk.usage
+                            break
                 break
             except RetryableError as exc:
                 # 已经向调用方输出过内容就不能透明重试了
@@ -318,9 +367,10 @@ class DefaultGateway:
             provider = self.provider(provider_id)
             batch = [texts[i] for i in missing]
             for attempt in range(1, MAX_ATTEMPTS + 1):
-                await self._bucket(provider_id).acquire()
                 try:
-                    fresh = await provider.embed(model, batch)
+                    async with self._slot(provider_id):
+                        await self._bucket(provider_id).acquire()
+                        fresh = await provider.embed(model, batch)
                     break
                 except RetryableError as exc:
                     if attempt == MAX_ATTEMPTS:
@@ -338,8 +388,9 @@ class DefaultGateway:
     async def test_provider(self, provider_id: str, model: str) -> None:
         """发一条极短请求验证 base_url / 密钥 / 模型名。不走缓存、不重试、不写审计。"""
         provider = self.provider(provider_id)
-        await self._bucket(provider_id).acquire()
-        await provider.complete(model, [Message("user", "Reply with OK.")])
+        async with self._slot(provider_id):
+            await self._bucket(provider_id).acquire()
+            await provider.complete(model, [Message("user", "Reply with OK.")])
 
     async def aclose(self) -> None:
         if self._http is not None:

@@ -1517,6 +1517,11 @@ export interface components {
             name: string;
             /** Base Url */
             base_url: string;
+            /**
+             * Max Concurrency
+             * @default 4
+             */
+            max_concurrency: number;
         };
         /** ProviderStatus */
         ProviderStatus: {

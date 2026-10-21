@@ -43,6 +43,7 @@ class Appearance(_Strict):
 
 
 PARSER_KEY_PREFIX = "parser-"
+DEFAULT_PROVIDER_CONCURRENCY = 4
 
 
 class ProviderConfig(_Strict):
@@ -50,6 +51,8 @@ class ProviderConfig(_Strict):
     kind: Literal["openai_compatible", "anthropic", "ollama"] = "openai_compatible"
     name: str
     base_url: str
+    # 同时进行的请求数上限（所有任务共享）；服务商限流（429）时调小
+    max_concurrency: int = Field(default=DEFAULT_PROVIDER_CONCURRENCY, ge=1, le=32)
 
     @field_validator("id")
     @classmethod

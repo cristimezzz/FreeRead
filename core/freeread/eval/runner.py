@@ -86,7 +86,10 @@ def configure(
 ) -> None:
     settings = AppSettings(
         target_lang=args.lang,
-        providers=[ProviderConfig(id="eval", name="评测", base_url=args.base_url)],
+        # 并发由评测脚本自己的 --jobs 等参数控制，网关不再额外收紧
+        providers=[
+            ProviderConfig(id="eval", name="评测", base_url=args.base_url, max_concurrency=32)
+        ],
         routes={task: ModelRoute(provider_id="eval", model=args.model)},
     )
     # 先保存服务地址再记同意：地址变了时 SettingsService 会作废旧的同意（隐私规则），

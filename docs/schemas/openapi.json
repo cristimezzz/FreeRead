@@ -5158,6 +5158,13 @@
           "base_url": {
             "type": "string",
             "title": "Base Url"
+          },
+          "max_concurrency": {
+            "type": "integer",
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Max Concurrency",
+            "default": 4
           }
         },
         "additionalProperties": false,

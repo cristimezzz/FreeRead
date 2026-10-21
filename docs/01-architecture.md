@@ -164,7 +164,7 @@ class LLMGateway:
 - `TaskKind`：`translate | summarize | qa | kg_extract | glossary | embed`，在设置里为每种任务指定 provider + model。
 - Provider 适配：`openai_compatible`（覆盖 OpenAI、DeepSeek、通义、Moonshot、vLLM 等）、`anthropic`、`ollama`。
 - 缓存：`llm_cache` 表，键为 `sha256(provider|model|prompt_id@version|canonical_input)`。
-- 限流与重试：每个 provider 一个令牌桶；429 / 5xx 指数退避。
+- 限流与重试：每个 provider 一个令牌桶，外加同时进行的请求数上限（设置里每个服务的「最大并发」，默认 4，所有任务共享；翻译 / 总结 / 图谱的并行度也跟随它）；429 / 5xx 指数退避。
 - 审计：每次调用写入 `llm_calls`（token、耗时、估算费用、任务类型、关联 doc_id）。
 - 密钥：Rust 壳从系统钥匙串读取后，在启动 sidecar 时通过环境变量注入；Python 端不落盘。
 
