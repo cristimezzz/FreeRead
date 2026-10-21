@@ -299,8 +299,11 @@ UI 采用"纸张、墨色与陶土"设计语言：固定的暖中性色阶 + 一
 │  └─ assets/                  图片、表格截图
 ├─ zotero-snapshots/           zotero.sqlite 只读快照
 ├─ models/                     本地解析 / 嵌入模型
+├─ engines/                    应用内安装的解析引擎环境及其模型缓存（打包版）
 └─ logs/
 ```
+
+此外 Rust 壳的 WebView2 数据在 `%LOCALAPPDATA%/com.freeread.desktop/`（bundle identifier），API Key 在系统钥匙串（Windows 凭据管理器目标名 `llm-keys.FreeRead`）。卸载时勾选「Delete the application data」会把这三处都删掉（`src-tauri/windows/hooks.nsh`）；不勾选、静默卸载或更新时都保留。
 
 ## 9. 测试与评测
 
