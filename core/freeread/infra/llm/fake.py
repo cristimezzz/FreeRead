@@ -159,7 +159,7 @@ def summary_responder(model: str, messages: list[Message]) -> str:
 
 def qa_responder(model: str, messages: list[Message]) -> str:
     """看得懂 qa_answer 提示词的确定性回复（测试与 --fake 评测用）：引用上下文里的前两块，
-    再故意带一个不存在的编号 b_9999，用来覆盖引用校验。其他请求交给 summary_responder。"""
+    再故意带一个不存在的编号 b_9999，用来覆盖引用校验；末行是卡片标题。其他请求交给 summary_responder。"""
     user = messages[-1].content
     if "检索到的原文：" not in user:
         return summary_responder(model, messages)
@@ -167,7 +167,11 @@ def qa_responder(model: str, messages: list[Message]) -> str:
     if not ids:
         return "论文中没有找到相关内容。"
     first, second = ids[0], ids[min(1, len(ids) - 1)]
-    return f"根据原文，第一点见此处 [{first}]。另外还有一点 [{second}][b_9999]。"
+    question = user.rsplit("问题：", 1)[-1].strip()
+    return (
+        f"根据原文，第一点见此处 [{first}]。另外还有一点 [{second}][b_9999]。\n"
+        f"标题：{question[:8]}要点"
+    )
 
 
 _ACRONYM_RE = re.compile(r"\b[A-Z][A-Za-z]*[A-Z][A-Za-z0-9-]*\b")

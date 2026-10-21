@@ -80,3 +80,39 @@ def test_ulid_monotonic_within_millisecond():
     # 同一毫秒内连续生成也必须严格递增，否则按 id 排序的同毫秒行顺序随机
     ids = [new_ulid() for _ in range(2000)]
     assert ids == sorted(ids) and len(set(ids)) == len(ids)
+
+
+def test_qa_tree_migration_chains_linear_sessions(tmp_path):
+    """0011：M2 的线性对话里 parent_id 为空的轮次接到前一轮上，每个对话的第一轮仍是根。"""
+    db = tmp_path / "freeread.db"
+    engine = make_engine(db)
+    migrate.command.upgrade(migrate.alembic_config(engine), "0010")
+    with engine.begin() as conn:
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+        for sid in ("s1", "s2"):
+            conn.execute(
+                text(
+                    "INSERT INTO qa_sessions (id, doc_id, scope, title, created_at, updated_at)"
+                    " VALUES (:id, 'd', 'doc:d', '', 't', 't')"
+                ),
+                {"id": sid},
+            )
+        nodes = [
+            ("n1", "s1", None, "1"),
+            ("n2", "s1", "n1", "2"),
+            ("n3", "s1", None, "3"),
+            ("m1", "s2", None, "1"),
+        ]
+        for nid, sid, parent, at in nodes:
+            conn.execute(
+                text(
+                    "INSERT INTO qa_nodes (id, session_id, parent_id, question, answer, citations,"
+                    " stats, model, prompt_version, status, created_at)"
+                    " VALUES (:id, :sid, :p, 'q', 'a', '[]', '{}', 'm', 'v', 'ok', :at)"
+                ),
+                {"id": nid, "sid": sid, "p": parent, "at": at},
+            )
+    migrate.upgrade(engine, db)
+    with engine.connect() as conn:
+        rows = dict(conn.execute(text("SELECT id, parent_id FROM qa_nodes")).all())
+    assert rows == {"n1": None, "n2": "n1", "n3": "n2", "m1": None}

@@ -267,7 +267,7 @@ M3 实现（迁移 `0008_kg` → `0010_kg_per_doc`，[M3 图谱](m3/kg.md)）。
 
 ## 7. 问答
 
-M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 的问答画布会在 `qa_nodes` 上加 `pinned_blocks`、`subgraph`、`position`（设计见架构 §5.7B），`parent_id` 已经能表示分叉。
+M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 改为问答树（迁移 `0011_qa_tree`，见 [m3/qa-tree.md](m3/qa-tree.md)）：`parent_id` 表示分叉，一个对话可有多个根；新增 `anchor`、`title`。`pinned_blocks`、`subgraph` 还没做；画布自动布局，不存 `position`。
 
 ### qa_sessions
 | 列 | 类型 | 说明 |
@@ -285,16 +285,18 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 的问答画布会在 
 |---|---|---|
 | id | TEXT PK | ULID |
 | session_id | TEXT FK → qa_sessions ON DELETE CASCADE | |
-| parent_id | TEXT FK → qa_nodes ON DELETE SET NULL | 上一轮；M2 为线性链 |
+| parent_id | TEXT FK → qa_nodes ON DELETE SET NULL | 父节点；为空是根。删除节点时服务层连同子树一起删 |
 | question | TEXT | |
+| title | TEXT | 模型起的卡片标题（回答末行 `标题：…`），没有时为空、界面显示截短的问题 |
 | answer | TEXT | 引用写成 `[b_0012]`，已校验都存在于该文档（块属于会话的文档，不再拼 `doc_id#`） |
 | citations | JSON | 按首次出现顺序的块 ID |
 | stats | JSON | `invalid_ids`（模型编造、已删除的编号数）/ `out_of_context` / `context_ids` / `modes` / `elapsed_ms` |
 | model / prompt_version | TEXT | `provider/model`、`qa_answer@1` |
 | status | TEXT | `ok` / `stale`（重新解析后有引用映射不上） |
+| anchor | JSON 可空 | 就此追问时在父节点回答里选中的文字 `{"text": …}` |
 | created_at | TEXT | |
 
-索引 `ix_qa_nodes_session_id_created_at`。重新解析时与译文、总结在同一事务里改写引用（`services/qa.migrate_qa`）。
+索引 `ix_qa_nodes_session_id_created_at`、`ix_qa_nodes_session_id_parent_id`。重新解析时与译文、总结在同一事务里改写引用（`services/qa.migrate_qa`）。
 
 ## 8. 基础设施
 

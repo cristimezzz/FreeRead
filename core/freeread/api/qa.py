@@ -1,4 +1,4 @@
-"""单篇论文问答：对话的增删查，提问（SSE）。"""
+"""单篇论文问答：对话与节点的增删查，在问答树的某个节点下提问（SSE）。"""
 
 import asyncio
 from collections.abc import AsyncIterator
@@ -24,6 +24,12 @@ class NewSession(BaseModel):
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     lang: str | None = None  # 默认取设置中的目标语言
+    # 挂在哪个节点下；None 为对话里新的根（新话题）
+    parent_id: str | None = None
+    # 就此追问：父节点回答里选中的文字
+    anchor: str | None = Field(default=None, max_length=500)
+    # 重答同一问题（作为兄弟节点）：不使用缓存
+    regenerate: bool = False
 
 
 def _doc_or_404(ctx, doc_id: str) -> None:
@@ -59,6 +65,14 @@ def delete_session(ctx: Ctx, session_id: str) -> Response:
     return Response(status_code=204)
 
 
+@router.delete("/qa/nodes/{node_id}", status_code=204)
+def delete_node(ctx: Ctx, node_id: str) -> Response:
+    """删除节点及其整棵子树。"""
+    if not ctx.qa.delete_node(node_id):
+        raise HTTPException(404, "node not found")
+    return Response(status_code=204)
+
+
 @router.post(
     "/qa/sessions/{session_id}/ask",
     response_class=StreamingResponse,
@@ -70,7 +84,7 @@ async def ask(ctx: Ctx, session_id: str, body: AskRequest, request: Request):
     - `delta`：`{text}`，流式输出的原始文本（引用尚未校验，前端只用来即时显示）；
     - `answer`：QANodeOut，校验并保存后的这一轮（以它为准替换流式文本）；
     - `error`：`{code, message, provider_id?}`，code 为 route_not_configured / missing_api_key /
-      consent_required / no_text / bad_output / llm_error；
+      consent_required / bad_request（parent_id 不在该对话）/ no_text / bad_output / llm_error；
     - `done`：结束。
     """
     try:
@@ -82,7 +96,14 @@ async def ask(ctx: Ctx, session_id: str, body: AskRequest, request: Request):
         raise HTTPException(404, str(e)) from e
 
     async def stream() -> AsyncIterator[str]:
-        events = ctx.qa.ask(session_id, body.question, body.lang)
+        events = ctx.qa.ask(
+            session_id,
+            body.question,
+            body.lang,
+            parent_id=body.parent_id,
+            anchor=body.anchor,
+            regenerate=body.regenerate,
+        )
         try:
             async for name, payload in events:
                 if await request.is_disconnected():

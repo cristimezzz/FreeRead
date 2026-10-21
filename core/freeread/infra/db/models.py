@@ -348,9 +348,10 @@ class QASessionRow(Base):
 
 
 class QANodeRow(Base):
-    """对话里的一问一答。parent_id 指向上一轮（M2 是线性链；M3 问答画布会分叉）。
+    """对话里的一问一答，按 parent_id 组成树（一个对话可有多个根）。见 docs/m3/qa-tree.md。
 
     answer 里的引用是 [b_0012] 标记，已校验都存在于该文档；citations 是按出现顺序的块 ID。
+    anchor 是"就此追问"时在父节点回答里选中的文字：{"text": ...}。
     """
 
     __tablename__ = "qa_nodes"
@@ -359,6 +360,8 @@ class QANodeRow(Base):
     session_id: Mapped[str] = mapped_column(ForeignKey("qa_sessions.id", ondelete="CASCADE"))
     parent_id: Mapped[str | None] = mapped_column(ForeignKey("qa_nodes.id", ondelete="SET NULL"))
     question: Mapped[str] = mapped_column(Text)
+    # 模型起的短标题（问答树卡片）；M3 之前的节点为空
+    title: Mapped[str] = mapped_column(Text, default="")
     answer: Mapped[str] = mapped_column(Text)
     citations: Mapped[list[str]] = mapped_column(JSON, default=list)
     # invalid_ids / out_of_context / context_ids / modes / elapsed_ms
@@ -366,9 +369,13 @@ class QANodeRow(Base):
     model: Mapped[str] = mapped_column(String)  # provider/model
     prompt_version: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="ok")  # ok | stale
+    anchor: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     created_at: Mapped[str] = mapped_column(String, default=utcnow)
 
-    __table_args__ = (Index("ix_qa_nodes_session_id_created_at", "session_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_qa_nodes_session_id_created_at", "session_id", "created_at"),
+        Index("ix_qa_nodes_session_id_parent_id", "session_id", "parent_id"),
+    )
 
 
 # ---------------------------------------------------------------- 基础设施

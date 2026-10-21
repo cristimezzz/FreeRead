@@ -19,7 +19,7 @@ import { ReflowView, type TranslationMode } from "./ReflowView";
 import { SearchPanel } from "./SearchPanel";
 import { SummaryPanel } from "../summary/SummaryPanel";
 import { useSummary } from "../summary/useSummary";
-import { QaPanel } from "../qa/QaPanel";
+import { QaBoard } from "../qa/QaBoard";
 import { ReparseDialog } from "./ReparseDialog";
 import { useQa } from "../qa/useQa";
 
@@ -88,9 +88,9 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   type Side = "search" | "summary" | "qa" | "glossary" | "kg" | "notes";
   const [side, setSide] = useState<Side | null>(null);
   const toggleSide = (panel: Side) => setSide((cur) => (cur === panel ? null : panel));
-  // 关闭时保留最后一个面板播放退出动画
+  // 关闭时保留最后一个面板播放退出动画（问答不占右侧面板，铺满阅读区）
   const lastSide = useRef(side);
-  if (side) lastSide.current = side;
+  if (side && side !== "qa") lastSide.current = side;
   const readerEl = useRef<HTMLDivElement>(null);
   const panesEl = useRef<HTMLDivElement>(null);
   const readerW = useWidth(readerEl);
@@ -207,6 +207,11 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   useEffect(() => {
     if (side !== "kg") setKgExpanded(false);
   }, [side]);
+  // 问答卡片铺满阅读区；点引用编号时先藏起来看原文，"回到问答"再显示（状态不丢）
+  const [qaHidden, setQaHidden] = useState(false);
+  useEffect(() => {
+    if (side !== "qa") setQaHidden(false);
+  }, [side]);
   const ann = useAnnotations(docId, irVersion);
   const wholeMarks = useMemo(
     () => Object.fromEntries(Object.entries(ann.wholeBlocks).map(([id, a]) => [id, a.color])),
@@ -311,8 +316,8 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
   const ready = status?.parse_status === "ready" && doc;
   const layout: Layout = ready ? prefs.layout : "pdf";
 
-  const panel = usePresence(side !== null);
-  const shownSide = side ?? lastSide.current;
+  const panel = usePresence(side !== null && side !== "qa");
+  const shownSide = side && side !== "qa" ? side : lastSide.current;
   // 面板最宽占阅读区 60%；窗口变窄时自动收回到上限内
   const panelMax = Math.max(PANEL_MIN, Math.round(readerW * 0.6));
   const panelW = Math.min(panelMax, Math.max(PANEL_MIN, prefs.panelWidth));
@@ -464,7 +469,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             <Button variant="ghost" small icon="summary" pressed={side === "summary"} onClick={() => toggleSide("summary")}>
               总结
             </Button>
-            <Button variant="ghost" small icon="qa" pressed={side === "qa"} onClick={() => toggleSide("qa")}>
+            <Button
+              variant="ghost"
+              small
+              icon="qa"
+              pressed={side === "qa"}
+              onClick={() => (side === "qa" && qaHidden ? setQaHidden(false) : toggleSide("qa"))}
+            >
               问答
             </Button>
             <Button
@@ -488,6 +499,24 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
       <div className="reader" ref={readerEl}>
         <div className="reader-panes" ref={panesEl}>
           {showKgStage && <div className="kg-stage" ref={setKgStage} />}
+          {side === "qa" && ready && !qaHidden && (
+            <div className="kg-stage qa-stage">
+              <QaBoard
+                state={qa}
+                blockText={(id) => blockPreview(byId.get(id))}
+                onPick={(id) => {
+                  setQaHidden(true);
+                  jumpTo(id);
+                }}
+                onClose={() => setSide(null)}
+              />
+            </div>
+          )}
+          {side === "qa" && qaHidden && (
+            <Button small icon="qa" className="qa-return" onClick={() => setQaHidden(false)}>
+              回到问答
+            </Button>
+          )}
           {layout !== "reflow" && (
             <PdfView
               docId={docId}
@@ -573,14 +602,6 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                   focusId={focusAnn}
                   onPick={jumpTo}
                   onExport={() => setExportOpen(true)}
-                  onClose={() => setSide(null)}
-                />
-              )}
-              {shownSide === "qa" && (
-                <QaPanel
-                  state={qa}
-                  blockText={(id) => blockPreview(byId.get(id))}
-                  onPick={jumpTo}
                   onClose={() => setSide(null)}
                 />
               )}

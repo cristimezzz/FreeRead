@@ -40,6 +40,7 @@ const PATHS = {
   external: ["M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"],
   expand: ["M14 4h6v6", "M10 20H4v-6", "M20 4l-6.5 6.5", "M4 20l6.5-6.5"],
   collapse: ["M20 10h-6V4", "M4 14h6v6", "M14 10l6.5-6.5", "M10 14l-6.5 6.5"],
+  fit: ["M4 9V5a1 1 0 0 1 1-1h4", "M15 4h4a1 1 0 0 1 1 1v4", "M20 15v4a1 1 0 0 1-1 1h-4", "M9 20H5a1 1 0 0 1-1-1v-4", "M9 9h6v6H9z"],
 } as const;
 
 export type IconName = keyof typeof PATHS;

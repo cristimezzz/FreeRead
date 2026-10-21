@@ -1,10 +1,11 @@
-"""单篇论文问答（线性对话）。见 docs/01-architecture.md §5.7、docs/m2/qa.md。
+"""单篇论文问答（问答树）。见 docs/01-architecture.md §5.7、docs/m2/qa.md、docs/m3/qa-tree.md。
 
-1. 检索：当前问题（追问时拼上上一轮问题）→ SearchService 混合检索 top-k 块；
+0. 位置：新问题挂在 parent_id 下（None 为新的根）；历史只取这条祖先链，兄弟分支互不可见；
+1. 检索：当前问题（追问时拼上父节点问题与选中的文字）→ SearchService 混合检索 top-k 块；
 2. 上下文：命中块加同章节邻块、摘要，按预算截断（domain/qa/context.py）；
 3. 生成：qa_answer@N，要求每个论断后用 [b_xxxx] 标注出处；流式输出；
-4. 校验：不存在的编号从正文删除（domain/qa/citations.py），存库与展示的引用 100% 存在；
-5. 存库：qa_sessions / qa_nodes，parent_id 指向上一轮。
+4. 校验：先取出末行"标题：…"作为卡片标题（没有则为空，界面退回问题），再把不存在的编号从正文删除（domain/qa/citations.py），存库与展示的引用 100% 存在；
+5. 存库：qa_sessions / qa_nodes，parent_id 指向父节点；重答（regenerate）跳过缓存。
 按需调用；和翻译、总结一样要先确认向该 provider 发送文档内容。
 """
 
@@ -38,8 +39,15 @@ SEARCH_K = 12
 CONTEXT_BUDGET = 4000  # token
 HISTORY_TURNS = 3
 HISTORY_ANSWER_CHARS = 600
+ANCHOR_CHARS = 500
 TITLE_CHARS = 40
+NODE_TITLE_CHARS = 16
 _MARKER_RE = re.compile(r"\[(b_\d+)\]")
+# 回答末行的卡片标题：标题：xxx（容忍 **标题**: / Title:）
+_TITLE_LINE_RE = re.compile(
+    r"(?:\A|\n)[ \t]*(?:\*\*)?(?:标题|Title)(?:\*\*)?[ \t]*[:：][ \t]*(.+?)[ \t]*\Z",
+    re.IGNORECASE,
+)
 
 
 class QAError(PreflightError):
@@ -51,6 +59,8 @@ class QANodeOut(BaseModel):
     session_id: str
     parent_id: str | None
     question: str
+    # 模型给这一问一答起的短标题（问答树卡片用）；为空时界面用问题代替
+    title: str
     # 引用写成 [b_0012]，都已校验存在于该文档
     answer: str
     citations: list[str]
@@ -60,6 +70,8 @@ class QANodeOut(BaseModel):
     model: str
     prompt_version: str
     status: Literal["ok", "stale"]
+    # 就此追问：父节点回答里选中的文字 {"text": ...}
+    anchor: dict[str, Any] | None
     created_at: str
 
 
@@ -147,6 +159,23 @@ class QAService:
         with self._sessions.begin() as s:
             return s.execute(delete(QASessionRow).where(QASessionRow.id == session_id)).rowcount > 0
 
+    def delete_node(self, node_id: str) -> int:
+        """删除一个节点及其整棵子树，返回删除的节点数（0 表示不存在）。"""
+        with self._sessions.begin() as s:
+            row = s.get(QANodeRow, node_id)
+            if row is None:
+                return 0
+            children: dict[str | None, list[str]] = {}
+            for n in self._nodes(s, row.session_id):
+                children.setdefault(n.parent_id, []).append(n.id)
+            doomed, stack = [], [node_id]
+            while stack:
+                cur = stack.pop()
+                doomed.append(cur)
+                stack.extend(children.get(cur, []))
+            s.execute(delete(QANodeRow).where(QANodeRow.id.in_(doomed)))
+            return len(doomed)
+
     @staticmethod
     def _nodes(s, session_id: str) -> list[QANodeRow]:
         return list(
@@ -160,20 +189,38 @@ class QAService:
     # ------------------------------------------------------------ 提问
 
     async def ask(
-        self, session_id: str, question: str, lang: str | None = None
+        self,
+        session_id: str,
+        question: str,
+        lang: str | None = None,
+        *,
+        parent_id: str | None = None,
+        anchor: str | None = None,
+        regenerate: bool = False,
     ) -> AsyncIterator[Event]:
+        """在 parent_id 下提问（None 为新的根）。regenerate：重答同一问题，不用缓存。"""
         started = time.perf_counter()
         question = question.strip()
         if not question:
             raise QAError("bad_request", "问题不能为空")
+        anchor = " ".join((anchor or "").split())[:ANCHOR_CHARS] or None
         session = await asyncio.to_thread(self.get_session, session_id)
+        by_id = {n.id: n for n in session.nodes}
+        if parent_id is not None and parent_id not in by_id:
+            raise QAError("bad_request", "要追问的节点不在这个对话里")
         lang = lang or self._settings.get().target_lang
         doc = await asyncio.to_thread(self.load, session.doc_id)
         provider_id, model = check_provider(self._gateway, self._settings, TaskKind.QA)
         prompt = self._prompts.get(PROMPT_ID)
 
-        previous = session.nodes[-HISTORY_TURNS:]
-        query = question if not previous else f"{question} {previous[-1].question}"
+        previous = _ancestors(by_id, parent_id)[-HISTORY_TURNS:]
+        query = " ".join(
+            [
+                question,
+                *([previous[-1].question] if previous else []),
+                *([anchor] if anchor else []),
+            ]
+        )
         found = await self._search.search_document(doc.doc_id, query, k=SEARCH_K)
         blocks = [ContextBlock(b.id, b.type, b.section_id, b.text) for b in source_blocks(doc)]
         context = build_context(
@@ -197,16 +244,18 @@ class QAService:
             title=doc.title,
             history=history,
             context=context.text,
+            anchor=anchor,
             question=question,
         )
+        opts = {**self.llm_opts, **({"use_cache": False} if regenerate else {})}
         parts: list[str] = []
         async for chunk in self._gateway.stream(
-            TaskKind.QA, messages, prompt_id=prompt.ref, doc_id=doc.doc_id, **self.llm_opts
+            TaskKind.QA, messages, prompt_id=prompt.ref, doc_id=doc.doc_id, **opts
         ):
             if chunk.delta:
                 parts.append(chunk.delta)
                 yield "delta", QADelta(text=chunk.delta)
-        raw = "".join(parts).strip()
+        raw, node_title = _split_title("".join(parts).strip())
         if not raw:
             raise QAError("bad_output", "模型没有返回内容")
 
@@ -221,8 +270,10 @@ class QAService:
         node = await asyncio.to_thread(
             self._save,
             session_id,
-            previous[-1].id if previous else None,
+            parent_id,
+            {"text": anchor} if anchor else None,
             question,
+            node_title,
             checked.text,
             checked.citations,
             stats,
@@ -235,7 +286,9 @@ class QAService:
         self,
         session_id: str,
         parent_id: str | None,
+        anchor: dict[str, Any] | None,
         question: str,
+        title: str,
         answer: str,
         citations: list[str],
         stats: dict[str, Any],
@@ -246,7 +299,9 @@ class QAService:
             row = QANodeRow(
                 session_id=session_id,
                 parent_id=parent_id,
+                anchor=anchor,
                 question=question,
+                title=title,
                 answer=answer,
                 citations=citations,
                 stats=stats,
@@ -257,12 +312,32 @@ class QAService:
             s.flush()  # 填上 created_at
             session = s.get(QASessionRow, session_id)
             if session is not None:
-                session.title = session.title or _title(question)
+                session.title = session.title or title or _title(question)
                 session.updated_at = row.created_at
             return _node_out(row)
 
 
 # ---------------------------------------------------------------- 辅助
+
+
+def _ancestors(by_id: dict[str, QANodeOut], node_id: str | None) -> list[QANodeOut]:
+    """node_id 及其祖先，从根到 node_id；None 为空链。"""
+    chain: list[QANodeOut] = []
+    seen: set[str] = set()
+    while node_id is not None and node_id in by_id and node_id not in seen:
+        seen.add(node_id)
+        chain.append(by_id[node_id])
+        node_id = by_id[node_id].parent_id
+    return chain[::-1]
+
+
+def _split_title(raw: str) -> tuple[str, str]:
+    """取出回答末行的"标题：…"，返回（去掉标题行的回答，标题）。没有标题行时标题为空。"""
+    m = _TITLE_LINE_RE.search(raw)
+    if m is None:
+        return raw, ""
+    title = _MARKER_RE.sub("", m.group(1)).strip().strip("\"'“”「」《》*").strip()
+    return raw[: m.start()].rstrip(), title[:NODE_TITLE_CHARS]
 
 
 def _title(question: str) -> str:
@@ -287,6 +362,7 @@ def _node_out(row: QANodeRow) -> QANodeOut:
         session_id=row.session_id,
         parent_id=row.parent_id,
         question=row.question,
+        title=row.title,
         answer=row.answer,
         citations=list(row.citations or []),
         untraced=not row.citations,
@@ -294,6 +370,7 @@ def _node_out(row: QANodeRow) -> QANodeOut:
         model=row.model,
         prompt_version=row.prompt_version,
         status=row.status,
+        anchor=row.anchor,
         created_at=row.created_at,
     )
 
