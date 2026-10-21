@@ -74,3 +74,9 @@ def test_ulid_and_timestamps():
     b = new_ulid()
     assert len(a) == 26 and a < b
     assert utcnow().endswith("Z")
+
+
+def test_ulid_monotonic_within_millisecond():
+    # 同一毫秒内连续生成也必须严格递增，否则按 id 排序的同毫秒行顺序随机
+    ids = [new_ulid() for _ in range(2000)]
+    assert ids == sorted(ids) and len(set(ids)) == len(ids)
