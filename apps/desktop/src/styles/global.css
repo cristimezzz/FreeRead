@@ -1215,6 +1215,23 @@ input[type="range"] {
   font-size: 13px;
 }
 
+/* 勾选了条目时替换排序说明的批量操作条 */
+.library-batch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  animation: fade-in var(--dur-fast) var(--ease);
+}
+
+.library-batch-count {
+  margin-right: 8px;
+  color: var(--ink2);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .items {
   position: relative;
   flex: 1;
@@ -1239,7 +1256,33 @@ input[type="range"] {
 
 /* 一个条目下有多个 PDF 时逐个列出 */
 .item {
+  position: relative;
   border-bottom: 1px solid var(--line);
+}
+
+/* 批量选择：复选框悬停时出现，勾选了任一条目后全部常显 */
+.item-list[data-checkable] .item-row,
+.item-list[data-checkable] .item-docs {
+  padding-left: 40px;
+}
+
+.item-check {
+  position: absolute;
+  top: 20px;
+  left: 12px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+
+.item:hover .item-check,
+.item:focus-within .item-check,
+.item-list[data-checking] .item-check {
+  opacity: 1;
 }
 
 .item-docs {
@@ -3365,7 +3408,8 @@ body.resizing .reader-pane {
   }
 }
 
-/* 文献库选中项（键盘、右键的对象） */
+/* 文献库选中项（键盘、右键的对象）与勾选项 */
+.item[data-checked],
 .item[data-selected] .item-row {
   background: var(--accent-soft);
 }

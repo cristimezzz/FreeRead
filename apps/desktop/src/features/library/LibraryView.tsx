@@ -19,6 +19,9 @@ const KEYS = {
   open: "Enter",
   copy: `${MOD}C`,
   remove: "Delete",
+  check: "Space",
+  checkAll: `${MOD}A`,
+  uncheck: "Esc",
   search: `${MOD}F`,
   import: `${MOD}O`,
   sync: "F5",
@@ -62,7 +65,10 @@ export function LibraryView() {
   loaded.current = items.length;
   const { navigate, toast, bumpLibrary } = useApp.getState();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [removing, setRemoving] = useState<Item | null>(null);
+  // 批量选中（勾选）的条目；anchor 是 Shift 连选的起点
+  const [checked, setChecked] = useState<ReadonlySet<string>>(() => new Set());
+  const anchor = useRef<string | null>(null);
+  const [removing, setRemoving] = useState<Item[] | null>(null);
   const [reparseDoc, setReparseDoc] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -70,6 +76,21 @@ export function LibraryView() {
     const t = setTimeout(() => setDebounced(query.trim()), 250);
     return () => clearTimeout(t);
   }, [query]);
+
+  // 换分类、换搜索词时清空勾选；列表刷新后丢掉已经不在列表里的
+  useEffect(() => {
+    setChecked(new Set());
+    anchor.current = null;
+  }, [selected, debounced]);
+  useEffect(() => {
+    setChecked((prev) => {
+      if (!prev.size) return prev;
+      const present = new Set(items.map((x) => x.id));
+      const next = [...prev].filter((id) => present.has(id));
+      return next.length === prev.size ? prev : new Set(next);
+    });
+  }, [items]);
+  const checkedItems = items.filter((x) => checked.has(x.id));
 
   useEffect(() => {
     useApp
@@ -169,19 +190,57 @@ export function LibraryView() {
     toast((await copyText(text)) ? `已复制${what}` : "复制失败");
   };
 
-  const remove = async (item: Item) => {
-    try {
-      const r = await api().POST("/library/items/{item_id}/archive", { params: { path: { item_id: item.id } } });
-      if (!r.response.ok) unwrap(r); // 204 没有响应体，unwrap 只用来抛出错误
-      toast(`已移除：${item.title}`);
-      // 选中项挪到相邻条目，方便连续操作
-      const i = items.findIndex((x) => x.id === item.id);
-      setSelectedId((items[i + 1] ?? items[i - 1])?.id ?? null);
-      bumpLibrary();
-    } catch (e) {
-      toast(`移除失败：${e}`);
+  const remove = async (list: Item[]) => {
+    // 逐条移除：本地服务，几百条也很快，失败的单独计数
+    const failed: string[] = [];
+    let error: unknown;
+    for (const item of list) {
+      try {
+        const r = await api().POST("/library/items/{item_id}/archive", { params: { path: { item_id: item.id } } });
+        if (!r.response.ok) unwrap(r); // 204 没有响应体，unwrap 只用来抛出错误
+      } catch (e) {
+        failed.push(item.id);
+        error = e;
+      }
     }
+    const done = list.length - failed.length;
+    if (list.length === 1) toast(failed.length ? `移除失败：${error}` : `已移除：${list[0].title}`);
+    else toast(failed.length ? `已移除 ${done} 篇，${failed.length} 篇失败：${error}` : `已移除 ${done} 篇文献`);
+    if (!done) return;
+    // 选中项挪到被移除的最后一条之后的相邻条目，方便连续操作
+    const gone = new Set(list.map((x) => x.id).filter((id) => !failed.includes(id)));
+    const last = Math.max(...items.map((x, i) => (gone.has(x.id) ? i : -1)));
+    const after = items.slice(last + 1).find((x) => !gone.has(x.id));
+    const before = items.slice(0, last).reverse().find((x) => !gone.has(x.id));
+    setSelectedId((after ?? before)?.id ?? null);
+    setChecked(new Set(failed));
+    bumpLibrary();
   };
+
+  /** 勾选 / 取消勾选；range 时把 anchor 到 item 之间全部勾上 */
+  const check = (item: Item, range = false) => {
+    const from = range && anchor.current ? items.findIndex((x) => x.id === anchor.current) : -1;
+    const to = items.findIndex((x) => x.id === item.id);
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (from >= 0) {
+        for (const x of items.slice(Math.min(from, to), Math.max(from, to) + 1)) next.add(x.id);
+      } else if (!next.delete(item.id)) {
+        next.add(item.id);
+      }
+      return next;
+    });
+    if (from < 0) anchor.current = item.id;
+    setSelectedId(item.id);
+  };
+  const checkAll = () => setChecked(new Set(items.map((x) => x.id)));
+  const uncheck = () => {
+    setChecked(new Set());
+    anchor.current = null;
+  };
+
+  const copyMany = (list: Item[], format: (x: Item) => string, what: string) =>
+    void copy(list.map(format).join("\n"), `${list.length} 条${what}`);
 
   const itemMenu = (item: Item): MenuItem[] => {
     const doc = defaultDoc(item);
@@ -218,10 +277,32 @@ export function LibraryView() {
       icon: "delete",
       shortcut: KEYS.remove,
       danger: true,
-      onSelect: () => setRemoving(item),
+      onSelect: () => setRemoving([item]),
     });
     return menu;
   };
+
+  /** 在勾选的条目上右键：对整批操作 */
+  const batchMenu = (list: Item[]): MenuItem[] => [
+    {
+      label: `复制 ${list.length} 条标题`,
+      icon: "copy",
+      shortcut: KEYS.copy,
+      onSelect: () => copyMany(list, (x) => x.title, "标题"),
+    },
+    { label: `复制 ${list.length} 条引用`, onSelect: () => copyMany(list, citation, "引用") },
+    "separator",
+    { label: "全选", shortcut: KEYS.checkAll, disabled: list.length === items.length, onSelect: checkAll },
+    { label: "取消选择", shortcut: KEYS.uncheck, onSelect: uncheck },
+    "separator",
+    {
+      label: `移除 ${list.length} 篇文献…`,
+      icon: "delete",
+      shortcut: KEYS.remove,
+      danger: true,
+      onSelect: () => setRemoving(list),
+    },
+  ];
 
   const listMenu = (): MenuItem[] => [
     { label: "导入 PDF…", icon: "upload", shortcut: KEYS.import, onSelect: () => void importPdf() },
@@ -233,6 +314,7 @@ export function LibraryView() {
     },
     "separator",
     { label: "搜索", icon: "search", shortcut: KEYS.search, onSelect: () => searchRef.current?.focus() },
+    { label: "全选", shortcut: KEYS.checkAll, disabled: !items.length, onSelect: checkAll },
     { label: "刷新列表", onSelect: () => void reload() },
   ];
 
@@ -270,6 +352,9 @@ export function LibraryView() {
         setQuery("");
       } else if (inSearch) {
         searchRef.current?.blur();
+      } else if (checked.size) {
+        handled();
+        uncheck();
       } else if (selectedId) {
         (document.activeElement as HTMLElement | null)?.blur();
         setSelectedId(null);
@@ -294,9 +379,26 @@ export function LibraryView() {
     const current = i >= 0 ? items[i] : undefined;
     const moveTo = (to: number) => {
       handled();
-      focusItem(items[Math.max(0, Math.min(items.length - 1, to))].id);
+      const next = items[Math.max(0, Math.min(items.length - 1, to))];
+      // Shift+方向键：把经过的条目一并勾上
+      if (e.shiftKey && current) {
+        setChecked((prev) => new Set(prev).add(current.id).add(next.id));
+        anchor.current ??= current.id;
+      }
+      focusItem(next.id);
     };
+    if (mod && key === "a") {
+      handled();
+      checkAll();
+      return;
+    }
     switch (key) {
+      case " ":
+        if (current) {
+          handled(); // 挡住按钮的空格激活（否则会打开文献）
+          check(current);
+        }
+        return;
       case "ArrowDown":
         return moveTo(i < 0 ? 0 : i + 1);
       case "ArrowUp":
@@ -317,15 +419,23 @@ export function LibraryView() {
         }
         return;
       case "Delete":
-        if (current) {
+        if (checkedItems.length) {
           handled();
-          setRemoving(current);
+          setRemoving(checkedItems);
+        } else if (current) {
+          handled();
+          setRemoving([current]);
         }
         return;
       case "c":
-        if (mod && current && !window.getSelection()?.toString()) {
-          handled();
-          void copy(current.title, "标题");
+        if (mod && !window.getSelection()?.toString()) {
+          if (checkedItems.length) {
+            handled();
+            copyMany(checkedItems, (x) => x.title, "标题");
+          } else if (current) {
+            handled();
+            void copy(current.title, "标题");
+          }
         }
         return;
     }
@@ -378,7 +488,31 @@ export function LibraryView() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
-        <span className="library-sort">按添加时间排序</span>
+        {checkedItems.length ? (
+          <div className="library-batch" role="toolbar" aria-label="批量操作">
+            <span className="library-batch-count">已选 {checkedItems.length} 篇</span>
+            <Button
+              variant="ghost"
+              small
+              disabled={checkedItems.length === items.length}
+              onClick={checkAll}
+              title={KEYS.checkAll}
+            >
+              全选
+            </Button>
+            <Button variant="ghost" small icon="copy" onClick={() => copyMany(checkedItems, citation, "引用")}>
+              复制引用
+            </Button>
+            <Button variant="ghost" small danger icon="delete" onClick={() => setRemoving(checkedItems)} title={KEYS.remove}>
+              移除
+            </Button>
+            <Button variant="ghost" small icon="close" onClick={uncheck} title={KEYS.uncheck}>
+              取消
+            </Button>
+          </div>
+        ) : (
+          <span className="library-sort">按添加时间排序</span>
+        )}
       </div>
       <section className="items" aria-label="文献列表" aria-busy={loading}>
         {loading && <Progress className="items-loading" />}
@@ -388,7 +522,11 @@ export function LibraryView() {
             onOpen={open}
             selectedId={selectedId}
             onSelect={(it) => setSelectedId(it.id)}
-            onMenu={(it, x, y) => openMenu(x, y, itemMenu(it))}
+            onMenu={(it, x, y) =>
+              openMenu(x, y, checked.has(it.id) && checkedItems.length > 1 ? batchMenu(checkedItems) : itemMenu(it))
+            }
+            checked={checked}
+            onCheck={check}
           />
         )}
         {!items.length && !loading && (
@@ -408,17 +546,25 @@ export function LibraryView() {
         open={removing !== null}
         headline="移除文献"
         onClose={(v) => {
-          const item = removing;
+          const list = removing;
           setRemoving(null);
-          if (v === "ok" && item) void remove(item);
+          if (v === "ok" && list?.length) void remove(list);
         }}
         actions={[
           { value: "cancel", label: "取消" },
-          { value: "ok", label: "移除", primary: true },
+          { value: "ok", label: removing && removing.length > 1 ? `移除 ${removing.length} 篇` : "移除", primary: true },
         ]}
       >
-        <p>从文献库移除「{removing?.title}」？PDF 文件、译文和批注都会保留，重新导入同一 PDF 即可恢复。</p>
-        {removing?.zotero_key && <p>这是 Zotero 条目，下次从 Zotero 同步时会重新出现；要彻底删除请在 Zotero 中删除。</p>}
+        <p>
+          从文献库移除{removing && removing.length > 1 ? `选中的 ${removing.length} 篇文献` : `「${removing?.[0]?.title}」`}
+          ？PDF 文件、译文和批注都会保留，重新导入同一 PDF 即可恢复。
+        </p>
+        {removing?.some((x) => x.zotero_key) &&
+          (removing.length > 1 ? (
+            <p>其中的 Zotero 条目下次从 Zotero 同步时会重新出现；要彻底删除请在 Zotero 中删除。</p>
+          ) : (
+            <p>这是 Zotero 条目，下次从 Zotero 同步时会重新出现；要彻底删除请在 Zotero 中删除。</p>
+          ))}
       </Dialog>
       <ReparseDialog open={reparseDoc !== null} docId={reparseDoc ?? ""} onClose={() => setReparseDoc(null)} />
     </div>
