@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { engineOptionLabel, urlHost } from "../features/settings/SettingsView";
-import { avatarSrc, formatDate, formatSize, plainNotes } from "../features/settings/about";
+import { avatarSrc, downloadedHint, formatDate, formatSize, plainNotes } from "../features/settings/about";
 
 const engine = { name: "mineru", label: "MinerU", available: true, heavy: true, location: "local" as const, has_key: false };
 
@@ -49,5 +49,14 @@ describe("关于：格式化", () => {
 describe("关于：更新说明", () => {
   it("去掉 Markdown 标题和粗体标记，列表换成圆点", () => {
     expect(plainNotes("## 新功能\r\n- **关于**页\n  * 子项\n\n正文")).toBe("新功能\n· 关于页\n  · 子项\n\n正文");
+  });
+});
+
+describe("关于：下载完成提示", () => {
+  it("按安装方式给出下一步", () => {
+    expect(downloadedHint("nsis", "C:/x.exe")).toContain("自动重新打开");
+    expect(downloadedHint("portable", "C:/x.zip")).toContain("解压覆盖");
+    expect(downloadedHint("deb", "/home/a/Downloads/x.deb")).toContain("apt install");
+    expect(downloadedHint("rpm", "/home/a/Downloads/x.rpm")).toContain("dnf install");
   });
 });

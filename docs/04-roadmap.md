@@ -70,7 +70,8 @@
 - [ ] 更多解析引擎。
 - [x] 云端 / 自部署解析服务：MinerU（mineru-api、mineru.net）与 docling-serve（ADR-0008）。
 - [ ] 导出到 Obsidian / Logseq。
-- [ ] macOS、Linux 打包；自动更新。
+- [x] Linux 打包：deb、rpm、AUR（x86_64）。
+- [ ] macOS 打包；自动更新。
 - [ ] 插件机制（自定义总结模板、提示词、解析引擎）。
 
 ## 风险跟踪

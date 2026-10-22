@@ -4,11 +4,13 @@ import { useApp } from "../../app/store";
 import { Button, Progress, Spinner } from "../../components/ui";
 import {
   appVersion,
+  ASSET_LABEL,
   applyUpdate,
   avatarSrc,
   checkUpdate,
   type Contributor,
   downloadUpdate,
+  downloadedHint,
   formatDate,
   formatSize,
   listContributors,
@@ -143,15 +145,14 @@ function updateDesc(step: UpdateStep, desktop: boolean): string {
     case "downloading":
       return `正在下载 ${step.info.asset?.name ?? ""}（${Math.round(step.progress * 100)}%）`;
     case "downloaded":
-      return step.info.portable
-        ? `已保存到 ${step.path}，退出 FreeRead 后解压覆盖原目录即可`
-        : "下载完成，已通过校验。安装时 FreeRead 会关闭，装好后自动重新打开";
+      return downloadedHint(step.info.kind, step.path);
     case "checked": {
       const { info } = step;
       if (!info.available) return `已是最新版本（${info.current}）`;
       const date = formatDate(info.publishedAt);
-      const size = info.asset ? `，${info.portable ? "便携版" : "安装包"} ${formatSize(info.asset.size)}` : "";
-      return `发现新版本 ${info.latest}${date && `（${date} 发布）`}${size}`;
+      const size = info.asset ? `，${ASSET_LABEL[info.kind]} ${formatSize(info.asset.size)}` : "";
+      const aur = info.kind === "aur" ? "，用 AUR 助手（如 yay -Syu）更新" : "";
+      return `发现新版本 ${info.latest}${date && `（${date} 发布）`}${size}${aur}`;
     }
   }
 }
@@ -183,7 +184,7 @@ function UpdateActions({
   if (step.s === "downloaded") {
     return (
       <Button small variant="primary" onClick={onApply}>
-        {step.info.portable ? "在文件夹中显示" : "安装并重启"}
+        {step.info.kind === "nsis" ? "安装并重启" : "在文件夹中显示"}
       </Button>
     );
   }

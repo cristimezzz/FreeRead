@@ -1,0 +1,51 @@
+name: Publish AUR package
+
+# Release 发布（草稿转正式）后，把 freeread-bin 推到 AUR：用 Release 里的 deb 渲染
+# packaging/aur/PKGBUILD.in（packaging/aur/render.sh），.SRCINFO 由 deploy-aur 生成。
+# 草稿 Release 的下载地址不公开，所以不放在 desktop-build.yml 的 release job 里。
+# 需要仓库 secret AUR_SSH_PRIVATE_KEY（对应公钥加在 AUR 账号上）。
+# 也可以手动触发，补推某个已发布的版本。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已发布的版本 tag，例如 v0.3.0
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aur
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ env.TAG }}
+      - name: Render PKGBUILD
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${TAG#v}"
+          gh release download "$TAG" --pattern "FreeRead_${version}_amd64.deb" --dir dl
+          mkdir aur
+          packaging/aur/render.sh "$version" "dl/FreeRead_${version}_amd64.deb" LICENSE > aur/PKGBUILD
+          cat aur/PKGBUILD
+      - uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
+        with:
+          pkgname: freeread-bin
+          pkgbuild: aur/PKGBUILD
+          commit_username: FreeRead CI
+          commit_email: ci@freeread.work
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: Update to ${{ env.TAG }}
+          ssh_keyscan_types: ed25519

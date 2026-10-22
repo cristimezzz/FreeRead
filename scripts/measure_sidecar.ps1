@@ -6,7 +6,7 @@
   每次启动用一个新的空数据目录（所以每次都会跑一遍 Alembic 迁移），从 Start-Process 计时，
   每 20 ms 请求一次 GET /health，到返回 200 为止；然后检查数据库已迁移到 head、
   /llm/providers 可用（提示词已加载，否则 sidecar 启动即失败），导入一个小 PDF 并等快速解析、再检索一次
-  （PyMuPDF）完成，最后 taskkill /T /F。解析检查不计入启动时间。
+  （PyMuPDF）完成，最后连同子进程强制结束。解析检查不计入启动时间。Windows 和 Linux（pwsh）都能运行。
 
   -Mode warm：同一路径先预热 1 次（不计），再测 -Runs 次。
   -Mode cold：每次把整个 onedir 目录复制到新的临时目录再启动，模拟安装后首次启动
@@ -95,10 +95,12 @@ function Measure-Start([string]$ExeDir, [int]$N) {
     $client.DefaultRequestHeaders.Add("X-FreeRead-Token", $token)
     $base = "http://127.0.0.1:$port"
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    $proc = Start-Process -PassThru -WindowStyle Hidden `
+    # -WindowStyle 只有 Windows 支持
+    $hidden = $IsWindows ? @{ WindowStyle = "Hidden" } : @{}
+    $proc = Start-Process -PassThru @hidden `
         -RedirectStandardError (Join-Path $Work "core-$N.err") `
         -RedirectStandardOutput (Join-Path $Work "core-$N.out") `
-        -FilePath (Join-Path $ExeDir "freeread-core.exe") `
+        -FilePath (Join-Path $ExeDir "freeread-core$($IsWindows ? '.exe' : '')") `
         -ArgumentList "--port", $port, "--token", $token, "--data-dir", "`"$data`""
     try {
         while ($true) {
@@ -129,7 +131,12 @@ function Measure-Start([string]$ExeDir, [int]$N) {
         throw
     } finally {
         $client.Dispose()
-        taskkill /T /F /PID $proc.Id 2>&1 | Out-Null
+        if ($IsWindows) {
+            taskkill /T /F /PID $proc.Id 2>&1 | Out-Null
+        } else {
+            pkill -KILL -P $proc.Id 2>&1 | Out-Null
+            Stop-Process -Force -Id $proc.Id -ErrorAction SilentlyContinue
+        }
         Start-Sleep -Milliseconds 500
     }
 }

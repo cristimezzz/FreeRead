@@ -1,11 +1,13 @@
 //! 检查与下载更新、列出贡献者：数据来自 GitHub 上的 Release 与仓库贡献者，只在设置页「关于」里用到。
 //!
-//! 不用 tauri-plugin-updater：它要签名密钥和 latest.json，而 Release 只附 NSIS 安装包和便携版 zip
-//! （.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
+//! 不用 tauri-plugin-updater：它要签名密钥和 latest.json，而 Release 只附 NSIS 安装包、便携版 zip
+//! 和 deb / rpm（.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
 //!
 //! - 安装版（exe 旁边有 NSIS 的 uninstall.exe）：下载 `*-setup.exe` 到临时目录，以 `/P /UPDATE /R`
 //!   运行（与 tauri-plugin-updater 相同：只显示进度、跳过重装询问、不删数据、装完重新打开），随即退出；
-//! - 便携版：下载 `*-portable.zip` 到「下载」文件夹，在资源管理器里选中，由用户自己解压替换。
+//! - 便携版：下载 `*-portable.zip` 到「下载」文件夹，在资源管理器里选中，由用户自己解压替换；
+//! - Linux deb / rpm：下载同类包到「下载」文件夹并打开该文件夹，由用户用包管理器安装（要 root）；
+//! - AUR（Arch 上装的 freeread-bin，是 deb 解包的）：不下载，由 AUR 助手更新。
 
 use std::fs::File;
 use std::io::Write;
@@ -68,7 +70,37 @@ pub struct UpdateInfo {
     published_at: Option<String>,
     /// 适合当前安装方式的下载包；Release 里没有时为 `None`（只能去网页下载）。
     asset: Option<AssetInfo>,
-    portable: bool,
+    kind: InstallKind,
+}
+
+/// 当前程序的安装方式，决定下载哪个包、下载完怎么处理。
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // 每个平台只构造其中几种
+pub enum InstallKind {
+    /// Windows NSIS 安装版
+    Nsis,
+    /// Windows 便携版 zip
+    Portable,
+    Deb,
+    Rpm,
+    /// Arch 上从 AUR 装的 freeread-bin
+    Aur,
+    /// 认不出来（开发构建、自己解包的等），只给 Release 链接
+    Unknown,
+}
+
+impl InstallKind {
+    /// Release 里对应的包名后缀（x86_64）；没有可直接用的包时为 `None`。
+    fn asset_suffix(self) -> Option<&'static str> {
+        match self {
+            Self::Nsis => Some("-setup.exe"),
+            Self::Portable => Some("-portable.zip"),
+            Self::Deb => Some("_amd64.deb"),
+            Self::Rpm => Some(".x86_64.rpm"),
+            Self::Aur | Self::Unknown => None,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -116,11 +148,32 @@ async fn github_json<T: for<'de> Deserialize<'de>>(path: &str) -> Result<T, Stri
     }
 }
 
-/// 有 NSIS 卸载程序的是安装版，否则是便携版 zip 解压出来的。
-fn is_portable() -> bool {
-    std::env::current_exe()
-        .map(|exe| !exe.with_file_name("uninstall.exe").is_file())
-        .unwrap_or(true)
+/// Windows：有 NSIS 卸载程序的是安装版，否则是便携版 zip 解压出来的。
+#[cfg(windows)]
+fn install_kind() -> InstallKind {
+    let installed = std::env::current_exe()
+        .map(|exe| exe.with_file_name("uninstall.exe").is_file())
+        .unwrap_or(false);
+    if installed {
+        InstallKind::Nsis
+    } else {
+        InstallKind::Portable
+    }
+}
+
+/// Linux：打包时 tauri-bundler 把包类型写进了可执行文件。AUR 的 freeread-bin 是 deb 解包的，
+/// 所以在 Arch 上看到 deb 当作 AUR 安装。
+#[cfg(not(windows))]
+fn install_kind() -> InstallKind {
+    use tauri::utils::{config::BundleType, platform::bundle_type};
+    match bundle_type() {
+        Some(BundleType::Deb) if std::path::Path::new("/etc/arch-release").exists() => {
+            InstallKind::Aur
+        }
+        Some(BundleType::Deb) => InstallKind::Deb,
+        Some(BundleType::Rpm) => InstallKind::Rpm,
+        _ => InstallKind::Unknown,
+    }
 }
 
 /// `v0.2.0` 是否比 `current` 新；解析不了的标签当作不新。
@@ -134,12 +187,8 @@ fn is_newer(tag: &str, current: &str) -> bool {
     }
 }
 
-fn pick_asset(assets: &[GhAsset], portable: bool) -> Option<&GhAsset> {
-    let suffix = if portable {
-        "-portable.zip"
-    } else {
-        "-setup.exe"
-    };
+fn pick_asset(assets: &[GhAsset], kind: InstallKind) -> Option<&GhAsset> {
+    let suffix = kind.asset_suffix()?;
     assets.iter().find(|a| a.name.ends_with(suffix))
 }
 
@@ -150,8 +199,8 @@ pub async fn check_update(
 ) -> Result<UpdateInfo, String> {
     let release: GhRelease = github_json("releases/latest").await?;
     let current = app.package_info().version.to_string();
-    let portable = is_portable();
-    let asset = pick_asset(&release.assets, portable).cloned();
+    let kind = install_kind();
+    let asset = pick_asset(&release.assets, kind).cloned();
     let info = UpdateInfo {
         available: is_newer(&release.tag_name, &current),
         current,
@@ -163,7 +212,7 @@ pub async fn check_update(
             name: a.name.clone(),
             size: a.size,
         }),
-        portable,
+        kind,
     };
     *state.asset.lock().unwrap() = asset;
     *state.downloaded.lock().unwrap() = None;
@@ -193,10 +242,11 @@ pub async fn download_update(
     state: State<'_, UpdateState>,
 ) -> Result<String, String> {
     let asset = state.asset.lock().unwrap().clone().ok_or("请先检查更新")?;
-    let dir = if is_portable() {
-        app.path().download_dir().map_err(|e| e.to_string())?
-    } else {
+    // 只有 NSIS 安装包由我们运行，放临时目录；其他的要用户自己处理，放「下载」文件夹
+    let dir = if install_kind() == InstallKind::Nsis {
         std::env::temp_dir().join("FreeRead-update")
+    } else {
+        app.path().download_dir().map_err(|e| e.to_string())?
     };
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let dest = dir.join(&asset.name);
@@ -245,7 +295,7 @@ pub async fn download_update(
     Ok(dest.display().to_string())
 }
 
-/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；便携版：在资源管理器里选中下载的 zip。
+/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；便携版、deb / rpm：在文件管理器里显示下载的包。
 #[tauri::command]
 pub fn apply_update(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), String> {
     let path = state
@@ -276,7 +326,18 @@ fn reveal(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[cfg(not(windows))]
+/// 各家文件管理器选中文件的方式不统一，用 xdg-open 打开所在文件夹。
+#[cfg(target_os = "linux")]
+fn reveal(path: &std::path::Path) -> Result<(), String> {
+    let dir = path.parent().unwrap_or(path);
+    std::process::Command::new("xdg-open")
+        .arg(dir)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("已保存到 {}（无法打开文件夹：{e}）", path.display()))
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
 fn reveal(path: &std::path::Path) -> Result<(), String> {
     Err(format!("已保存到 {}", path.display()))
 }
@@ -306,18 +367,26 @@ mod tests {
 
     #[test]
     fn picks_asset_for_install_kind() {
+        // 文件名与 tauri-bundler 的命名一致
         let assets = [
             asset("FreeRead_0.2.0_x64-portable.zip"),
             asset("FreeRead_0.2.0_x64-setup.exe"),
+            asset("FreeRead_0.2.0_amd64.deb"),
+            asset("FreeRead-0.2.0-1.x86_64.rpm"),
         ];
+        let name = |kind| pick_asset(&assets, kind).map(|a| a.name.as_str());
         assert_eq!(
-            pick_asset(&assets, false).unwrap().name,
-            "FreeRead_0.2.0_x64-setup.exe"
+            name(InstallKind::Nsis),
+            Some("FreeRead_0.2.0_x64-setup.exe")
         );
         assert_eq!(
-            pick_asset(&assets, true).unwrap().name,
-            "FreeRead_0.2.0_x64-portable.zip"
+            name(InstallKind::Portable),
+            Some("FreeRead_0.2.0_x64-portable.zip")
         );
-        assert!(pick_asset(&assets[..1], false).is_none());
+        assert_eq!(name(InstallKind::Deb), Some("FreeRead_0.2.0_amd64.deb"));
+        assert_eq!(name(InstallKind::Rpm), Some("FreeRead-0.2.0-1.x86_64.rpm"));
+        assert_eq!(name(InstallKind::Aur), None);
+        assert_eq!(name(InstallKind::Unknown), None);
+        assert!(pick_asset(&assets[..1], InstallKind::Nsis).is_none());
     }
 }
