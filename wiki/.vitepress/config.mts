@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitepress'
 
-// 使用说明站点：docs.freeread.work，由 Cloudflare Pages 从 wiki/ 构建。
+// 使用说明站点：docs.freeread.work，由 Cloudflare Pages 从 wiki/ 构建（输出 .vitepress/dist）。
 // 设计文档（docs/）不上站，开发者指南里直接链接到 GitHub。
 
 const repo = 'https://github.com/cristimezzz/FreeRead'
@@ -29,7 +29,7 @@ export default defineConfig({
     siteTitle: 'FreeRead 文档',
 
     nav: [
-      { text: '主页', link: 'https://cristimezzz.github.io/FreeRead/' },
+      { text: '主页', link: 'https://freeread.work' },
       { text: '下载', link: `${repo}/releases` },
       { text: '问题反馈', link: `${repo}/issues` },
     ],
