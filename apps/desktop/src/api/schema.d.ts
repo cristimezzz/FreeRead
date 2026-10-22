@@ -1016,6 +1016,11 @@ export interface components {
              */
             parse_device: "auto" | "gpu" | "cpu";
             /**
+             * Pypi Mirror
+             * @default
+             */
+            pypi_mirror: string;
+            /**
              * Providers
              * @default []
              */

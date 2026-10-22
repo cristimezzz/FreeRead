@@ -2669,6 +2669,18 @@ body.resizing .reader-pane {
 }
 
 /* 引擎安装：当前一行输出、失败时的输出末尾 */
+.mirror-pick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.mirror-pick .inp {
+  width: 260px;
+  max-width: 100%;
+}
+
 .install-msg {
   display: block;
   overflow: hidden;

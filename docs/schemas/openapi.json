@@ -3888,6 +3888,12 @@
             "title": "Parse Device",
             "default": "auto"
           },
+          "pypi_mirror": {
+            "type": "string",
+            "pattern": "^(https?://\\S+)?$",
+            "title": "Pypi Mirror",
+            "default": ""
+          },
           "providers": {
             "items": {
               "$ref": "#/components/schemas/ProviderConfig"

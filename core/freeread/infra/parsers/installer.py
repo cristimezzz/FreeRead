@@ -116,7 +116,8 @@ class EngineInstaller:
     def base(self) -> Path:
         return self.root or engines_root()
 
-    async def install(self, engine: str, report: Report) -> None:
+    async def install(self, engine: str, report: Report, index_url: str = "") -> None:
+        """index_url：PyPI 镜像的 simple 索引，空为官方 PyPI。torch 仍走 --torch-backend 选的 PyTorch 源。"""
         if engine not in ENGINE_PACKAGES:
             raise InstallError(f"未知的解析引擎 {engine!r}")
         root = self.base
@@ -139,12 +140,13 @@ class EngineInstaller:
         )  # fmt: skip
         python = venv_python(partial)
         await report(0.15, "下载并安装引擎（含 PyTorch，可能有数 GB）")
+        index = ["--default-index", index_url] if index_url else []
         backends = torch_backends()
         for i, backend in enumerate(backends):
             try:
                 await self._run(
                     [*uv, "pip", "install", "--python", str(python), "--torch-backend", backend,
-                     *ENGINE_PACKAGES[engine]],
+                     *index, *ENGINE_PACKAGES[engine]],
                     env, log_path, report, 0.15, "安装引擎",
                 )  # fmt: skip
                 break

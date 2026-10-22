@@ -60,6 +60,7 @@ async def test_install_success(fake, tmp_path):
     log = (tmp_path / "engine-install-mineru.log").read_text(encoding="utf-8")
     assert "mineru[torch]==4.0.12" in log and "--torch-backend cu128" in log
     assert "--torch-backend cpu" not in log
+    assert "--default-index" not in log
 
 
 async def test_install_failure_leaves_no_engine(fake):
@@ -108,6 +109,24 @@ def test_torch_backends(monkeypatch, plat, machine, smi, expected):
     monkeypatch.setattr(installer.platform, "machine", lambda: machine)
     monkeypatch.setattr(installer.shutil, "which", lambda name: smi)
     assert installer.torch_backends() == expected
+
+
+async def test_install_uses_pypi_mirror(fake, tmp_path):
+    _, _, inst = fake
+
+    async def report(p: float, msg: str) -> None:
+        pass
+
+    mirror = "https://pypi.tuna.tsinghua.edu.cn/simple"
+    await inst.install("docling", report, mirror)
+    log = (tmp_path / "engine-install-docling.log").read_text(encoding="utf-8")
+    assert f"--default-index {mirror}" in log
+
+
+def test_settings_pypi_mirror(client):
+    s = client.get("/settings").json()
+    assert s["pypi_mirror"] == ""
+    assert client.put("/settings", json=s | {"pypi_mirror": "not a url"}).status_code == 422
 
 
 async def test_install_unknown_engine(fake):

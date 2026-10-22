@@ -125,6 +125,8 @@ class AppSettings(_Strict):
     parsers: ParserServices = ParserServices()
     # 本机 MinerU / Docling 的运行设备；auto 由引擎自行检测（有 CUDA 用 GPU），API 模式不受影响
     parse_device: Literal["auto", "gpu", "cpu"] = "auto"
+    # 安装本机 MinerU / Docling 时的 PyPI 镜像（simple 索引地址）；空为官方 PyPI。PyTorch 不受影响
+    pypi_mirror: str = Field(default="", pattern=r"^(https?://\S+)?$")
     providers: list[ProviderConfig] = []
     routes: dict[TaskKind, ModelRoute] = {}
     # 用户已同意向其发送文档内容的 provider（architecture §10）

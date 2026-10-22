@@ -239,7 +239,7 @@ class ParseService:
         _ensure_installable(engine)
         if engine == "mineru":
             await self.registry.close()  # 重新安装时常驻 worker 还占着旧环境
-        await self.installer.install(engine, ctx.report)
+        await self.installer.install(engine, ctx.report, self._settings.get().pypi_mirror)
         await ctx.report(1.0, f"{self.registry.get(engine).label} 已安装")
 
     def enqueue_renormalize(self) -> list[str]:

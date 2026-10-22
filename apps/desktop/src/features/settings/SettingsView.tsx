@@ -431,6 +431,8 @@ export function SettingsView() {
                 info={info}
                 installJob={installJobs[name]}
                 onInstall={() => installEngine(name)}
+                pypiMirror={settings.pypi_mirror}
+                onPypiMirror={(pypi_mirror) => update({ pypi_mirror })}
                 onChange={(patch) => updateParser(name, patch)}
                 onKey={(k) => setParserKey(name, k)}
                 onTest={() => testParser(name)}

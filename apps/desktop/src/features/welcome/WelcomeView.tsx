@@ -333,6 +333,8 @@ function ParseStep({ settings, onBack, onNext }: { settings: Settings; onBack?: 
           info={info}
           installJob={installJobs[heavy]}
           onInstall={() => void installEngine(heavy)}
+          pypiMirror={settings.pypi_mirror}
+          onPypiMirror={(pypi_mirror) => update({ pypi_mirror })}
           onChange={(patch) =>
             update({ parsers: { ...settings.parsers, [heavy]: { ...settings.parsers[heavy], ...patch } } })
           }
