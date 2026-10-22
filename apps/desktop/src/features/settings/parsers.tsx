@@ -33,9 +33,7 @@ export function urlHost(url: string): string {
 }
 
 const TIERS: { value: RemoteParser["tier"]; label: string }[] = [
-  { value: "flash", label: "flash（最快）" },
-  { value: "basic", label: "basic（与本机相同，推荐）" },
-  { value: "standard", label: "standard（VLM，更准）" },
+  { value: "standard", label: "standard（VLM，推荐）" },
   { value: "advanced", label: "advanced（最准，最慢）" },
 ];
 

@@ -68,10 +68,16 @@ class RemoteParser(_Strict):
 
     mode: Literal["local", "api"] = "local"
     base_url: str = Field(default="", pattern=r"^(https?://\S+)?$")
-    # 仅 MinerU 使用；basic 与本机 effort=medium 同档
-    tier: Literal["flash", "basic", "standard", "advanced"] = "basic"
+    # 仅 MinerU 使用；MinerU API 只支持 standard / advanced（VLM）
+    tier: Literal["standard", "advanced"] = "standard"
     # 用户确认过可以上传 PDF 的公网地址；与 base_url 不同即视为未确认（局域网 / 本机地址无需确认）
     consented_url: str | None = None
+
+    @field_validator("tier", mode="before")
+    @classmethod
+    def _legacy_tier(cls, v: object) -> object:
+        # 旧版本可选的 flash / basic 已不被 API 支持，升级为 standard，免得整组解析设置回退默认
+        return "standard" if v in ("flash", "basic") else v
 
 
 class ParserServices(_Strict):

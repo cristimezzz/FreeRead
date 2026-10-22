@@ -3869,12 +3869,12 @@
               "mineru": {
                 "base_url": "",
                 "mode": "local",
-                "tier": "basic"
+                "tier": "standard"
               },
               "docling": {
                 "base_url": "",
                 "mode": "local",
-                "tier": "basic"
+                "tier": "standard"
               }
             }
           },
@@ -5144,7 +5144,7 @@
             "default": {
               "mode": "local",
               "base_url": "",
-              "tier": "basic"
+              "tier": "standard"
             }
           },
           "docling": {
@@ -5152,7 +5152,7 @@
             "default": {
               "mode": "local",
               "base_url": "",
-              "tier": "basic"
+              "tier": "standard"
             }
           }
         },
@@ -5558,13 +5558,11 @@
           "tier": {
             "type": "string",
             "enum": [
-              "flash",
-              "basic",
               "standard",
               "advanced"
             ],
             "title": "Tier",
-            "default": "basic"
+            "default": "standard"
           },
           "consented_url": {
             "anyOf": [
