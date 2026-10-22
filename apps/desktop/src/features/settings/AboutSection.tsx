@@ -17,8 +17,7 @@ import {
   REPO_URL,
   type UpdateInfo,
 } from "./about";
-import { Icon } from "../../components/icons";
-import { Group, Row } from "./Row";
+import { Group, More, Row } from "./Row";
 
 type UpdateStep =
   | { s: "idle" }
@@ -94,13 +93,9 @@ export function AboutSection({ title }: { title: string }) {
       </Row>
       {step.s === "downloading" && <Progress value={step.progress} className="about-bar" />}
       {info?.available && info.notes.trim() && (
-        <details className="about-more">
-          <summary>
-            <Icon name="chevronRight" size={16} />
-            {info.latest} 更新说明
-          </summary>
+        <More label={`${info.latest} 更新说明`}>
           <div className="about-notes">{plainNotes(info.notes)}</div>
-        </details>
+        </More>
       )}
 
       <h3 className="about-h">贡献者</h3>
