@@ -9,4 +9,5 @@ export const SETTINGS_SECTIONS = [
   { id: "zotero", label: "Zotero" },
   { id: "parse", label: "解析" },
   { id: "privacy", label: "隐私" },
+  { id: "about", label: "关于" },
 ] as const;
