@@ -20,12 +20,13 @@ export interface UpdateInfo {
 }
 
 /** 当前程序的安装方式（src-tauri/src/update.rs 的 InstallKind）。 */
-export type InstallKind = "nsis" | "portable" | "deb" | "rpm" | "aur" | "unknown";
+export type InstallKind = "nsis" | "portable" | "appImage" | "deb" | "rpm" | "aur" | "unknown";
 
 /** 下载包在界面上的叫法。 */
 export const ASSET_LABEL: Record<InstallKind, string> = {
   nsis: "安装包",
   portable: "便携版",
+  appImage: "AppImage",
   deb: "deb 包",
   rpm: "rpm 包",
   aur: "",
@@ -39,6 +40,8 @@ export function downloadedHint(kind: InstallKind, path: string): string {
       return "下载完成，已通过校验。安装时 FreeRead 会关闭，装好后自动重新打开";
     case "portable":
       return `已保存到 ${path}，退出 FreeRead 后解压覆盖原目录即可`;
+    case "appImage":
+      return `已保存到 ${path}（已加上可执行权限），退出 FreeRead 后用它替换旧的 AppImage 即可`;
     case "deb":
       return `已保存到 ${path}，退出 FreeRead 后用 sudo apt install 安装这个文件`;
     case "rpm":
@@ -71,7 +74,7 @@ export async function downloadUpdate(onProgress: (p: number) => void): Promise<s
   }
 }
 
-/** 安装版运行安装包并退出应用；便携版、deb / rpm 在文件管理器里显示下载的包。 */
+/** 安装版运行安装包并退出应用；便携版、AppImage、deb / rpm 在文件管理器里显示下载的包。 */
 export const applyUpdate = () => invoke<void>("apply_update");
 
 let contributors: Promise<Contributor[]> | null = null;

@@ -4,7 +4,7 @@
 
 项目主页：<https://freeread.work>
 
-> 当前版本 **0.2.0**：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
+> 当前版本 **0.2.1**（新增 Linux 版）：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
 
 ## 功能
 
@@ -24,7 +24,7 @@
 在 [Releases](https://github.com/cristimezzz/FreeRead/releases) 下载：
 
 - **Windows 10/11 x64**：安装包（`*-setup.exe`）或便携版（`*-portable.zip`）。程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。
-- **Linux x86_64**（0.2.0 之后的版本起）：Debian / Ubuntu 用 `*_amd64.deb`，Fedora / openSUSE 用 `*.x86_64.rpm`，Arch 从 AUR 安装 `freeread-bin`。需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12、Fedora 36 及更新）。详见[安装说明](https://docs.freeread.work/install)。
+- **Linux x86_64**（0.2.1 起）：任意发行版可用免安装的 `*_amd64.AppImage`；Debian / Ubuntu 用 `*_amd64.deb`，Fedora / openSUSE 用 `*.x86_64.rpm`，Arch 从 AUR 安装 `freeread-bin`。需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12、Fedora 36 及更新）。详见[安装说明](https://docs.freeread.work/install)。
 
 ## 快速上手
 

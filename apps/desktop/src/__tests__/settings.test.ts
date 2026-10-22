@@ -56,6 +56,7 @@ describe("关于：下载完成提示", () => {
   it("按安装方式给出下一步", () => {
     expect(downloadedHint("nsis", "C:/x.exe")).toContain("自动重新打开");
     expect(downloadedHint("portable", "C:/x.zip")).toContain("解压覆盖");
+    expect(downloadedHint("appImage", "/home/a/Downloads/x.AppImage")).toContain("替换旧的 AppImage");
     expect(downloadedHint("deb", "/home/a/Downloads/x.deb")).toContain("apt install");
     expect(downloadedHint("rpm", "/home/a/Downloads/x.rpm")).toContain("dnf install");
   });
