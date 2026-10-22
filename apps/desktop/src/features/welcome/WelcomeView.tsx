@@ -55,7 +55,7 @@ export function WelcomeView() {
           <BrandMark size={40} />
           <div>
             <h1 className="display serif">欢迎使用 FreeRead</h1>
-            <p className="page-sub">花一分钟做好三件事，就可以开始翻译、总结和问答。每一步都可以跳过，以后在设置里修改。</p>
+            <p className="page-sub">静下心来，开启你的阅读之旅。</p>
           </div>
           <Button variant="ghost" small className="welcome-skip" disabled={finishing} onClick={() => void finish(false)}>
             跳过向导
