@@ -32,22 +32,33 @@ interface ItemListProps {
   onSelect?: (item: Item) => void;
   /** 右键（或菜单键 / Shift+F10）：在视口坐标 (x, y) 为该条目弹出菜单 */
   onMenu?: (item: Item, x: number, y: number) => void;
+  /** 批量选中的条目；传了 onCheck 才显示复选框 */
+  checked?: ReadonlySet<string>;
+  /** 勾选 / 取消勾选；range 为 true（Shift）时从上一次勾选的条目连选到这里 */
+  onCheck?: (item: Item, range: boolean) => void;
 }
 
-export function ItemList({ items, onOpen, selectedId, onSelect, onMenu }: ItemListProps) {
+export function ItemList({ items, onOpen, selectedId, onSelect, onMenu, checked, onCheck }: ItemListProps) {
   return (
-    <div className="item-list" role="list">
+    <div
+      className="item-list"
+      role="list"
+      data-checkable={onCheck ? true : undefined}
+      data-checking={checked?.size ? true : undefined}
+    >
       {items.map((it) => {
         const doc = defaultDoc(it);
         const meta = [formatAuthors(it.authors), it.year, it.venue].filter(Boolean).join(" · ");
         const status = doc ? (doc.parse_status ?? "pending") : "none";
         const selected = it.id === selectedId;
+        const isChecked = !!checked?.has(it.id);
         return (
           <div
             key={it.id}
             className="item"
             role="listitem"
             data-selected={selected || undefined}
+            data-checked={isChecked || undefined}
             onContextMenu={(e) => {
               if (!onMenu) return;
               e.preventDefault();
@@ -58,6 +69,18 @@ export function ItemList({ items, onOpen, selectedId, onSelect, onMenu }: ItemLi
               onMenu(it, inside ? e.clientX : r.left + 16, inside ? e.clientY : r.bottom);
             }}
           >
+            {onCheck && (
+              <input
+                type="checkbox"
+                className="item-check"
+                checked={isChecked}
+                readOnly
+                // 键盘用空格勾选当前条目，复选框本身不进 Tab 顺序
+                tabIndex={-1}
+                aria-label={`选择「${it.title || "无标题"}」`}
+                onClick={(e) => onCheck(it, e.shiftKey)}
+              />
+            )}
             <button
               type="button"
               className="item-row"
@@ -66,7 +89,15 @@ export function ItemList({ items, onOpen, selectedId, onSelect, onMenu }: ItemLi
               // 只有选中项可 Tab 进入，其余用方向键移动（没有选中项时第一项可进入）
               tabIndex={selected || (!selectedId && it === items[0]) ? 0 : -1}
               onFocus={() => onSelect?.(it)}
-              onClick={() => onOpen(it)}
+              // Shift 连选时别顺带选中一片文字
+              onMouseDown={(e) => {
+                if (e.shiftKey && onCheck) e.preventDefault();
+              }}
+              onClick={(e) => {
+                // Ctrl / ⌘ 点击勾选，Shift 点击连选；普通点击始终是打开
+                if (onCheck && (e.ctrlKey || e.metaKey || e.shiftKey)) onCheck(it, e.shiftKey);
+                else onOpen(it);
+              }}
             >
               <span className="item-text">
                 <span className="item-title serif">{it.title || "（无标题）"}</span>
