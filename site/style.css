@@ -537,6 +537,21 @@ img {
   margin-left: auto;
 }
 
+/* 站外链接放在右侧，不进 .top-nav（那里的链接都是页内锚点，驱动段落指示线） */
+.top-link {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--ink2);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+}
+
+.top-link:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
 .theme-btn .sun,
 :root[data-theme="dark"] .theme-btn .moon {
   display: none;
