@@ -63,6 +63,31 @@ def test_settings_invalid_stored_value_falls_back_to_default(client):
     assert s["parse_engine"] == "auto" and s["target_lang"] == "en"
 
 
+def test_onboarding_flag(client):
+    ctx = client.app.state.ctx
+    from freeread.infra.db.models import SettingRow
+
+    # 全新安装：显示欢迎向导
+    s = client.get("/settings").json()
+    assert s["onboarding_done"] is False
+    # 显式存过 False（重新打开向导）仍为 False
+    assert client.put("/settings", json=s).json()["onboarding_done"] is False
+    assert client.get("/settings").json()["onboarding_done"] is False
+    # 向导出现之前的老用户：有别的设置行、没有这一项
+    with ctx.sessions.begin() as db:
+        db.delete(db.get(SettingRow, "onboarding_done"))
+    assert client.get("/settings").json()["onboarding_done"] is True
+
+
+def test_onboarding_flag_ignores_non_settings_rows(client):
+    ctx = client.app.state.ctx
+    from freeread.infra.db.models import SettingRow
+
+    with ctx.sessions.begin() as db:
+        db.merge(SettingRow(key="not_an_app_setting", value={"x": 1}))
+    assert client.get("/settings").json()["onboarding_done"] is False
+
+
 def test_jobs_api(client):
     ctx = client.app.state.ctx
     job = ctx.jobs.enqueue("no_handler_yet", {"doc_id": "d_1"})

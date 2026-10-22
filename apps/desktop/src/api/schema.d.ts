@@ -1060,6 +1060,11 @@ export interface components {
              *     }
              */
             zotero: components["schemas"]["ZoteroSettings"];
+            /**
+             * Onboarding Done
+             * @default false
+             */
+            onboarding_done: boolean;
         };
         /** Appearance */
         Appearance: {

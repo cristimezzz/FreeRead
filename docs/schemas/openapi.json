@@ -3942,6 +3942,11 @@
               "source": "auto",
               "data_dir": ""
             }
+          },
+          "onboarding_done": {
+            "type": "boolean",
+            "title": "Onboarding Done",
+            "default": false
           }
         },
         "additionalProperties": false,

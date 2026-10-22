@@ -1287,6 +1287,191 @@ input[type="range"] {
   white-space: pre-wrap;
 }
 
+/* ================================================================ 欢迎向导 */
+
+/* 片头：与启动页同一版式。两页从书脊展开 → 细线从中间画出 → 整体上移淡出；名称不动，从启动页过来不跳。
+   这是全应用唯一超过 --dur-slow 的动效，时长都由三档令牌乘出来，减少动效时归零 */
+.welcome-intro {
+  cursor: default;
+  user-select: none;
+}
+
+.welcome-intro .mark svg {
+  overflow: visible;
+}
+
+.welcome-intro .mark path {
+  transform-box: fill-box;
+  animation: intro-page calc(var(--dur-slow) * 2) var(--ease) var(--dur) both;
+}
+
+.welcome-intro .mark path:first-child {
+  transform-origin: right center;
+}
+
+.welcome-intro .mark path:last-child {
+  transform-origin: left center;
+  animation-delay: calc(var(--dur) + var(--dur-fast));
+}
+
+/* 与 .boot-bar 同高，线画在中间 */
+.welcome-intro-rule {
+  display: flex;
+  align-items: center;
+  width: 48px;
+  height: 3px;
+}
+
+.welcome-intro-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--accent);
+  animation: intro-rule calc(var(--dur-slow) * 2) var(--ease) calc(var(--dur-slow) * 2) both;
+}
+
+.welcome-intro-spacer {
+  visibility: hidden;
+}
+
+.welcome-intro[data-state="leaving"] {
+  animation: intro-out var(--dur-slow) var(--ease-exit) forwards;
+}
+
+@keyframes intro-page {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+}
+
+@keyframes intro-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes intro-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+.welcome {
+  height: 100%;
+  overflow: auto;
+  padding: calc(var(--titlebar-h) + 28px) 24px 64px;
+  animation: fade-in var(--dur-slow) var(--ease);
+}
+
+.welcome-col {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.welcome-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.welcome-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-skip {
+  flex: none;
+}
+
+.welcome-steps {
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.welcome-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 0 4px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--ink3);
+  font-size: 13px;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.welcome-steps li + li {
+  margin-left: 16px;
+}
+
+.welcome-steps i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line2);
+  border-radius: 50%;
+  font-size: 12px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.welcome-steps li[data-done] {
+  color: var(--ink2);
+}
+
+.welcome-steps li[aria-current="step"] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.welcome-steps li[aria-current="step"] i {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.welcome-step {
+  padding-top: 28px;
+  animation: rise-in var(--dur-slow) var(--ease);
+}
+
+.welcome-step > h2 {
+  margin: 0 0 4px;
+  font-size: 21px;
+  font-weight: 500;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.welcome-actions-end {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .welcome-head {
+    flex-wrap: wrap;
+  }
+  .welcome .card .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ================================================================ 文献库 */
 
 .library {
@@ -2424,6 +2609,11 @@ body.resizing .reader-pane {
 
 .settings-col {
   max-width: 760px;
+}
+
+.settings-welcome {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .set-group {

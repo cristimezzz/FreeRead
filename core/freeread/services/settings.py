@@ -127,6 +127,8 @@ class AppSettings(_Strict):
     glossary: GlossarySettings = GlossarySettings()
     kg: KGSettings = KGSettings()
     zotero: ZoteroSettings = ZoteroSettings()
+    # 首次启动的欢迎向导走完或跳过后置 True；老用户见 SettingsService.get
+    onboarding_done: bool = False
 
     @model_validator(mode="after")
     def _check_refs(self) -> "AppSettings":
@@ -147,6 +149,9 @@ class SettingsService:
         with self._sessions() as s:
             stored = {r.key: r.value for r in s.scalars(select(SettingRow))}
         known = {k: v for k, v in stored.items() if k in AppSettings.model_fields}
+        # 没有这一项但存过别的设置：欢迎向导出现之前就在用的老用户，不再引导
+        if known and "onboarding_done" not in known:
+            known["onboarding_done"] = True
         try:
             return AppSettings.model_validate(known)
         except ValueError:
