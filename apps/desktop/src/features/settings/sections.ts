@@ -10,4 +10,5 @@ export const SETTINGS_SECTIONS = [
   { id: "glossary", label: "术语表" },
   { id: "appearance", label: "外观" },
   { id: "privacy", label: "隐私" },
+  { id: "about", label: "关于" },
 ] as const;

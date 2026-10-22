@@ -2879,6 +2879,100 @@ body.resizing .reader-pane {
   margin-top: 14px;
 }
 
+/* 设置 · 关于：更新进度、更新说明、贡献者 */
+.about-bar.bar {
+  display: block;
+  margin: -6px 0 8px;
+}
+
+.about-notes {
+  max-height: 16em;
+  overflow: auto;
+  margin: 6px 0 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink2);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.about-h {
+  margin: 22px 0 4px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.about-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contributors {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contributor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+
+.contributor:hover {
+  border-color: var(--ink3);
+}
+
+.contributor:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.contributor img {
+  flex: none;
+  border-radius: 50%;
+  background: var(--line);
+}
+
+.contributor > span {
+  min-width: 0;
+}
+
+.contributor b,
+.contributor span span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.contributor b {
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.contributor span span {
+  color: var(--ink3);
+  font-size: 12px;
+}
+
 /* ================================================================ 关键帧 */
 
 @keyframes fade-in {

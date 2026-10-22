@@ -15,6 +15,7 @@
 #[cfg(windows)]
 mod job;
 mod keys;
+mod update;
 
 use std::collections::VecDeque;
 use std::net::TcpListener;
@@ -212,6 +213,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(CoreExitState::default());
+            app.manage(update::UpdateState::default());
             match spawn_core(app.handle()) {
                 Ok(sidecar) => {
                     app.manage(sidecar);
@@ -227,7 +229,11 @@ pub fn run() {
             core_info,
             core_status,
             keys::set_api_key,
-            keys::delete_api_key
+            keys::delete_api_key,
+            update::check_update,
+            update::list_contributors,
+            update::download_update,
+            update::apply_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

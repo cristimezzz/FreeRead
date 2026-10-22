@@ -25,6 +25,10 @@ serde_json = "1"
 getrandom = "0.3"
 # 系统钥匙串（Windows 凭据管理器 / macOS Keychain / Secret Service），存 LLM API Key
 keyring = "4.2"
+# 设置页「关于」：查询 GitHub Release 与贡献者、下载更新（src/update.rs）。走系统 TLS（Windows 上是 schannel），不另编 TLS 库
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "system-proxy", "http2"] }
+sha2 = "0.10"
+semver = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.60", features = [
