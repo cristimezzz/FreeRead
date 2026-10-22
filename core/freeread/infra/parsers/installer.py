@@ -3,7 +3,8 @@
 引擎不随安装包分发，由用户在设置里点"安装"后下载到 <engines_root>/<engine>/ 独立环境：
 1. 准备 uv：环境变量 FREEREAD_UV → 之前下载到 <root>/_uv/ 的 → PATH 上的 uv → 下载固定版本（sha256 校验）；
 2. `uv venv --managed-python --relocatable` 建到 <root>/<engine>.partial（Python 由 uv 下载到 <root>/_python/）；
-3. `uv pip install --torch-backend auto` 安装固定版本的引擎包（与 Normalizer 适配的版本一致）；
+3. `uv pip install --torch-backend <...>` 安装固定版本的引擎包（与 Normalizer 适配的版本一致），
+   默认 GPU 版 PyTorch，失败时退回 CPU 版（torch_backends）；
 4. 导入检查通过后改名为 <root>/<engine>。engine_python() 在改名后才存在，装到一半不会被当作已安装。
 模型权重不在这里下载：引擎首次解析时自己下载到 <root>/cache/（engine_env）。
 """
@@ -38,6 +39,10 @@ IMPORT_CHECK = {
     "mineru": "import mineru.backend.analyze",
     "docling": "import docling.document_converter",
 }
+
+# 没检测到 NVIDIA 驱动时默认装的 CUDA 版本（驱动 ≥ 570 可用，支持到 RTX 50 系）
+DEFAULT_CUDA_BACKEND = "cu128"
+CUDA_MACHINES = {"amd64", "x86_64"}
 
 UV_VERSION = "0.12.23"
 # (平台, 架构) → (发布文件名, sha256, 字节数)；来自 GitHub release 的 digest
@@ -83,6 +88,19 @@ class InstallError(RuntimeError):
     pass
 
 
+def torch_backends() -> list[str]:
+    """依次尝试的 uv --torch-backend：默认装 GPU（CUDA）版，失败再退回 CPU 版。
+
+    CUDA 版在没有可用 GPU 的机器上也能用 CPU 跑，所以没检测到显卡驱动时同样先装 GPU 版，
+    之后装上驱动不必重装引擎。检测到 NVIDIA 驱动时用 auto，由 uv 选与驱动匹配的 CUDA 版本。
+    macOS 与 ARM 版 Windows 没有 CUDA 版 PyTorch，交给 auto（CPU / MPS）。
+    """
+    if sys.platform not in ("win32", "linux") or platform.machine().lower() not in CUDA_MACHINES:
+        return ["auto"]
+    gpu = "auto" if shutil.which("nvidia-smi") else DEFAULT_CUDA_BACKEND
+    return [gpu, "cpu"]
+
+
 def _exe(name: str) -> str:
     return f"{name}.exe" if sys.platform == "win32" else name
 
@@ -121,11 +139,20 @@ class EngineInstaller:
         )  # fmt: skip
         python = venv_python(partial)
         await report(0.15, "下载并安装引擎（含 PyTorch，可能有数 GB）")
-        await self._run(
-            [*uv, "pip", "install", "--python", str(python), "--torch-backend", "auto",
-             *ENGINE_PACKAGES[engine]],
-            env, log_path, report, 0.15, "安装引擎",
-        )  # fmt: skip
+        backends = torch_backends()
+        for i, backend in enumerate(backends):
+            try:
+                await self._run(
+                    [*uv, "pip", "install", "--python", str(python), "--torch-backend", backend,
+                     *ENGINE_PACKAGES[engine]],
+                    env, log_path, report, 0.15, "安装引擎",
+                )  # fmt: skip
+                break
+            except InstallError:
+                if i == len(backends) - 1:
+                    raise
+                log.warning("installing %s with torch backend %s failed; retrying", engine, backend)
+                await report(0.15, "GPU 版 PyTorch 安装失败，改装 CPU 版")
         await report(0.95, "检查安装结果")
         await self._run(
             [str(python), "-c", IMPORT_CHECK[engine]],
