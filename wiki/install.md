@@ -7,7 +7,7 @@
 - Windows 10 / 11，x64
 - WebView2 运行时（Windows 11 和较新的 Windows 10 自带；安装包在缺少时会自动安装）
 
-**Linux**（0.2.0 之后的版本起）
+**Linux**（0.2.1 起）
 
 - x86_64，glibc 2.35 以上：Ubuntu 22.04、Debian 12、Fedora 36、openSUSE Tumbleweed、Arch 及更新的发行版
 - WebKitGTK 4.1（包管理器会自动安装）

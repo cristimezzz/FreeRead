@@ -110,11 +110,11 @@
             FreeRead 是本地优先的学术文献阅读器：从 Zotero 导入文献库，把 PDF 重排为易读版式，再用你自己的大模型翻译、总结、问答和抽取知识图谱——每句结论都能跳回原文。
           </p>
           <div class="hero-cta rv" style="--i: 4">
-            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 0.2.0</a>
+            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 0.2.1</a>
             <a class="btn lg" href="https://github.com/cristimezzz/FreeRead"><svg class="ico"><use href="#i-github" /></svg>查看源码</a>
           </div>
           <div class="hero-meta rv" style="--i: 5">
-            <span>Windows 10 / 11 x64</span>
+            <span>Windows 10 / 11 · Linux</span>
             <span>开源 · AGPL-3.0</span>
             <span>数据保存在本机</span>
           </div>
@@ -605,25 +605,41 @@
       <section class="sec" id="download">
         <div class="wrap">
           <div class="sec-head rv">
-            <div class="eyebrow">下载 · 0.2.0</div>
+            <div class="eyebrow">下载 · 0.2.1</div>
             <h2>现在就开始读</h2>
-            <p>支持 Windows 10 / 11 x64。免费、开源，以 AGPL-3.0-or-later 发布。</p>
+            <p>支持 Windows 10 / 11 x64 和 Linux x86_64。免费、开源，以 AGPL-3.0-or-later 发布。</p>
           </div>
           <div class="dl">
             <div class="card rv">
-              <h3>安装包 <span class="rec">推荐</span></h3>
-              <div class="file">FreeRead_0.2.0_x64-setup.exe</div>
+              <h3>Windows 安装包 <span class="rec">推荐</span></h3>
+              <div class="file">FreeRead_0.2.1_x64-setup.exe</div>
               <p>安装到当前用户目录，不需要管理员权限；缺少 WebView2 时自动安装。</p>
-              <a class="btn primary" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.0/FreeRead_0.2.0_x64-setup.exe"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
+              <a class="btn primary" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.1/FreeRead_0.2.1_x64-setup.exe"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
             </div>
             <div class="card rv" style="--i: 1">
-              <h3>便携版</h3>
-              <div class="file">FreeRead_0.2.0_x64-portable.zip</div>
+              <h3>Windows 便携版</h3>
+              <div class="file">FreeRead_0.2.1_x64-portable.zip</div>
               <p>解压后运行 freeread-desktop.exe；文献库和设置仍保存在 %APPDATA%\FreeRead，和安装版共用。</p>
-              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.0/FreeRead_0.2.0_x64-portable.zip"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
+              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.1/FreeRead_0.2.1_x64-portable.zip"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
+            </div>
+            <div class="card rv" style="--i: 2">
+              <h3>Linux AppImage</h3>
+              <div class="file">FreeRead_0.2.1_amd64.AppImage</div>
+              <p>任意发行版免安装：加上可执行权限后直接运行，需要 FUSE 2。</p>
+              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.1/FreeRead_0.2.1_amd64.AppImage"><svg class="ico"><use href="#i-download" /></svg>下载 AppImage</a>
+            </div>
+            <div class="card rv" style="--i: 3">
+              <h3>Linux 软件包</h3>
+              <div class="file">FreeRead_0.2.1_amd64.deb · FreeRead-0.2.1-1.x86_64.rpm</div>
+              <p>Debian / Ubuntu 用 deb，Fedora / openSUSE 用 rpm；Arch 从 AUR 安装 freeread-bin。</p>
+              <div class="btns">
+                <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.1/FreeRead_0.2.1_amd64.deb"><svg class="ico"><use href="#i-download" /></svg>deb</a>
+                <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.1/FreeRead-0.2.1-1.x86_64.rpm"><svg class="ico"><use href="#i-download" /></svg>rpm</a>
+                <a class="btn" href="https://aur.archlinux.org/packages/freeread-bin">AUR</a>
+              </div>
             </div>
           </div>
-          <p class="dl-note rv">程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。所有版本见 <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a>。</p>
+          <p class="dl-note rv">Linux 版需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12、Fedora 36 及更新），详见<a href="https://docs.freeread.work/install">安装说明</a>。程序暂未签名，Windows 的 SmartScreen 提示时选"更多信息 → 仍要运行"。所有版本见 <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a>。</p>
 
           <ol class="quick">
             <li class="rv"><b>导入文献</b><br />打开 Zotero 7（可选），在文献库里点"从 Zotero 同步"，或用"导入 PDF"。</li>

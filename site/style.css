@@ -2095,6 +2095,16 @@ img {
   overflow-wrap: anywhere;
 }
 
+.dl .card .btns .btn {
+  flex: 1;
+}
+
+.dl .card .btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .dl .card p {
   flex: 1;
   margin: 8px 0 18px;
