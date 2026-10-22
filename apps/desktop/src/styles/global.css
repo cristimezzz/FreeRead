@@ -2662,6 +2662,47 @@ body.resizing .reader-pane {
   gap: 8px;
 }
 
+/* 分组里默认折叠的次要设置 */
+.set-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 4px 8px 4px 2px;
+  border-radius: 6px;
+  color: var(--ink2);
+  font-size: 13px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.set-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.set-more > summary:hover {
+  color: var(--ink);
+}
+
+.set-more > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.set-more > summary .ico {
+  transition: transform var(--dur) var(--ease);
+}
+
+.set-more[open] > summary .ico {
+  transform: rotate(90deg);
+}
+
+.set-more[open] > summary {
+  margin-bottom: 2px;
+}
+
 .set-row .row-bar.bar {
   display: block;
   width: 220px;
