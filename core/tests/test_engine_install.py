@@ -20,7 +20,10 @@ if args[0] == "venv":
     print("Creating virtual environment at:", args[-1])
 elif args[0] == "pip":
     print("Resolved 3 packages")
-    if Path(__file__).with_name("fail").exists():
+    backend = args[args.index("--torch-backend") + 1]
+    if Path(__file__).with_name("fail").exists() or (
+        Path(__file__).with_name("fail-gpu").exists() and backend != "cpu"
+    ):
         print("error: no matching distribution", file=sys.stderr)
         sys.exit(2)
     print("Installed 3 packages")
@@ -36,6 +39,7 @@ def fake(tmp_path, monkeypatch):
     monkeypatch.setattr(
         installer, "IMPORT_CHECK", {"mineru": "import json", "docling": "import json"}
     )
+    monkeypatch.setattr(installer, "torch_backends", lambda: ["cu128", "cpu"])
     root = tmp_path / "engines"
     return script, root, EngineInstaller(root, tmp_path, [sys.executable, str(script)])
 
@@ -54,7 +58,9 @@ async def test_install_success(fake, tmp_path):
     assert "Installed 3 packages" in messages
     assert [p for p, _ in reports] == sorted(p for p, _ in reports)
     log = (tmp_path / "engine-install-mineru.log").read_text(encoding="utf-8")
-    assert "mineru[torch]==4.0.12" in log and "--torch-backend auto" in log
+    assert "mineru[torch]==4.0.12" in log and "--torch-backend cu128" in log
+    assert "--torch-backend cpu" not in log
+    assert "--default-index" not in log
 
 
 async def test_install_failure_leaves_no_engine(fake):
@@ -71,6 +77,56 @@ async def test_install_failure_leaves_no_engine(fake):
     (script.parent / "fail").unlink()
     await inst.install("docling", report)
     assert (root / "docling").is_dir()
+
+
+async def test_install_falls_back_to_cpu_torch(fake, tmp_path):
+    script, root, inst = fake
+    (script.parent / "fail-gpu").touch()
+    messages: list[str] = []
+
+    async def report(p: float, msg: str) -> None:
+        messages.append(msg)
+
+    await inst.install("mineru", report)
+    assert (root / "mineru").is_dir()
+    assert "GPU 版 PyTorch 安装失败，改装 CPU 版" in messages
+    log = (tmp_path / "engine-install-mineru.log").read_text(encoding="utf-8")
+    assert log.index("--torch-backend cu128") < log.index("--torch-backend cpu")
+
+
+@pytest.mark.parametrize(
+    ("plat", "machine", "smi", "expected"),
+    [
+        ("win32", "AMD64", None, ["cu128", "cpu"]),
+        ("win32", "AMD64", "nvidia-smi", ["auto", "cpu"]),
+        ("linux", "x86_64", None, ["cu128", "cpu"]),
+        ("win32", "ARM64", None, ["auto"]),
+        ("darwin", "arm64", None, ["auto"]),
+    ],
+)
+def test_torch_backends(monkeypatch, plat, machine, smi, expected):
+    monkeypatch.setattr(installer.sys, "platform", plat)
+    monkeypatch.setattr(installer.platform, "machine", lambda: machine)
+    monkeypatch.setattr(installer.shutil, "which", lambda name: smi)
+    assert installer.torch_backends() == expected
+
+
+async def test_install_uses_pypi_mirror(fake, tmp_path):
+    _, _, inst = fake
+
+    async def report(p: float, msg: str) -> None:
+        pass
+
+    mirror = "https://pypi.tuna.tsinghua.edu.cn/simple"
+    await inst.install("docling", report, mirror)
+    log = (tmp_path / "engine-install-docling.log").read_text(encoding="utf-8")
+    assert f"--default-index {mirror}" in log
+
+
+def test_settings_pypi_mirror(client):
+    s = client.get("/settings").json()
+    assert s["pypi_mirror"] == ""
+    assert client.put("/settings", json=s | {"pypi_mirror": "not a url"}).status_code == 422
 
 
 async def test_install_unknown_engine(fake):

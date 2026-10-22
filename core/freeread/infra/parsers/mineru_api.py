@@ -56,7 +56,7 @@ class MinerUApiParser:
         self,
         base_url: str,
         api_key: str | None = None,
-        tier: str = "basic",
+        tier: str = "standard",
         *,
         transport: httpx.AsyncBaseTransport | None = None,
         poll_interval: float = 1.0,

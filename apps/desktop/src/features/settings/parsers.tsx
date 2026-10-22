@@ -33,10 +33,18 @@ export function urlHost(url: string): string {
 }
 
 const TIERS: { value: RemoteParser["tier"]; label: string }[] = [
-  { value: "flash", label: "flash（最快）" },
-  { value: "basic", label: "basic（与本机相同，推荐）" },
-  { value: "standard", label: "standard（VLM，更准）" },
+  { value: "standard", label: "standard（VLM，推荐）" },
   { value: "advanced", label: "advanced（最准，最慢）" },
+];
+
+const CUSTOM_MIRROR = "custom";
+const PYPI_MIRRORS: { value: string; label: string }[] = [
+  { value: "", label: "官方 PyPI" },
+  { value: "https://pypi.tuna.tsinghua.edu.cn/simple", label: "清华大学" },
+  { value: "https://mirrors.aliyun.com/pypi/simple", label: "阿里云" },
+  { value: "https://mirrors.ustc.edu.cn/pypi/simple", label: "中国科学技术大学" },
+  { value: "https://mirrors.cloud.tencent.com/pypi/simple", label: "腾讯云" },
+  { value: CUSTOM_MIRROR, label: "自定义…" },
 ];
 
 const URL_PLACEHOLDER: Record<RemoteEngine, string> = {
@@ -51,6 +59,9 @@ interface RemoteParserCardProps {
   info: Engine | undefined;
   installJob: Job | undefined;
   onInstall: () => void;
+  /** 本机安装用的 PyPI 镜像（设置 pypi_mirror，两个引擎共用） */
+  pypiMirror: string;
+  onPypiMirror: (url: string) => void;
   onChange: (patch: Partial<RemoteParser>) => void;
   onKey: (key: string | null) => void;
   onTest: () => Promise<boolean | null>;
@@ -63,6 +74,8 @@ export function RemoteParserCard({
   info,
   installJob,
   onInstall,
+  pypiMirror,
+  onPypiMirror,
   onChange,
   onKey,
   onTest,
@@ -158,22 +171,35 @@ export function RemoteParserCard({
           )}
         </>
       )}
-      {!isApi && <LocalInstall label={label} info={info} job={installJob} onInstall={onInstall} />}
+      {!isApi && (
+        <LocalInstall
+          label={label}
+          info={info}
+          job={installJob}
+          onInstall={onInstall}
+          mirror={pypiMirror}
+          onMirror={onPypiMirror}
+        />
+      )}
     </div>
   );
 }
 
-/** 本机模式：未安装时提供安装，安装中显示进度，失败时显示原因并可重试。 */
+/** 本机模式：未安装时提供安装（可选 PyPI 镜像），安装中显示进度，失败时显示原因并可重试。 */
 function LocalInstall({
   label,
   info,
   job,
   onInstall,
+  mirror,
+  onMirror,
 }: {
   label: string;
   info: Engine | undefined;
   job: Job | undefined;
   onInstall: () => void;
+  mirror: string;
+  onMirror: (url: string) => void;
 }) {
   const active = job && (job.status === "queued" || job.status === "running");
   if (active) {
@@ -192,21 +218,57 @@ function LocalInstall({
   if (info?.unavailable_reason !== "not_installed") return null;
   const failed = job?.status === "failed";
   return (
-    <Row
-      title={failed ? "安装失败" : `本机未安装 ${label}`}
-      desc={
-        failed ? (
-          <span className="install-err">{job.error}</span>
-        ) : (
-          <>
-            安装会下载 Python 3.12、PyTorch 与 {label}（共数 GB）到独立环境，首次解析时还会下载模型。也可以改用 API 服务。
-          </>
-        )
-      }
-    >
-      <Button small variant={failed ? undefined : "primary"} onClick={onInstall}>
-        {failed ? "重试安装" : "安装"}
-      </Button>
+    <>
+      <PypiMirrorRow mirror={mirror} onMirror={onMirror} />
+      <Row
+        title={failed ? "安装失败" : `本机未安装 ${label}`}
+        desc={
+          failed ? (
+            <span className="install-err">{job.error}</span>
+          ) : (
+            <>
+              安装会下载 Python 3.12、PyTorch 与 {label}（共数 GB）到独立环境，首次解析时还会下载模型。也可以改用 API 服务。
+            </>
+          )
+        }
+      >
+        <Button small variant={failed ? undefined : "primary"} onClick={onInstall}>
+          {failed ? "重试安装" : "安装"}
+        </Button>
+      </Row>
+    </>
+  );
+}
+
+/** PyPI 镜像：常用国内源或自定义 simple 索引地址。 */
+function PypiMirrorRow({ mirror, onMirror }: { mirror: string; onMirror: (url: string) => void }) {
+  const known = PYPI_MIRRORS.some((m) => m.value === mirror && m.value !== CUSTOM_MIRROR);
+  const [custom, setCustom] = useState(!known);
+  return (
+    <Row title="PyPI 镜像" desc="安装时下载 Python 包的源；PyTorch 仍从 PyTorch 官方源下载">
+      <span className="mirror-pick">
+        <Select
+          label="PyPI 镜像"
+          hideLabel
+          value={custom ? CUSTOM_MIRROR : mirror}
+          options={PYPI_MIRRORS}
+          onValue={(v) => {
+            setCustom(v === CUSTOM_MIRROR);
+            if (v !== CUSTOM_MIRROR) onMirror(v);
+          }}
+        />
+        {custom && (
+          <TextField
+            label="自定义 PyPI 镜像"
+            hideLabel
+            mono
+            placeholder="https://…/simple"
+            value={mirror}
+            commitOnChange
+            onValue={(v) => onMirror(v.trim())}
+          />
+        )}
+      </span>
     </Row>
   );
 }

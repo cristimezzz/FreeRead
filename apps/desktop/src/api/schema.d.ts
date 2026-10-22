@@ -999,12 +999,12 @@ export interface components {
              *       "mineru": {
              *         "base_url": "",
              *         "mode": "local",
-             *         "tier": "basic"
+             *         "tier": "standard"
              *       },
              *       "docling": {
              *         "base_url": "",
              *         "mode": "local",
-             *         "tier": "basic"
+             *         "tier": "standard"
              *       }
              *     }
              */
@@ -1015,6 +1015,11 @@ export interface components {
              * @enum {string}
              */
             parse_device: "auto" | "gpu" | "cpu";
+            /**
+             * Pypi Mirror
+             * @default
+             */
+            pypi_mirror: string;
             /**
              * Providers
              * @default []
@@ -1508,7 +1513,7 @@ export interface components {
              * @default {
              *       "mode": "local",
              *       "base_url": "",
-             *       "tier": "basic"
+             *       "tier": "standard"
              *     }
              */
             mineru: components["schemas"]["RemoteParser"];
@@ -1516,7 +1521,7 @@ export interface components {
              * @default {
              *       "mode": "local",
              *       "base_url": "",
-             *       "tier": "basic"
+             *       "tier": "standard"
              *     }
              */
             docling: components["schemas"]["RemoteParser"];
@@ -1683,10 +1688,10 @@ export interface components {
             base_url: string;
             /**
              * Tier
-             * @default basic
+             * @default standard
              * @enum {string}
              */
-            tier: "flash" | "basic" | "standard" | "advanced";
+            tier: "standard" | "advanced";
             /** Consented Url */
             consented_url?: string | null;
         };

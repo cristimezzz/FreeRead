@@ -99,7 +99,7 @@ class FakeMinerU:
 
 def mineru(server, url="https://mineru.example.com/api", key=KEY):
     return MinerUApiParser(
-        url, key, "basic", transport=httpx.MockTransport(server), poll_interval=0
+        url, key, "standard", transport=httpx.MockTransport(server), poll_interval=0
     )
 
 
@@ -114,14 +114,14 @@ async def test_mineru_upload_parse_download(tmp_path):
         "engine": "mineru",
         "engine_version": "4.0.12",
         "transport": "api",
-        "tier": "basic",
+        "tier": "standard",
     }
     by_path = {(r.method, r.url.path): r for r in server.requests}
     submit = json.loads(by_path[("POST", "/api/v1/parse/jobs")].content)
     assert submit == {
         "files": [{"source": {"type": "file_id", "file_id": "f_src"}}],
         "output_formats": ["middle_json"],
-        "tier": "basic",
+        "tier": "standard",
     }
     assert by_path[("POST", "/api/v1/uploads")].headers["authorization"] == f"Bearer {KEY}"
     # 预签名上传地址不带密钥，内容是 PDF 原文
@@ -140,7 +140,7 @@ async def test_mineru_loopback_local_source_skips_upload(tmp_path):
     p = MinerUApiParser(
         "http://127.0.0.1:8000/api",
         None,
-        "basic",
+        "standard",
         transport=httpx.MockTransport(server),
         poll_interval=0,
     )
@@ -313,7 +313,7 @@ async def test_mineru_cancel_notifies_server(tmp_path):
     p = MinerUApiParser(
         "https://mineru.example.com/api",
         KEY,
-        "basic",
+        "standard",
         transport=httpx.MockTransport(server),
         poll_interval=10,
     )
@@ -470,7 +470,7 @@ def test_settings_parsers_defaults_and_fallback(client):
     assert s["parsers"]["mineru"] == {
         "mode": "local",
         "base_url": "",
-        "tier": "basic",
+        "tier": "standard",
         "consented_url": None,
     }
     from freeread.infra.db.models import SettingRow
@@ -478,3 +478,15 @@ def test_settings_parsers_defaults_and_fallback(client):
     with client.app.state.ctx.sessions.begin() as db:
         db.merge(SettingRow(key="parsers", value={"mineru": {"mode": "cloud"}}))
     assert client.get("/settings").json()["parsers"]["mineru"]["mode"] == "local"
+
+
+def test_settings_legacy_mineru_tier_upgraded(client):
+    from freeread.infra.db.models import SettingRow
+
+    legacy = {"mode": "api", "base_url": "https://mineru.net/api", "tier": "basic"}
+    with client.app.state.ctx.sessions.begin() as db:
+        db.merge(SettingRow(key="parsers", value={"mineru": legacy}))
+    # API 已不支持 basic：升级为 standard，其余配置保留
+    mineru = client.get("/settings").json()["parsers"]["mineru"]
+    assert mineru["tier"] == "standard" and mineru["mode"] == "api"
+    assert mineru["base_url"] == "https://mineru.net/api"
