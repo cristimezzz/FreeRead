@@ -25,12 +25,22 @@
 |---|---|
 | `FreeRead_<版本>_x64-setup.exe` | Windows 大多数用户。安装到当前用户目录（`%LOCALAPPDATA%\FreeRead`），不需要管理员权限，有开始菜单快捷方式和卸载入口 |
 | `FreeRead_<版本>_x64-portable.zip` | Windows 上不想安装、或没有权限运行安装程序时。解压到任意目录，运行 `freeread-desktop.exe` |
+| `FreeRead_<版本>_amd64.AppImage` | 任意 Linux 发行版，免安装，单个文件 |
 | `FreeRead_<版本>_amd64.deb` | Debian、Ubuntu 及其衍生版 |
 | `FreeRead-<版本>-1.x86_64.rpm` | Fedora、openSUSE 等 |
 
 便携版只是"免安装"：文献库、设置、缓存仍保存在 `%APPDATA%\FreeRead`，API Key 仍在系统凭据管理器里，与安装版共用，不会随文件夹一起带走。解压后请保持 `freeread-desktop.exe` 与 `freeread-core` 文件夹在同一目录。
 
 ## Linux 安装
+
+AppImage（任意发行版，不需要 root）：
+
+```bash
+chmod +x FreeRead_<版本>_amd64.AppImage
+./FreeRead_<版本>_amd64.AppImage
+```
+
+AppImage 需要 FUSE 2（Ubuntu 22.04 起要先 `sudo apt install libfuse2`，Ubuntu 24.04 起是 `libfuse2t64`）；装不了时可以用 `./FreeRead_<版本>_amd64.AppImage --appimage-extract-and-run` 运行。AppImage 不会加到应用菜单里，可以用 AppImageLauncher 之类的工具集成。
 
 Debian / Ubuntu：
 
@@ -52,7 +62,7 @@ Arch：从 AUR 安装 [`freeread-bin`](https://aur.archlinux.org/packages/freere
 yay -S freeread-bin
 ```
 
-装好后在应用菜单里找 FreeRead。程序装在 `/usr/lib/FreeRead`，文献库、设置、缓存保存在 `~/.local/share/FreeRead`（设置了 `XDG_DATA_HOME` 时在其下），API Key 保存在 Secret Service（GNOME Keyring / KWallet）里。
+用包管理器装好后在应用菜单里找 FreeRead。程序装在 `/usr/lib/FreeRead`；无论哪种方式，文献库、设置、缓存保存在 `~/.local/share/FreeRead`（设置了 `XDG_DATA_HOME` 时在其下），API Key 保存在 Secret Service（GNOME Keyring / KWallet）里。
 
 ## 首次运行提示"Windows 已保护你的电脑"
 
@@ -64,6 +74,7 @@ FreeRead 目前没有代码签名，SmartScreen 会拦截首次运行。点 **�
 
 - **Windows 安装版**：下载完点安装，FreeRead 会关闭，安装包以更新模式运行（只显示进度、保留数据），装好后自动重新打开。
 - **Windows 便携版**：下载到“下载”文件夹并在资源管理器里选中，由你解压替换旧的 `freeread-desktop.exe` 和 `freeread-core` 文件夹。
+- **Linux AppImage**：下载新的 AppImage 到“下载”文件夹（已加上可执行权限）并打开该文件夹，退出 FreeRead 后用它替换旧文件即可。
 - **Linux deb / rpm**：下载同类安装包到“下载”文件夹并打开该文件夹，退出 FreeRead 后用上面的 `apt install` / `dnf install` 命令安装新包即可覆盖旧版本。
 - **AUR**：不在应用里下载，用 AUR 助手更新（例如 `yay -Syu`）。
 
@@ -80,6 +91,8 @@ sudo apt remove free-read      # Debian / Ubuntu
 sudo dnf remove free-read      # Fedora
 yay -R freeread-bin            # Arch
 ```
+
+AppImage 直接删掉文件即可。
 
 卸载不会删除数据。要彻底清除，再删掉 `~/.local/share/FreeRead`，并在“密码和密钥”（Seahorse）或 KWallet 里删除名为 FreeRead 的条目。
 

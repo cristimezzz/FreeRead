@@ -3,8 +3,9 @@ name: Desktop build
 # 打包 sidecar（PyInstaller onedir，经 bundle.resources 安装）+ Tauri 安装包，作为 artifact 上传：
 # - Windows：NSIS 安装包和便携版 zip，在干净的 runner 上静默安装 / 解压，复测体积、启动时间和退出残留
 #   （scripts/verify_installed.ps1）；
-# - Linux x86_64：deb 和 rpm（ubuntu-22.04 构建，glibc 2.35 起可用），装 deb 后冒烟 sidecar、
-#   在 Xvfb 里启动壳并检查退出残留，rpm 在 Fedora 容器里装一遍，AUR 的 PKGBUILD 在 Arch 容器里打一遍。
+# - Linux x86_64：AppImage、deb 和 rpm（ubuntu-22.04 构建，glibc 2.35 起可用），装 deb 后冒烟 sidecar、
+#   在 Xvfb 里启动壳并检查退出残留，AppImage 同样在 Xvfb 里启动一遍，rpm 在 Fedora 容器里装一遍，
+#   AUR 的 PKGBUILD 在 Arch 容器里打一遍。
 #   AUR 包在 Release 发布后由 aur.yml 推送。
 # 手动触发，或在打包相关文件变更的 PR 上触发；合并到 main 时也跑一次，
 # 为 PR 预热 Rust 缓存（PR 分支能读到 main 的缓存，main 读不到 PR 的，见 docs/build-speed.md）。
@@ -133,7 +134,7 @@ jobs:
       - name: System packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf xvfb gnome-keyring gdb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf xvfb gnome-keyring gdb libfuse2
       - uses: astral-sh/setup-uv@v10.3.0
       - uses: actions/setup-node@v7
         with:
@@ -150,15 +151,15 @@ jobs:
         shell: pwsh
         run: ./scripts/build_sidecar.ps1
       # tauri.conf.json 的 targets 只写了 nsis，Linux 的包类型在这里指定
-      - name: Build deb and rpm
+      - name: Build AppImage, deb and rpm
         working-directory: apps/desktop
         run: |
           npm ci
-          npm run tauri build -- --bundles deb,rpm
+          npm run tauri build -- --bundles deb,rpm,appimage
       - name: Collect packages
         run: |
           mkdir -p dist
-          cp apps/desktop/src-tauri/target/release/bundle/deb/*.deb apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm dist/
+          cp apps/desktop/src-tauri/target/release/bundle/deb/*.deb apps/desktop/src-tauri/target/release/bundle/rpm/*.rpm apps/desktop/src-tauri/target/release/bundle/appimage/*.AppImage dist/
           ls -l dist
       - uses: actions/upload-artifact@v7
         with:
@@ -178,6 +179,19 @@ jobs:
         run: |
           dbus-run-session -- scripts/ci/linux_launch_smoke.sh "$SHELL_BIN" "$CORE_DIR"
           echo "- Xvfb 启动壳、sidecar 随壳退出：通过" >> "$GITHUB_STEP_SUMMARY"
+      # 先解包检查 sidecar 在 AppImage 里且能运行（linuxdeploy 会处理 AppDir 里的 ELF），
+      # 再经 FUSE 挂载直接运行 AppImage，和用户双击一样
+      - name: Run AppImage under Xvfb
+        run: |
+          appimage=$(realpath dist/*.AppImage)
+          chmod +x "$appimage"
+          (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract > /dev/null)
+          core=$(find "$RUNNER_TEMP/squashfs-root" -path '*/freeread-core/freeread-core' -type f | head -n1)
+          [ -n "$core" ] || { echo "AppImage 里没有 freeread-core"; exit 1; }
+          echo "sidecar：${core#"$RUNNER_TEMP/squashfs-root"}"
+          "$core" --help > /dev/null
+          dbus-run-session -- scripts/ci/linux_launch_smoke.sh "$appimage" '/tmp/\.mount_[^/]*/usr/lib/[^/]*/freeread-core'
+          { echo "- AppImage 大小：$(du -h "$appimage" | cut -f1)"; echo "- AppImage 在 Xvfb 里启动壳、sidecar 随壳退出：通过"; } >> "$GITHUB_STEP_SUMMARY"
       - name: Install rpm on Fedora
         run: |
           docker run --rm -v "$PWD/dist:/dist:ro" -e CORE_DIR fedora:42 bash -euc '

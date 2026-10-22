@@ -1,11 +1,12 @@
 //! 检查与下载更新、列出贡献者：数据来自 GitHub 上的 Release 与仓库贡献者，只在设置页「关于」里用到。
 //!
 //! 不用 tauri-plugin-updater：它要签名密钥和 latest.json，而 Release 只附 NSIS 安装包、便携版 zip
-//! 和 deb / rpm（.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
+//! 和 AppImage / deb / rpm（.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
 //!
 //! - 安装版（exe 旁边有 NSIS 的 uninstall.exe）：下载 `*-setup.exe` 到临时目录，以 `/P /UPDATE /R`
 //!   运行（与 tauri-plugin-updater 相同：只显示进度、跳过重装询问、不删数据、装完重新打开），随即退出；
 //! - 便携版：下载 `*-portable.zip` 到「下载」文件夹，在资源管理器里选中，由用户自己解压替换；
+//! - Linux AppImage：下载新的 AppImage 到「下载」文件夹（加上可执行权限）并打开该文件夹，由用户替换旧文件；
 //! - Linux deb / rpm：下载同类包到「下载」文件夹并打开该文件夹，由用户用包管理器安装（要 root）；
 //! - AUR（Arch 上装的 freeread-bin，是 deb 解包的）：不下载，由 AUR 助手更新。
 
@@ -84,6 +85,8 @@ pub enum InstallKind {
     Portable,
     Deb,
     Rpm,
+    /// Linux AppImage
+    AppImage,
     /// Arch 上从 AUR 装的 freeread-bin
     Aur,
     /// 认不出来（开发构建、自己解包的等），只给 Release 链接
@@ -98,6 +101,7 @@ impl InstallKind {
             Self::Portable => Some("-portable.zip"),
             Self::Deb => Some("_amd64.deb"),
             Self::Rpm => Some(".x86_64.rpm"),
+            Self::AppImage => Some("_amd64.AppImage"),
             Self::Aur | Self::Unknown => None,
         }
     }
@@ -172,6 +176,7 @@ fn install_kind() -> InstallKind {
         }
         Some(BundleType::Deb) => InstallKind::Deb,
         Some(BundleType::Rpm) => InstallKind::Rpm,
+        Some(BundleType::AppImage) => InstallKind::AppImage,
         _ => InstallKind::Unknown,
     }
 }
@@ -291,11 +296,17 @@ pub async fn download_update(
     }
     let _ = std::fs::remove_file(&dest);
     std::fs::rename(&part, &dest).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    if install_kind() == InstallKind::AppImage {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(0o755))
+            .map_err(|e| e.to_string())?;
+    }
     *state.downloaded.lock().unwrap() = Some(dest.clone());
     Ok(dest.display().to_string())
 }
 
-/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；便携版、deb / rpm：在文件管理器里显示下载的包。
+/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；便携版、AppImage、deb / rpm：在文件管理器里显示下载的包。
 #[tauri::command]
 pub fn apply_update(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), String> {
     let path = state
@@ -373,6 +384,7 @@ mod tests {
             asset("FreeRead_0.2.0_x64-setup.exe"),
             asset("FreeRead_0.2.0_amd64.deb"),
             asset("FreeRead-0.2.0-1.x86_64.rpm"),
+            asset("FreeRead_0.2.0_amd64.AppImage"),
         ];
         let name = |kind| pick_asset(&assets, kind).map(|a| a.name.as_str());
         assert_eq!(
@@ -385,6 +397,10 @@ mod tests {
         );
         assert_eq!(name(InstallKind::Deb), Some("FreeRead_0.2.0_amd64.deb"));
         assert_eq!(name(InstallKind::Rpm), Some("FreeRead-0.2.0-1.x86_64.rpm"));
+        assert_eq!(
+            name(InstallKind::AppImage),
+            Some("FreeRead_0.2.0_amd64.AppImage")
+        );
         assert_eq!(name(InstallKind::Aur), None);
         assert_eq!(name(InstallKind::Unknown), None);
         assert!(pick_asset(&assets[..1], InstallKind::Nsis).is_none());
