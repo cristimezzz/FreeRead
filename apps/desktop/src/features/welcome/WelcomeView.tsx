@@ -6,6 +6,7 @@ import { api, unwrap } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
 import { BrandMark } from "../../components/icons";
+import { exitMs } from "../../components/motion";
 import { Button, Segmented, TextField } from "../../components/ui";
 import {
   REMOTE_ENGINES,
@@ -27,7 +28,10 @@ export function WelcomeView() {
   const settings = useApp((s) => s.settings);
   const [step, setStep] = useState(0);
   const [finishing, setFinishing] = useState(false);
+  // 用户要求减少动效时不播片头
+  const [intro, setIntro] = useState(() => exitMs() > 0);
   if (!settings) return null;
+  if (intro) return <WelcomeIntro onDone={() => setIntro(false)} />;
 
   const finish = async (syncZotero: boolean) => {
     const { saveSettings, toast, navigate } = useApp.getState();
@@ -77,6 +81,51 @@ export function WelcomeView() {
           {step === 2 && <ImportStep settings={settings} busy={finishing} onBack={back} onFinish={finish} />}
         </section>
       </div>
+    </div>
+  );
+}
+
+/** 片头停留多久后开始退场（毫秒），之后淡出 INTRO_EXIT_MS 进入向导；点击或按键可跳过。 */
+const INTRO_HOLD_MS = 1800;
+const INTRO_EXIT_MS = 280;
+
+/**
+ * 进入向导前的片头：Logo 的两页从书脊处展开，启动页进度条的位置上画出一道强调色细线，然后淡出。
+ * 版式与启动页（.boot）相同，从启动页过来时 Logo 和名称原地不动。
+ */
+function WelcomeIntro({ onDone }: { onDone: () => void }) {
+  const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLeaving(true), INTRO_HOLD_MS);
+    const skip = () => setLeaving(true);
+    window.addEventListener("keydown", skip);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("keydown", skip);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!leaving) return;
+    const t = setTimeout(onDone, INTRO_EXIT_MS);
+    return () => clearTimeout(t);
+  }, [leaving]);
+
+  return (
+    <div
+      className="boot welcome-intro"
+      data-state={leaving ? "leaving" : undefined}
+      role="presentation"
+      onClick={() => setLeaving(true)}
+    >
+      <BrandMark size={56} />
+      <div className="boot-name serif">FreeRead</div>
+      {/* 占住启动页进度条和状态文字的位置，Logo 与名称才不会移动 */}
+      <span className="welcome-intro-rule" />
+      <p aria-hidden="true" className="welcome-intro-spacer">
+        FreeRead
+      </p>
     </div>
   );
 }

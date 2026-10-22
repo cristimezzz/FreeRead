@@ -1289,10 +1289,80 @@ input[type="range"] {
 
 /* ================================================================ 欢迎向导 */
 
+/* 片头：与启动页同一版式。两页从书脊展开 → 细线从中间画出 → 整体上移淡出；名称不动，从启动页过来不跳。
+   这是全应用唯一超过 --dur-slow 的动效，时长都由三档令牌乘出来，减少动效时归零 */
+.welcome-intro {
+  cursor: default;
+  user-select: none;
+}
+
+.welcome-intro .mark svg {
+  overflow: visible;
+}
+
+.welcome-intro .mark path {
+  transform-box: fill-box;
+  animation: intro-page calc(var(--dur-slow) * 2) var(--ease) var(--dur) both;
+}
+
+.welcome-intro .mark path:first-child {
+  transform-origin: right center;
+}
+
+.welcome-intro .mark path:last-child {
+  transform-origin: left center;
+  animation-delay: calc(var(--dur) + var(--dur-fast));
+}
+
+/* 与 .boot-bar 同高，线画在中间 */
+.welcome-intro-rule {
+  display: flex;
+  align-items: center;
+  width: 48px;
+  height: 3px;
+}
+
+.welcome-intro-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--accent);
+  animation: intro-rule calc(var(--dur-slow) * 2) var(--ease) calc(var(--dur-slow) * 2) both;
+}
+
+.welcome-intro-spacer {
+  visibility: hidden;
+}
+
+.welcome-intro[data-state="leaving"] {
+  animation: intro-out var(--dur-slow) var(--ease-exit) forwards;
+}
+
+@keyframes intro-page {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+}
+
+@keyframes intro-rule {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes intro-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
 .welcome {
   height: 100%;
   overflow: auto;
   padding: calc(var(--titlebar-h) + 28px) 24px 64px;
+  animation: fade-in var(--dur-slow) var(--ease);
 }
 
 .welcome-col {
