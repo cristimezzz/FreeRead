@@ -57,13 +57,15 @@ if __name__ == "__main__":
 # Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上；
 # 迁移脚本里 import 的 alembic.op / sqlalchemy 方言也要收集（静态分析看不到）。
 # PyMuPDF 快速解析器用 importlib.metadata 取版本号，要带上包元数据。
-# sqlite-vec 的 vec0.dll / vec0.so 在包目录里、由 sqlite_vec.loadable_path() 按路径加载，静态分析看不到。
+# sqlite-vec 的 vec0.dll / vec0.so 在包目录里、由 sqlite_vec.loadable_path() 按路径加载，静态分析看不到；
+# 用 --add-binary 显式带上：--collect-binaries 在 Linux 上只认 lib*.so，会漏掉 vec0.so。
 # onnxruntime / tokenizers 由 pyinstaller-hooks-contrib 的 hook 收集原生库；嵌入模型本身不打包，首次使用时下载。
 # 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Prompts = Join-Path $Core "prompts"
 # 重型引擎的包装脚本由引擎自己的 Python 运行（不是 sidecar），以源文件带上，运行时在 sys._MEIPASS/engines。
 $EngineScripts = Join-Path $Root "scripts/engines"
+$VecPath = Join-Path (& $Python -c "import os, sqlite_vec; print(os.path.dirname(sqlite_vec.__file__))") $VecLib
 $Dist = Join-Path $Build "dist"
 
 Write-Host "==> PyInstaller --onedir"
@@ -73,7 +75,7 @@ Write-Host "==> PyInstaller --onedir"
     --collect-submodules alembic `
     --hidden-import sqlalchemy.dialects.sqlite `
     --copy-metadata pymupdf `
-    --collect-binaries sqlite_vec `
+    --add-binary "${VecPath}${Sep}sqlite_vec" `
     --collect-binaries onnxruntime `
     --add-data "${Migrations}${Sep}freeread/infra/db/migrations" `
     --add-data "${Prompts}${Sep}prompts" `
