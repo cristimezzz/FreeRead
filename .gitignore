@@ -41,3 +41,8 @@ Thumbs.db
 core/pytest-of-*/
 
 .devenv
+
+# 文档站点（VitePress）
+wiki/node_modules/
+wiki/.vitepress/dist/
+wiki/.vitepress/cache/
