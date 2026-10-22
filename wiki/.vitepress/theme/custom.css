@@ -1,0 +1,233 @@
+/* 「纸张、墨色与陶土」（ADR-0007）：令牌与 site/style.css、apps/desktop/src/app/theme.ts 一致。
+   只覆盖默认主题的变量和少量细节，不改布局。陶土色只用于“指向”：链接、选中、焦点。 */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/ibm-plex-sans-latin-500-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  font-weight: 600;
+  font-display: swap;
+  src: url(/fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-weight: 400;
+  font-display: swap;
+  src: url(/fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-weight: 500;
+  font-display: swap;
+  src: url(/fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Source Serif 4 Variable";
+  font-weight: 200 900;
+  font-display: swap;
+  src: url(/fonts/source-serif-4-latin-opsz-normal.woff2) format("woff2-variations");
+}
+
+/* ================================================================ 令牌 */
+
+:root {
+  --bg: #faf9f5;
+  --bg2: #f0eee6;
+  --surface: #ffffff;
+  --ink: #141413;
+  --ink2: #3d3d3a;
+  --ink3: #65645e;
+  --line: #e6e3da;
+  --line2: #d4d0c4;
+  --hover: rgba(20, 20, 19, 0.05);
+  --ok: #3f6b45;
+  --err: #a3402f;
+  --btn: #141413;
+  --btn-ink: #faf9f5;
+  --accent: #d97757;
+  --accent-ink: color-mix(in oklab, var(--accent) 70%, #000);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+
+  --font-ui: "IBM Plex Sans", "Source Han Sans SC", "Noto Sans SC", "Noto Sans CJK SC", "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-serif: "Source Serif 4 Variable", "Source Serif 4", "Source Han Serif SC", "Noto Serif SC",
+    "Noto Serif CJK SC", "Songti SC", "SimSun", Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 280ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* VitePress 用 html.dark 切换深色（跟随系统或手动） */
+.dark {
+  --bg: #1f1e1d;
+  --bg2: #262624;
+  --surface: #30302e;
+  --ink: #f3f1ea;
+  --ink2: #d6d3c8;
+  --ink3: #a6a398;
+  --line: #3b3a37;
+  --line2: #4c4a45;
+  --hover: rgba(255, 255, 255, 0.06);
+  --ok: #9cc79c;
+  --err: #eba08c;
+  --btn: #f3f1ea;
+  --btn-ink: #1f1e1d;
+  --accent-ink: color-mix(in oklab, var(--accent) 62%, #fff);
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* ================================================================ 映射到默认主题 */
+
+:root,
+.dark {
+  --vp-font-family-base: var(--font-ui);
+  --vp-font-family-mono: var(--font-mono);
+
+  --vp-c-bg: var(--bg);
+  --vp-c-bg-alt: var(--bg2);
+  --vp-c-bg-elv: var(--surface);
+  --vp-c-bg-soft: var(--bg2);
+
+  --vp-c-text-1: var(--ink);
+  --vp-c-text-2: var(--ink2);
+  --vp-c-text-3: var(--ink3);
+
+  --vp-c-border: var(--line2);
+  --vp-c-divider: var(--line);
+  --vp-c-gutter: var(--line);
+
+  --vp-c-default-soft: var(--hover);
+
+  --vp-c-brand-1: var(--accent-ink);
+  --vp-c-brand-2: var(--accent);
+  --vp-c-brand-3: var(--accent);
+  --vp-c-brand-soft: var(--accent-soft);
+
+  --vp-c-tip-1: var(--accent-ink);
+  --vp-c-tip-soft: var(--accent-soft);
+  --vp-c-danger-1: var(--err);
+
+  /* 线，不用阴影 */
+  --vp-shadow-1: none;
+  --vp-shadow-2: none;
+  --vp-shadow-3: 0 0 0 1px var(--line);
+  --vp-shadow-4: 0 0 0 1px var(--line);
+  --vp-shadow-5: 0 0 0 1px var(--line);
+
+  /* 主按钮用墨色 */
+  --vp-button-brand-bg: var(--btn);
+  --vp-button-brand-text: var(--btn-ink);
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-bg: var(--ink2);
+  --vp-button-brand-hover-text: var(--btn-ink);
+  --vp-button-brand-active-bg: var(--ink3);
+
+  --vp-code-bg: var(--bg2);
+  --vp-code-color: var(--ink);
+  --vp-code-block-bg: var(--bg2);
+  --vp-code-copy-code-bg: var(--surface);
+
+  --vp-local-search-bg: var(--bg);
+  --vp-local-search-result-bg: var(--surface);
+  --vp-local-search-result-border: var(--line);
+  --vp-local-search-highlight-bg: var(--accent-soft);
+  --vp-local-search-highlight-text: var(--ink);
+
+  --vp-home-hero-name-color: var(--ink);
+}
+
+/* ================================================================ 细节 */
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 标题用衬线体 */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3,
+.VPNavBarTitle .title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.vp-doc h2 {
+  border-top-color: var(--line);
+}
+
+.vp-doc a {
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 3px;
+  transition: color var(--dur-fast) var(--ease), text-decoration-color var(--dur-fast) var(--ease);
+}
+
+.vp-doc a:hover {
+  text-decoration-color: currentColor;
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+}
+
+.vp-doc tr,
+.vp-doc tr:nth-child(2n) {
+  background: transparent;
+}
+
+.vp-doc th,
+.vp-doc td {
+  border-color: var(--line);
+}
+
+.vp-doc th {
+  background: var(--bg2);
+}
+
+/* 窄屏下表格横向滚动，而不是撑破页面 */
+@media (max-width: 640px) {
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+.VPSidebarItem .text,
+.VPNavBarMenuLink,
+.VPLink {
+  transition: color var(--dur-fast) var(--ease);
+}
+
+.VPSidebarItem.is-active > .item .text {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.VPSidebarItem.is-active > .item .indicator {
+  background: var(--accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms !important;
+  }
+}

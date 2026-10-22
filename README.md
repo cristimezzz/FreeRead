@@ -30,7 +30,7 @@
 3. 打开一篇文献，等快速解析完成后切到"重排"或"并排"视图。
 4. 在 设置 › 大模型服务 里添加服务并保存 API Key（向导里配过就不用了），然后就能翻译、总结、问答和抽取图谱。
 
-完整的使用说明见 [Wiki](https://github.com/cristimezzz/FreeRead/wiki)。
+完整的使用说明见 [docs.freeread.work](https://docs.freeread.work)。
 
 ## 仓库结构
 
