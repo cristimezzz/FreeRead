@@ -95,7 +95,12 @@ export const activeJobs = (jobs: Record<string, Job>) =>
 export function startEventStream(): () => void {
   const controller = new AbortController();
   const refreshJobs = async () => {
-    const jobs = unwrap(await api().GET("/jobs", { params: { query: { limit: 200 } } }));
+    // 最近 200 个之外再单独拉全部进行中 / 排队的，批量解析时排队任务可能远超 200
+    const [recent, active] = await Promise.all([
+      api().GET("/jobs", { params: { query: { limit: 200 } } }),
+      api().GET("/jobs", { params: { query: { status: ["queued", "running"], limit: 1000 } } }),
+    ]);
+    const jobs = [...unwrap(recent), ...unwrap(active)];
     useApp.setState({ jobs: Object.fromEntries(jobs.map((j) => [j.id, j])) });
   };
 
