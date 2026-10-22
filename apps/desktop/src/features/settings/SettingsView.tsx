@@ -17,7 +17,7 @@ import {
   useEngines,
 } from "./actions";
 import { engineOptionLabel, RemoteParserCard, urlHost } from "./parsers";
-import { Group, Row } from "./Row";
+import { Group, More, Row } from "./Row";
 import { SETTINGS_SECTIONS } from "./sections";
 import { ZoteroSection } from "./ZoteroSection";
 
@@ -163,6 +163,238 @@ export function SettingsView() {
           </Button>
         </p>
 
+        <Group id="providers" title={sectionTitle("providers")}>
+          <p className="set-hint">
+            支持 OpenAI 兼容接口（OpenAI、DeepSeek、通义、Moonshot、vLLM 等）。API Key 保存在系统钥匙串，不写入设置文件。
+          </p>
+          {settings.providers.map((p, i) => (
+            <ProviderCard
+              key={p.id}
+              provider={p}
+              defaultOpen={i === 0}
+              hasKey={Boolean(keys[p.id])}
+              onChange={(patch) => updateProvider(i, patch)}
+              onKey={(k) => setKey(p.id, k)}
+              onTest={() => test(p.id)}
+              onRemove={() => removeProvider(p.id)}
+            />
+          ))}
+          <Button small icon="add" className="add-provider" onClick={addProvider}>
+            添加服务
+          </Button>
+        </Group>
+
+        <Group id="ai" title={sectionTitle("ai")}>
+          <Row title="目标语言">
+            <Select
+              label="目标语言"
+              hideLabel
+              value={settings.target_lang}
+              options={LANGS}
+              onValue={(target_lang) => update({ target_lang })}
+            />
+          </Row>
+          <Row title="翻译使用的服务">
+            <Select
+              label="翻译使用的服务"
+              hideLabel
+              value={route?.provider_id ?? ""}
+              options={[{ value: "", label: "未配置" }, ...providerOptions]}
+              onValue={(provider_id) =>
+                update({
+                  routes: provider_id
+                    ? { ...settings.routes, translate: { provider_id, model: route?.model ?? "" } }
+                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "translate")),
+                })
+              }
+            />
+            {route && (
+              <TextField
+                label="翻译模型"
+                hideLabel
+                mono
+                className="model-inp"
+                placeholder="模型"
+                value={route.model}
+                commitOnChange
+                onValue={(model) => update({ routes: { ...settings.routes, translate: { ...route, model } } })}
+              />
+            )}
+          </Row>
+          <More
+            label="按任务指定服务、自动抽取图谱"
+            defaultOpen={Boolean(summaryRoute || qaRoute || kgRoute || settings.kg.auto)}
+          >
+            <Row title="总结使用的服务" desc="总结要读全文并归纳，推荐用推理能力更强的模型">
+              <Select
+                label="总结使用的服务"
+                hideLabel
+                value={summaryRoute?.provider_id ?? ""}
+                options={[{ value: "", label: "与翻译相同" }, ...providerOptions]}
+                onValue={(provider_id) =>
+                  update({
+                    routes: provider_id
+                      ? {
+                          ...settings.routes,
+                          summarize: { provider_id, model: summaryRoute?.model || route?.model || "" },
+                        }
+                      : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "summarize")),
+                  })
+                }
+              />
+              {summaryRoute && (
+                <TextField
+                  label="总结模型"
+                  hideLabel
+                  mono
+                  className="model-inp"
+                  placeholder="模型"
+                  value={summaryRoute.model}
+                  commitOnChange
+                  onValue={(model) => update({ routes: { ...settings.routes, summarize: { ...summaryRoute, model } } })}
+                />
+              )}
+            </Row>
+            <Row title="问答使用的服务" desc="回答只依据检索到的原文，并标出出处">
+              <Select
+                label="问答使用的服务"
+                hideLabel
+                value={qaRoute?.provider_id ?? ""}
+                options={[{ value: "", label: "与总结相同" }, ...providerOptions]}
+                onValue={(provider_id) =>
+                  update({
+                    routes: provider_id
+                      ? {
+                          ...settings.routes,
+                          qa: { provider_id, model: qaRoute?.model || summaryRoute?.model || route?.model || "" },
+                        }
+                      : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "qa")),
+                  })
+                }
+              />
+              {qaRoute && (
+                <TextField
+                  label="问答模型"
+                  hideLabel
+                  mono
+                  className="model-inp"
+                  placeholder="模型"
+                  value={qaRoute.model}
+                  commitOnChange
+                  onValue={(model) => update({ routes: { ...settings.routes, qa: { ...qaRoute, model } } })}
+                />
+              )}
+            </Row>
+            <Row title="图谱抽取使用的服务" desc="按章节找出方法、数据集、指标等实体和关系，每篇调用次数与章节数相当">
+              <Select
+                label="图谱抽取使用的服务"
+                hideLabel
+                value={kgRoute?.provider_id ?? ""}
+                options={[{ value: "", label: "与总结相同" }, ...providerOptions]}
+                onValue={(provider_id) =>
+                  update({
+                    routes: provider_id
+                      ? {
+                          ...settings.routes,
+                          kg_extract: { provider_id, model: kgRoute?.model || summaryRoute?.model || route?.model || "" },
+                        }
+                      : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "kg_extract")),
+                  })
+                }
+              />
+              {kgRoute && (
+                <TextField
+                  label="图谱抽取模型"
+                  hideLabel
+                  mono
+                  className="model-inp"
+                  placeholder="模型"
+                  value={kgRoute.model}
+                  commitOnChange
+                  onValue={(model) => update({ routes: { ...settings.routes, kg_extract: { ...kgRoute, model } } })}
+                />
+              )}
+            </Row>
+            <Row
+              title="建立语义索引后自动抽取图谱"
+              desc="新导入的文献嵌入完成后自动排队抽取（会调用大模型）；关闭时在阅读器的图谱面板里手动抽取"
+              htmlFor="kg-auto"
+            >
+              <Switch
+                id="kg-auto"
+                label="建立语义索引后自动抽取图谱"
+                checked={settings.kg.auto}
+                onValue={(auto) => update({ kg: { ...settings.kg, auto } })}
+              />
+            </Row>
+          </More>
+        </Group>
+
+        <Group id="parse" title={sectionTitle("parse")}>
+          <Row title="高质量解析引擎" desc="导入后先用快速模式秒级出可读版本，再在后台用高质量引擎升级">
+            <Select
+              label="高质量解析引擎"
+              hideLabel
+              value={settings.parse_engine}
+              options={[
+                { value: "auto", label: "自动（MinerU 可用时升级）" },
+                { value: "pymupdf", label: "只用快速模式" },
+                ...engines
+                  .filter((e) => e.heavy)
+                  .map((e) => ({
+                    value: e.name as Settings["parse_engine"],
+                    label: engineOptionLabel(e),
+                    disabled: !e.available,
+                  })),
+              ]}
+              onValue={(parse_engine) => update({ parse_engine })}
+            />
+          </Row>
+          <p className="set-hint">
+            MinerU 和 Docling 可以在本机运行，也可以调用自部署或云端服务：MinerU 支持 mineru-api 与
+            mineru.net，Docling 支持 docling-serve。局域网地址无需确认；公网地址要先允许上传 PDF。
+          </p>
+          {REMOTE_ENGINES.map((name) => {
+            const info = engines.find((e) => e.name === name);
+            return (
+              <RemoteParserCard
+                key={name}
+                engine={name}
+                label={info?.label ?? name}
+                cfg={settings.parsers[name]}
+                info={info}
+                installJob={installJobs[name]}
+                onInstall={() => installEngine(name)}
+                pypiMirror={settings.pypi_mirror}
+                onPypiMirror={(pypi_mirror) => update({ pypi_mirror })}
+                onChange={(patch) => updateParser(name, patch)}
+                onKey={(k) => setParserKey(name, k)}
+                onTest={() => testParser(name)}
+              />
+            );
+          })}
+          <More defaultOpen={settings.parse_device !== "auto"}>
+            <Row title="解析设备" desc="只影响在本机运行的 MinerU 和 Docling。GPU 需要 NVIDIA 显卡；改动从下一次解析开始生效">
+              <Segmented
+                label="解析设备"
+                value={settings.parse_device}
+                options={[
+                  { value: "auto", label: "自动" },
+                  { value: "gpu", label: "GPU" },
+                  { value: "cpu", label: "CPU" },
+                ]}
+                onValue={(parse_device) => update({ parse_device })}
+              />
+            </Row>
+          </More>
+        </Group>
+
+        <ZoteroSection settings={settings} update={update} Group={Group} Row={Row} title={sectionTitle("zotero")} />
+
+        <EmbeddingSection settings={settings} update={update} />
+
+        <GlossarySection settings={settings} update={update} />
+
         <Group id="appearance" title={sectionTitle("appearance")}>
           <Row title="深浅色">
             <Segmented
@@ -215,229 +447,6 @@ export function SettingsView() {
               onValue={(contrast) => appearance({ contrast })}
             />
           </Row>
-        </Group>
-
-        <Group id="ai" title={sectionTitle("ai")}>
-          <Row title="目标语言">
-            <Select
-              label="目标语言"
-              hideLabel
-              value={settings.target_lang}
-              options={LANGS}
-              onValue={(target_lang) => update({ target_lang })}
-            />
-          </Row>
-          <Row title="翻译使用的服务">
-            <Select
-              label="翻译使用的服务"
-              hideLabel
-              value={route?.provider_id ?? ""}
-              options={[{ value: "", label: "未配置" }, ...providerOptions]}
-              onValue={(provider_id) =>
-                update({
-                  routes: provider_id
-                    ? { ...settings.routes, translate: { provider_id, model: route?.model ?? "" } }
-                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "translate")),
-                })
-              }
-            />
-            {route && (
-              <TextField
-                label="翻译模型"
-                hideLabel
-                mono
-                className="model-inp"
-                placeholder="模型"
-                value={route.model}
-                commitOnChange
-                onValue={(model) => update({ routes: { ...settings.routes, translate: { ...route, model } } })}
-              />
-            )}
-          </Row>
-          <Row title="总结使用的服务" desc="总结要读全文并归纳，推荐用推理能力更强的模型">
-            <Select
-              label="总结使用的服务"
-              hideLabel
-              value={summaryRoute?.provider_id ?? ""}
-              options={[{ value: "", label: "与翻译相同" }, ...providerOptions]}
-              onValue={(provider_id) =>
-                update({
-                  routes: provider_id
-                    ? {
-                        ...settings.routes,
-                        summarize: { provider_id, model: summaryRoute?.model || route?.model || "" },
-                      }
-                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "summarize")),
-                })
-              }
-            />
-            {summaryRoute && (
-              <TextField
-                label="总结模型"
-                hideLabel
-                mono
-                className="model-inp"
-                placeholder="模型"
-                value={summaryRoute.model}
-                commitOnChange
-                onValue={(model) => update({ routes: { ...settings.routes, summarize: { ...summaryRoute, model } } })}
-              />
-            )}
-          </Row>
-          <Row title="问答使用的服务" desc="回答只依据检索到的原文，并标出出处">
-            <Select
-              label="问答使用的服务"
-              hideLabel
-              value={qaRoute?.provider_id ?? ""}
-              options={[{ value: "", label: "与总结相同" }, ...providerOptions]}
-              onValue={(provider_id) =>
-                update({
-                  routes: provider_id
-                    ? {
-                        ...settings.routes,
-                        qa: { provider_id, model: qaRoute?.model || summaryRoute?.model || route?.model || "" },
-                      }
-                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "qa")),
-                })
-              }
-            />
-            {qaRoute && (
-              <TextField
-                label="问答模型"
-                hideLabel
-                mono
-                className="model-inp"
-                placeholder="模型"
-                value={qaRoute.model}
-                commitOnChange
-                onValue={(model) => update({ routes: { ...settings.routes, qa: { ...qaRoute, model } } })}
-              />
-            )}
-          </Row>
-          <Row title="图谱抽取使用的服务" desc="按章节找出方法、数据集、指标等实体和关系，每篇调用次数与章节数相当">
-            <Select
-              label="图谱抽取使用的服务"
-              hideLabel
-              value={kgRoute?.provider_id ?? ""}
-              options={[{ value: "", label: "与总结相同" }, ...providerOptions]}
-              onValue={(provider_id) =>
-                update({
-                  routes: provider_id
-                    ? {
-                        ...settings.routes,
-                        kg_extract: { provider_id, model: kgRoute?.model || summaryRoute?.model || route?.model || "" },
-                      }
-                    : Object.fromEntries(Object.entries(settings.routes).filter(([k]) => k !== "kg_extract")),
-                })
-              }
-            />
-            {kgRoute && (
-              <TextField
-                label="图谱抽取模型"
-                hideLabel
-                mono
-                className="model-inp"
-                placeholder="模型"
-                value={kgRoute.model}
-                commitOnChange
-                onValue={(model) => update({ routes: { ...settings.routes, kg_extract: { ...kgRoute, model } } })}
-              />
-            )}
-          </Row>
-          <Row
-            title="建立语义索引后自动抽取图谱"
-            desc="新导入的文献嵌入完成后自动排队抽取（会调用大模型）；关闭时在阅读器的图谱面板里手动抽取"
-            htmlFor="kg-auto"
-          >
-            <Switch
-              id="kg-auto"
-              label="建立语义索引后自动抽取图谱"
-              checked={settings.kg.auto}
-              onValue={(auto) => update({ kg: { ...settings.kg, auto } })}
-            />
-          </Row>
-        </Group>
-
-        <GlossarySection settings={settings} update={update} />
-
-        <EmbeddingSection settings={settings} update={update} />
-
-        <Group id="providers" title={sectionTitle("providers")}>
-          <p className="set-hint">
-            支持 OpenAI 兼容接口（OpenAI、DeepSeek、通义、Moonshot、vLLM 等）。API Key 保存在系统钥匙串，不写入设置文件。
-          </p>
-          {settings.providers.map((p, i) => (
-            <ProviderCard
-              key={p.id}
-              provider={p}
-              defaultOpen={i === 0}
-              hasKey={Boolean(keys[p.id])}
-              onChange={(patch) => updateProvider(i, patch)}
-              onKey={(k) => setKey(p.id, k)}
-              onTest={() => test(p.id)}
-              onRemove={() => removeProvider(p.id)}
-            />
-          ))}
-          <Button small icon="add" className="add-provider" onClick={addProvider}>
-            添加服务
-          </Button>
-        </Group>
-
-        <ZoteroSection settings={settings} update={update} Group={Group} Row={Row} title={sectionTitle("zotero")} />
-
-        <Group id="parse" title={sectionTitle("parse")}>
-          <Row title="高质量解析引擎" desc="导入后先用快速模式秒级出可读版本，再在后台用高质量引擎升级">
-            <Select
-              label="高质量解析引擎"
-              hideLabel
-              value={settings.parse_engine}
-              options={[
-                { value: "auto", label: "自动（MinerU 可用时升级）" },
-                { value: "pymupdf", label: "只用快速模式" },
-                ...engines
-                  .filter((e) => e.heavy)
-                  .map((e) => ({
-                    value: e.name as Settings["parse_engine"],
-                    label: engineOptionLabel(e),
-                    disabled: !e.available,
-                  })),
-              ]}
-              onValue={(parse_engine) => update({ parse_engine })}
-            />
-          </Row>
-          <Row title="解析设备" desc="只影响在本机运行的 MinerU 和 Docling。GPU 需要 NVIDIA 显卡；改动从下一次解析开始生效">
-            <Segmented
-              label="解析设备"
-              value={settings.parse_device}
-              options={[
-                { value: "auto", label: "自动" },
-                { value: "gpu", label: "GPU" },
-                { value: "cpu", label: "CPU" },
-              ]}
-              onValue={(parse_device) => update({ parse_device })}
-            />
-          </Row>
-          <p className="set-hint">
-            MinerU 和 Docling 可以在本机运行，也可以调用自部署或云端服务：MinerU 支持 mineru-api 与
-            mineru.net，Docling 支持 docling-serve。局域网地址无需确认；公网地址要先允许上传 PDF。
-          </p>
-          {REMOTE_ENGINES.map((name) => {
-            const info = engines.find((e) => e.name === name);
-            return (
-              <RemoteParserCard
-                key={name}
-                engine={name}
-                label={info?.label ?? name}
-                cfg={settings.parsers[name]}
-                info={info}
-                installJob={installJobs[name]}
-                onInstall={() => installEngine(name)}
-                onChange={(patch) => updateParser(name, patch)}
-                onKey={(k) => setParserKey(name, k)}
-                onTest={() => testParser(name)}
-              />
-            );
-          })}
         </Group>
 
         <Group id="privacy" title={sectionTitle("privacy")}>
@@ -667,43 +676,28 @@ function EmbeddingSection({
           onValue={(source) => set({ source })}
         />
       </Row>
-      <Row title="解析后自动建立索引" htmlFor="embed-auto">
-        <Switch id="embed-auto" label="解析后自动建立索引" checked={embedding.auto} onValue={(auto) => set({ auto })} />
-      </Row>
 
       {embedding.source === "local" ? (
-        <>
-          <Row
-            title={status?.local_label ?? embedding.local_model}
-            desc={
-              <>
-                {status && `约 ${mb(status.size_bytes)}，`}
-                {download
-                  ? `下载中 ${Math.round(download.progress * 100)}%`
-                  : status?.downloaded
-                    ? "已就绪"
-                    : "未下载"}
-                {download && <Progress value={download.progress} className="row-bar" />}
-              </>
-            }
-          >
-            {!status?.downloaded && (
-              <Button small disabled={Boolean(download)} onClick={startDownload}>
-                下载模型
-              </Button>
-            )}
-          </Row>
-          <Row title="下载源" desc="Hugging Face 访问慢时可改为镜像，如 https://hf-mirror.com">
-            <TextField
-              label="下载源"
-              hideLabel
-              mono
-              value={embedding.mirror}
-              commitOnChange
-              onValue={(mirror) => set({ mirror })}
-            />
-          </Row>
-        </>
+        <Row
+          title={status?.local_label ?? embedding.local_model}
+          desc={
+            <>
+              {status && `约 ${mb(status.size_bytes)}，`}
+              {download
+                ? `下载中 ${Math.round(download.progress * 100)}%`
+                : status?.downloaded
+                  ? "已就绪"
+                  : "未下载"}
+              {download && <Progress value={download.progress} className="row-bar" />}
+            </>
+          }
+        >
+          {!status?.downloaded && (
+            <Button small disabled={Boolean(download)} onClick={startDownload}>
+              下载模型
+            </Button>
+          )}
+        </Row>
       ) : (
         <>
           <Row title="嵌入使用的服务">
@@ -760,6 +754,24 @@ function EmbeddingSection({
           </Button>
         </Row>
       )}
+
+      <More defaultOpen={!embedding.auto || embedding.mirror !== "https://huggingface.co"}>
+        <Row title="解析后自动建立索引" htmlFor="embed-auto">
+          <Switch id="embed-auto" label="解析后自动建立索引" checked={embedding.auto} onValue={(auto) => set({ auto })} />
+        </Row>
+        {embedding.source === "local" && (
+          <Row title="下载源" desc="Hugging Face 访问慢时可改为镜像，如 https://hf-mirror.com">
+            <TextField
+              label="下载源"
+              hideLabel
+              mono
+              value={embedding.mirror}
+              commitOnChange
+              onValue={(mirror) => set({ mirror })}
+            />
+          </Row>
+        )}
+      </More>
     </Group>
   );
 }

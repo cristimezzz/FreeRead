@@ -1,10 +1,11 @@
-// 设置 › Zotero：数据源（本地 API / 数据库快照）、数据目录、上次同步。见 docs/m2/zotero-sync.md。
+// 设置 › Zotero：上次同步；数据源（本地 API / 数据库快照）与数据目录默认折叠。见 docs/m2/zotero-sync.md。
 
 import { type ReactNode, useEffect, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
 import { Button, Select, TextField } from "../../components/ui";
+import { More } from "./Row";
 
 type SyncState = Schemas["SyncStateOut"];
 type Zotero = Settings["zotero"];
@@ -58,36 +59,6 @@ export function ZoteroSection({
 
   return (
     <Group id="zotero" title={title}>
-      <Row title="数据来源" desc="Zotero 运行时用本地 API；没运行时读取数据库快照（先复制一份再读，不会改动 Zotero 的数据库）">
-        <Select
-          label="数据来源"
-          hideLabel
-          value={zotero.source}
-          options={[
-            { value: "auto", label: "自动（推荐）" },
-            { value: "local_api", label: "只用本地 API" },
-            { value: "sqlite", label: "只用数据库快照" },
-          ]}
-          onValue={(source) => set({ source })}
-        />
-      </Row>
-      <Row title="Zotero 数据目录" desc="包含 zotero.sqlite 和 storage 文件夹；留空为默认的 用户目录\Zotero">
-        <TextField
-          label="Zotero 数据目录"
-          hideLabel
-          mono
-          className="model-inp"
-          placeholder="~/Zotero"
-          value={zotero.data_dir}
-          commitOnChange
-          onValue={(data_dir) => set({ data_dir: data_dir.trim() })}
-        />
-        {isTauri() && (
-          <Button small onClick={() => void browse()}>
-            选择…
-          </Button>
-        )}
-      </Row>
       <Row
         title="上次同步"
         desc={
@@ -114,6 +85,38 @@ export function ZoteroSection({
       <p className="set-hint">
         平时同步只读取上次之后变化的条目（需要本地 API）；每 7 天或点"完全同步"时读取全部，并把 Zotero 里删除或移入回收站的条目归档。
       </p>
+      <More defaultOpen={zotero.source !== "auto" || Boolean(zotero.data_dir)}>
+        <Row title="数据来源" desc="Zotero 运行时用本地 API；没运行时读取数据库快照（先复制一份再读，不会改动 Zotero 的数据库）">
+          <Select
+            label="数据来源"
+            hideLabel
+            value={zotero.source}
+            options={[
+              { value: "auto", label: "自动（推荐）" },
+              { value: "local_api", label: "只用本地 API" },
+              { value: "sqlite", label: "只用数据库快照" },
+            ]}
+            onValue={(source) => set({ source })}
+          />
+        </Row>
+        <Row title="Zotero 数据目录" desc="包含 zotero.sqlite 和 storage 文件夹；留空为默认的 用户目录\Zotero">
+          <TextField
+            label="Zotero 数据目录"
+            hideLabel
+            mono
+            className="model-inp"
+            placeholder="~/Zotero"
+            value={zotero.data_dir}
+            commitOnChange
+            onValue={(data_dir) => set({ data_dir: data_dir.trim() })}
+          />
+          {isTauri() && (
+            <Button small onClick={() => void browse()}>
+              选择…
+            </Button>
+          )}
+        </Row>
+      </More>
     </Group>
   );
 }
