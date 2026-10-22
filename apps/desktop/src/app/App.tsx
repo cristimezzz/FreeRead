@@ -11,6 +11,7 @@ import { JobsBar } from "../features/jobs/JobsBar";
 import { LibraryView } from "../features/library/LibraryView";
 import { ReaderView } from "../features/reader/ReaderView";
 import { SettingsView } from "../features/settings/SettingsView";
+import { WelcomeView } from "../features/welcome/WelcomeView";
 import { startEventStream, useApp } from "./store";
 import { applyTheme, DEFAULT_ACCENT } from "./theme";
 
@@ -92,6 +93,18 @@ export default function App() {
           </div>
         )}
       </div>
+      </>
+    );
+  }
+
+  // 新安装：先走欢迎向导（配置大模型、解析服务，询问是否从 Zotero 导入）
+  if (settings && !settings.onboarding_done) {
+    return (
+      <>
+        <Titlebar />
+        <WelcomeView />
+        <Snackbar />
+        <ContextMenu />
       </>
     );
   }

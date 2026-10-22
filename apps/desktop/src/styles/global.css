@@ -1287,6 +1287,121 @@ input[type="range"] {
   white-space: pre-wrap;
 }
 
+/* ================================================================ 欢迎向导 */
+
+.welcome {
+  height: 100%;
+  overflow: auto;
+  padding: calc(var(--titlebar-h) + 28px) 24px 64px;
+}
+
+.welcome-col {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.welcome-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.welcome-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome-skip {
+  flex: none;
+}
+
+.welcome-steps {
+  display: flex;
+  gap: 8px;
+  margin: 32px 0 0;
+  padding: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.welcome-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: -1px;
+  padding: 0 4px 12px;
+  border-bottom: 2px solid transparent;
+  color: var(--ink3);
+  font-size: 13px;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.welcome-steps li + li {
+  margin-left: 16px;
+}
+
+.welcome-steps i {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line2);
+  border-radius: 50%;
+  font-size: 12px;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+
+.welcome-steps li[data-done] {
+  color: var(--ink2);
+}
+
+.welcome-steps li[aria-current="step"] {
+  border-bottom-color: var(--accent);
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.welcome-steps li[aria-current="step"] i {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.welcome-step {
+  padding-top: 28px;
+  animation: rise-in var(--dur-slow) var(--ease);
+}
+
+.welcome-step > h2 {
+  margin: 0 0 4px;
+  font-size: 21px;
+  font-weight: 500;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.welcome-actions-end {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .welcome-head {
+    flex-wrap: wrap;
+  }
+  .welcome .card .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* ================================================================ 文献库 */
 
 .library {
@@ -2424,6 +2539,11 @@ body.resizing .reader-pane {
 
 .settings-col {
   max-width: 760px;
+}
+
+.settings-welcome {
+  margin-left: 8px;
+  vertical-align: middle;
 }
 
 .set-group {
