@@ -7,11 +7,12 @@
      （PyInstaller 只装在这个构建环境里，不写进 core/pyproject.toml）。
   2. --onedir 打包到 build/sidecar/dist/freeread-core/，再整个目录复制到
      apps/desktop/src-tauri/binaries/freeread-core/，由 tauri.conf.json 的 bundle.resources
-     安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core.exe（apps/desktop/src-tauri/src/lib.rs）。
+     安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core[.exe]（apps/desktop/src-tauri/src/lib.rs）。
+     Windows 和 Linux 共用这个脚本（Linux 上用 pwsh 运行，见 .github/workflows/desktop-build.yml）。
      不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
      选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
   3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据、
-     sqlite-vec 扩展（vec0.dll）、重型引擎的包装脚本 scripts/engines/*.py（引擎本身由用户在设置里安装）。
+     sqlite-vec 扩展（vec0.dll / vec0.so）、重型引擎的包装脚本 scripts/engines/*.py（引擎本身由用户在设置里安装）。
      打完用 scripts/measure_sidecar.ps1 冒烟（启动、迁移、提示词、导入并解析一个 PDF、检索）。
 
 .EXAMPLE
@@ -28,7 +29,11 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Core = Join-Path $Root "core"
 $Build = Join-Path $Root "build/sidecar"
 $Venv = Join-Path $Build ".venv"
-$Python = Join-Path $Venv "Scripts/python.exe"
+$Python = Join-Path $Venv ($IsWindows ? "Scripts/python.exe" : "bin/python")
+$Exe = $IsWindows ? ".exe" : ""
+$VecLib = $IsWindows ? "vec0.dll" : "vec0.so"
+# --add-data 的「源;目标」分隔符：Windows 上是 ;，其他平台是 :
+$Sep = [IO.Path]::PathSeparator
 $Target = Join-Path $Root "apps/desktop/src-tauri/binaries/freeread-core"
 
 New-Item -ItemType Directory -Force $Build | Out-Null
@@ -52,13 +57,15 @@ if __name__ == "__main__":
 # Alembic 按文件路径加载迁移脚本（env.py、versions/*.py），要以源文件形式带上；
 # 迁移脚本里 import 的 alembic.op / sqlalchemy 方言也要收集（静态分析看不到）。
 # PyMuPDF 快速解析器用 importlib.metadata 取版本号，要带上包元数据。
-# sqlite-vec 的 vec0.dll 在包目录里、由 sqlite_vec.loadable_path() 按路径加载，静态分析看不到。
+# sqlite-vec 的 vec0.dll / vec0.so 在包目录里、由 sqlite_vec.loadable_path() 按路径加载，静态分析看不到；
+# 用 --add-binary 显式带上：--collect-binaries 在 Linux 上只认 lib*.so，会漏掉 vec0.so。
 # onnxruntime / tokenizers 由 pyinstaller-hooks-contrib 的 hook 收集原生库；嵌入模型本身不打包，首次使用时下载。
 # 提示词放在包外的 prompts/，运行时从 sys._MEIPASS/prompts 读（freeread/infra/llm/prompts.py）。
 $Migrations = Join-Path $Core "freeread/infra/db/migrations"
 $Prompts = Join-Path $Core "prompts"
 # 重型引擎的包装脚本由引擎自己的 Python 运行（不是 sidecar），以源文件带上，运行时在 sys._MEIPASS/engines。
 $EngineScripts = Join-Path $Root "scripts/engines"
+$VecPath = Join-Path (& $Python -c "import os, sqlite_vec; print(os.path.dirname(sqlite_vec.__file__))") $VecLib
 $Dist = Join-Path $Build "dist"
 
 Write-Host "==> PyInstaller --onedir"
@@ -68,11 +75,11 @@ Write-Host "==> PyInstaller --onedir"
     --collect-submodules alembic `
     --hidden-import sqlalchemy.dialects.sqlite `
     --copy-metadata pymupdf `
-    --collect-binaries sqlite_vec `
+    --add-binary "${VecPath}${Sep}sqlite_vec" `
     --collect-binaries onnxruntime `
-    --add-data "${Migrations};freeread/infra/db/migrations" `
-    --add-data "${Prompts};prompts" `
-    --add-data "${EngineScripts};engines" `
+    --add-data "${Migrations}${Sep}freeread/infra/db/migrations" `
+    --add-data "${Prompts}${Sep}prompts" `
+    --add-data "${EngineScripts}${Sep}engines" `
     --distpath $Dist `
     --workpath (Join-Path $Build "work") `
     --specpath $Build `
@@ -80,12 +87,12 @@ Write-Host "==> PyInstaller --onedir"
 
 $OneDir = Join-Path $Dist "freeread-core"
 foreach ($required in @(
-        "freeread-core.exe",
+        "freeread-core$Exe",
         "_internal/freeread/infra/db/migrations/env.py",
         "_internal/prompts/translate.yaml",
         "_internal/prompts/summarize_map.yaml",
         "_internal/prompts/templates/summary.yaml",
-        "_internal/sqlite_vec/vec0.dll",
+        "_internal/sqlite_vec/$VecLib",
         "_internal/engines/mineru_worker.py",
         "_internal/engines/run_docling.py"
     )) {

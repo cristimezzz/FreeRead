@@ -1,0 +1,28 @@
+# Maintainer: Yunlang Cai
+#
+# 由 .github/workflows/aur.yml 在 Release 发布后用 packaging/aur/render.sh 渲染并推送到 AUR，
+# 不要直接在 AUR 仓库里改。直接重打包 Release 里的 deb（tauri-bundler 产物）。
+pkgname=freeread-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Local-first reader and translator for academic papers"
+arch=('x86_64')
+url="https://freeread.work"
+license=('AGPL-3.0-or-later')
+depends=('webkit2gtk-4.1' 'gtk3' 'openssl' 'hicolor-icon-theme')
+optdepends=('gnome-keyring: store LLM API keys (or any other Secret Service provider, e.g. KWallet)'
+            'xdg-utils: open the downloads folder from the update checker')
+provides=('freeread')
+conflicts=('freeread')
+# sidecar 是 PyInstaller 打包的，strip 会破坏它
+options=('!strip' '!debug')
+source=("FreeRead_${pkgver}_amd64.deb::https://github.com/cristimezzz/FreeRead/releases/download/v${pkgver}/FreeRead_${pkgver}_amd64.deb"
+        "LICENSE-${pkgver}::https://raw.githubusercontent.com/cristimezzz/FreeRead/v${pkgver}/LICENSE")
+noextract=("LICENSE-${pkgver}")
+sha256sums=('@DEB_SHA256@'
+            '@LICENSE_SHA256@')
+
+package() {
+  bsdtar -xpf data.tar.* -C "$pkgdir"
+  install -Dm644 "LICENSE-${pkgver}" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
