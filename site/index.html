@@ -6,12 +6,12 @@
     <title>FreeRead — 本地优先的学术文献阅读器</title>
     <meta
       name="description"
-      content="FreeRead：从 Zotero 导入文献，把 PDF 重排为易读版式，并提供大模型翻译、AI 总结、单篇问答和批注。数据留在本机，开源免费。"
+      content="FreeRead：从 Zotero 导入文献，把 PDF 重排为易读版式，并提供大模型翻译、AI 总结、问答树、知识图谱和批注。数据留在本机，开源免费。"
     />
     <meta name="theme-color" content="#FAF9F5" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1F1E1D" media="(prefers-color-scheme: dark)" />
     <meta property="og:title" content="FreeRead — 本地优先的学术文献阅读器" />
-    <meta property="og:description" content="把 PDF 重排成易读版式，逐块翻译、带出处的总结与问答。数据留在本机。" />
+    <meta property="og:description" content="把 PDF 重排成易读版式，逐块翻译、带出处的总结、问答与知识图谱。数据留在本机。" />
     <meta property="og:image" content="https://cristimezzz.github.io/FreeRead/screenshots/reader-light.webp" />
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
     <link rel="preload" href="fonts/source-serif-4-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin />
@@ -34,6 +34,9 @@
       <symbol id="i-settings" viewBox="0 0 24 24"><path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0z" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></symbol>
       <symbol id="i-search" viewBox="0 0 24 24"><path d="M17.5 11a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0z" /><path d="m20 20-4.2-4.2" /></symbol>
       <symbol id="i-summary" viewBox="0 0 24 24"><path d="M5 6h14M5 11h14M5 16h9" /></symbol>
+      <symbol id="i-graph" viewBox="0 0 24 24"><path d="M8 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM14 13a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM9 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" /><path d="m7.7 8.4 2.8 2.9M16.3 7.2l-2.8 4.3M10.7 14.5l-2.9 3" /></symbol>
+      <symbol id="i-wand" viewBox="0 0 24 24"><path d="m4 20 11-11" /><path d="m13 7 2-2 4 4-2 2" /><path d="M6 4v3M4.5 5.5h3M19 15v3M17.5 16.5h3" /></symbol>
+      <symbol id="i-checks" viewBox="0 0 24 24"><path d="M5 4h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1zM5 14h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z" /><path d="m5.5 7 1.2 1.2L8.8 6M5.5 17l1.2 1.2 2.1-2.2M13 7h7M13 17h7" /></symbol>
       <symbol id="i-qa" viewBox="0 0 24 24"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.1A8 8 0 1 1 20 12z" /></symbol>
       <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></symbol>
       <symbol id="i-translate" viewBox="0 0 24 24"><path d="M4 5h8M8 3v2" /><path d="M10 5c-.8 3.6-3 6.3-6 8" /><path d="M6 9c1 1.8 2.6 3.2 4.5 4" /><path d="m12 21 4-9 4 9" /><path d="M13.4 18h5.2" /></symbol>
@@ -102,10 +105,10 @@
             <span class="line rv" style="--i: 2">读得<em>像一本书</em>。</span>
           </h1>
           <p class="lead rv" style="--i: 3">
-            FreeRead 是本地优先的学术文献阅读器：从 Zotero 导入文献库，把 PDF 重排为易读版式，再用你自己的大模型翻译、总结和问答——每句结论都能跳回原文。
+            FreeRead 是本地优先的学术文献阅读器：从 Zotero 导入文献库，把 PDF 重排为易读版式，再用你自己的大模型翻译、总结、问答和抽取知识图谱——每句结论都能跳回原文。
           </p>
           <div class="hero-cta rv" style="--i: 4">
-            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 0.1.0</a>
+            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 0.2.0</a>
             <a class="btn lg" href="https://github.com/cristimezzz/FreeRead"><svg class="ico"><use href="#i-github" /></svg>查看源码</a>
           </div>
           <div class="hero-meta rv" style="--i: 5">
@@ -346,7 +349,7 @@
                 <div class="step-text">
                   <div class="n">03</div>
                   <h3>问答和总结，句句有出处</h3>
-                  <p>针对单篇论文提问，回答里的每个引用编号都经过校验，指向原文中的具体段落；悬停或点击就能看到它说的是哪一段。总结也一样，分层展开，可以跳回原文。</p>
+                  <p>针对单篇论文提问，回答里的每个引用编号都经过校验，指向原文中的具体段落；悬停或点击就能看到它说的是哪一段。问答是一棵树：每张卡片都能追问、重答或另起一支。总结也一样，分层展开，可以跳回原文。</p>
                   <div class="facts">
                     <div class="fact"><b>校验</b><span>引用必须真实存在</span></div>
                     <div class="fact"><b>自选模型</b><span>OpenAI 兼容 / Anthropic / Ollama</span></div>
@@ -436,8 +439,12 @@
             <div class="feature"><svg class="ico"><use href="#i-layers" /></svg><h3>解析引擎</h3><p>内置 PyMuPDF；一键安装 MinerU / Docling，或连接远程服务，单篇可换引擎重解析。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-translate" /></svg><h3>翻译</h3><p>块级翻译，可视区域优先；四种显示方式；整篇后台翻译后离线可读；术语表可编辑。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-summary" /></svg><h3>AI 总结</h3><p>分层、结构化的总结，每条结论都带可跳转的原文引用。</p></div>
-            <div class="feature"><svg class="ico"><use href="#i-qa" /></svg><h3>单篇问答</h3><p>针对一篇论文提问，答案中的引用经过校验，点一下就到原文。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-qa" /></svg><h3>问答树</h3><p>每一问一答是一张卡片，可以追问、重答、另起，选中回答里的文字就此追问；引用都经过校验。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-graph" /></svg><h3>知识图谱</h3><p>抽取一篇论文的方法、数据集、指标和它们的关系，每条关系都带出处；3D 云图浏览，点一下回到原文。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-edit" /></svg><h3>批注与导出</h3><p>在重排视图里高亮、写批注；连同总结、正文和译文导出为 Markdown。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-checks" /></svg><h3>批量整理</h3><p>复选框、Shift 连选、Ctrl 点选，批量复制引用或移除；任务条点开看全部进度。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-wand" /></svg><h3>欢迎向导</h3><p>第一次打开时一步步配好大模型、解析服务，并决定是否从 Zotero 导入。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-sync" /></svg><h3>应用内更新</h3><p>在设置 › 关于里检查新版本，下载后校验 sha256；安装版装完自动重新打开。</p></div>
           </div>
         </div>
       </section>
@@ -525,7 +532,7 @@
           <div class="sec-head rv">
             <div class="eyebrow">截图</div>
             <h2>真实界面</h2>
-            <p>以下截图来自 FreeRead 0.1.0，跟随你的深浅色设置。</p>
+            <p>以下截图来自 FreeRead 0.2.0，跟随你的深浅色设置。</p>
           </div>
           <div class="gallery-nav">
             <button class="ibtn bordered" type="button" data-gal="-1" aria-label="上一张"><svg class="ico"><use href="#i-chev-l" /></svg></button>
@@ -552,12 +559,18 @@
             <figcaption><b>AI 总结</b>分层结构，引用可跳转</figcaption>
           </figure>
           <figure class="rv" style="--i: 3">
-            <button type="button" aria-label="放大：问答">
-              <span class="frame"><img class="shot-light" src="screenshots/qa-light.webp" width="1440" height="900" alt="问答面板" loading="lazy" /><img class="shot-dark" src="screenshots/qa-dark.webp" width="1440" height="900" alt="问答面板（深色）" loading="lazy" /></span>
+            <button type="button" aria-label="放大：问答树">
+              <span class="frame"><img class="shot-light" src="screenshots/qa-light.webp" width="1440" height="900" alt="问答树" loading="lazy" /><img class="shot-dark" src="screenshots/qa-dark.webp" width="1440" height="900" alt="问答树（深色）" loading="lazy" /></span>
             </button>
-            <figcaption><b>问答</b>回答排成正文，引用经过校验</figcaption>
+            <figcaption><b>问答树</b>追问、另起，每一支各带上下文</figcaption>
           </figure>
           <figure class="rv" style="--i: 4">
+            <button type="button" aria-label="放大：知识图谱">
+              <span class="frame"><img class="shot-light" src="screenshots/kg-light.webp" width="1440" height="900" alt="知识图谱：3D 链接云图铺满阅读区" loading="lazy" /><img class="shot-dark" src="screenshots/kg-dark.webp" width="1440" height="900" alt="知识图谱（深色）" loading="lazy" /></span>
+            </button>
+            <figcaption><b>知识图谱</b>实体与关系，每条都带出处</figcaption>
+          </figure>
+          <figure class="rv" style="--i: 5">
             <button type="button" aria-label="放大：设置">
               <span class="frame"><img class="shot-light" src="screenshots/settings-light.webp" width="1440" height="900" alt="设置：外观" loading="lazy" /><img class="shot-dark" src="screenshots/settings-dark.webp" width="1440" height="900" alt="设置：外观（深色）" loading="lazy" /></span>
             </button>
@@ -590,22 +603,22 @@
       <section class="sec" id="download">
         <div class="wrap">
           <div class="sec-head rv">
-            <div class="eyebrow">下载 · 0.1.0</div>
+            <div class="eyebrow">下载 · 0.2.0</div>
             <h2>现在就开始读</h2>
             <p>支持 Windows 10 / 11 x64。免费、开源，以 AGPL-3.0-or-later 发布。</p>
           </div>
           <div class="dl">
             <div class="card rv">
               <h3>安装包 <span class="rec">推荐</span></h3>
-              <div class="file">FreeRead_0.1.0_x64-setup.exe</div>
+              <div class="file">FreeRead_0.2.0_x64-setup.exe</div>
               <p>安装到当前用户目录，不需要管理员权限；缺少 WebView2 时自动安装。</p>
-              <a class="btn primary" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.1.0/FreeRead_0.1.0_x64-setup.exe"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
+              <a class="btn primary" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.0/FreeRead_0.2.0_x64-setup.exe"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
             </div>
             <div class="card rv" style="--i: 1">
               <h3>便携版</h3>
-              <div class="file">FreeRead_0.1.0_x64-portable.zip</div>
+              <div class="file">FreeRead_0.2.0_x64-portable.zip</div>
               <p>解压后运行 freeread-desktop.exe；文献库和设置仍保存在 %APPDATA%\FreeRead，和安装版共用。</p>
-              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.1.0/FreeRead_0.1.0_x64-portable.zip"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
+              <a class="btn" href="https://github.com/cristimezzz/FreeRead/releases/download/v0.2.0/FreeRead_0.2.0_x64-portable.zip"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
             </div>
           </div>
           <p class="dl-note rv">程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。所有版本见 <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a>。</p>

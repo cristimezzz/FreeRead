@@ -39,3 +39,5 @@ Thumbs.db
 
 # pytest 在沙箱里退回到项目内的临时目录
 core/pytest-of-*/
+
+.devenv
