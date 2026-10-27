@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { exitMs } from "../../components/motion";
+import { PanelNote } from "../../components/SidePanel";
 import { computeLayout } from "./layout";
 import type { KgScene, Selection } from "./KgScene";
 import type { CloudLink, CloudNode } from "./useKg";
@@ -94,8 +95,12 @@ export function KgCloud({ all, nodes, links, selected, onSelect }: Props) {
   return (
     <div className="kg-cloud" role="group" aria-label={`知识图谱云图：${nodes.length} 个实体、${links.length} 条关系`}>
       <div className="kg-cloud-canvas" ref={box} />
-      {error && <p className="search-note error kg-cloud-note">{error}</p>}
-      {!ready && !error && <p className="search-note kg-cloud-note">正在加载 3D 图谱…</p>}
+      {error && (
+        <PanelNote error className="kg-cloud-note m-0">
+          {error}
+        </PanelNote>
+      )}
+      {!ready && !error && <PanelNote className="kg-cloud-note m-0">正在加载 3D 图谱…</PanelNote>}
     </div>
   );
 }

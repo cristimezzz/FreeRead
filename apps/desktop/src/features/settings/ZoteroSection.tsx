@@ -4,8 +4,10 @@ import { type ReactNode, useEffect, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
-import { Button, Select, TextField } from "../../components/ui";
-import { More } from "./Row";
+import { OptionSelect, TextInput } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { Button } from "../../components/ui/button";
+import { Hint, More } from "./Row";
 
 type SyncState = Schemas["SyncStateOut"];
 type Zotero = Settings["zotero"];
@@ -73,21 +75,22 @@ export function ZoteroSection({
         }
       >
         <Button
-          small
-          icon="sync"
+          variant="outline"
+          size="sm"
           disabled={Boolean(syncing)}
           title="重新读取全部条目，补上增量同步看不到的变化"
           onClick={() => void fullSync()}
         >
+          <Icon name="sync" />
           完全同步
         </Button>
       </Row>
-      <p className="set-hint">
+      <Hint>
         平时同步只读取上次之后变化的条目（需要本地 API）；每 7 天或点"完全同步"时读取全部，并把 Zotero 里删除或移入回收站的条目归档。
-      </p>
+      </Hint>
       <More defaultOpen={zotero.source !== "auto" || Boolean(zotero.data_dir)}>
         <Row title="数据来源" desc="Zotero 运行时用本地 API；没运行时读取数据库快照（先复制一份再读，不会改动 Zotero 的数据库）">
-          <Select
+          <OptionSelect
             label="数据来源"
             hideLabel
             value={zotero.source}
@@ -100,18 +103,18 @@ export function ZoteroSection({
           />
         </Row>
         <Row title="Zotero 数据目录" desc="包含 zotero.sqlite 和 storage 文件夹；留空为默认的 用户目录\Zotero">
-          <TextField
+          <TextInput
             label="Zotero 数据目录"
             hideLabel
             mono
-            className="model-inp"
+            className="min-w-45"
             placeholder="~/Zotero"
             value={zotero.data_dir}
             commitOnChange
             onValue={(data_dir) => set({ data_dir: data_dir.trim() })}
           />
           {isTauri() && (
-            <Button small onClick={() => void browse()}>
+            <Button variant="outline" size="sm" onClick={() => void browse()}>
               选择…
             </Button>
           )}

@@ -1,7 +1,10 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { Icon } from "../../components/icons";
-import { IconButton } from "../../components/ui";
+import { IconButton } from "../../components/controls";
+import { PanelNote, SidePanel } from "../../components/SidePanel";
+import { Input } from "../../components/ui/input";
+import { cn } from "../../lib/utils";
 
 type Hit = Schemas["SearchHit"];
 type Response = Schemas["SearchResponse"];
@@ -77,16 +80,17 @@ export function SearchPanel({ docId, embedStatus, onPick, onClose }: Props) {
       : null;
 
   return (
-    <aside className="side-panel search-panel" aria-label="文内搜索">
-      <div className="side-panel-head">
-        <h2 className="serif">搜索</h2>
-        <IconButton icon="close" label="关闭搜索" onClick={onClose} />
-      </div>
-      <label className="field search-box">
-        <Icon name="search" />
-        <input
+    <SidePanel
+      title="搜索"
+      aria-label="文内搜索"
+      actions={<IconButton icon="close" label="关闭搜索" onClick={onClose} />}
+    >
+      <div className="relative mr-4 mb-3 ml-6">
+        <Icon name="search" className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
+        <Input
           ref={input}
           type="search"
+          className="pl-9"
           value={query}
           placeholder="搜索关键词或提一个问题"
           aria-label="搜索本文"
@@ -96,25 +100,32 @@ export function SearchPanel({ docId, embedStatus, onPick, onClose }: Props) {
             if (e.key === "Enter" && result?.hits[0]) pick(result.hits[0]);
           }}
         />
-      </label>
-      {note && <p className="search-note">{note}</p>}
-      {error && <p className="search-note error">搜索失败：{error}</p>}
-      {result && !result.hits.length && <p className="search-note">没有找到相关内容</p>}
-      <ol className="search-hits">
+      </div>
+      {note && <PanelNote>{note}</PanelNote>}
+      {error && <PanelNote error>搜索失败：{error}</PanelNote>}
+      {result && !result.hits.length && <PanelNote>没有找到相关内容</PanelNote>}
+      <ol className="min-h-0 flex-1 overflow-auto px-3 pb-4">
         {result?.hits.map((h) => (
-          <li key={h.block_id}>
-            <button type="button" className={h.block_id === active ? "active" : undefined} onClick={() => pick(h)}>
-              <span className="search-meta">
+          <li key={h.block_id} className="animate-in fade-in-0">
+            <button
+              type="button"
+              className={cn(
+                "hover:bg-accent flex w-full cursor-pointer flex-col gap-1 rounded-lg px-3 py-2.5 text-left",
+                h.block_id === active && "bg-brand-soft hover:bg-brand-soft",
+              )}
+              onClick={() => pick(h)}
+            >
+              <span className="text-muted-foreground text-[11.5px]">
                 {TYPE_LABEL[h.type] ?? h.type}
                 {h.page != null && ` · 第 ${h.page + 1} 页`}
                 {h.sources.includes("vector") && !h.sources.includes("fts") && " · 语义相关"}
               </span>
-              <span className="search-snippet">{renderSnippet(h.snippet)}</span>
+              <span className="font-serif text-sm leading-relaxed">{renderSnippet(h.snippet)}</span>
             </button>
           </li>
         ))}
       </ol>
-    </aside>
+    </SidePanel>
   );
 }
 
@@ -123,7 +134,11 @@ function renderSnippet(s: string) {
   let last = 0;
   for (const m of s.matchAll(HL)) {
     out.push(s.slice(last, m.index));
-    out.push(<mark key={m.index}>{m[1]}</mark>);
+    out.push(
+      <mark key={m.index} className="bg-brand-soft text-brand-ink rounded-[3px]">
+        {m[1]}
+      </mark>,
+    );
     last = (m.index ?? 0) + m[0].length;
   }
   out.push(s.slice(last));

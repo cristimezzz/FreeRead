@@ -1,8 +1,8 @@
-// 动效小工具：退出动画期间保持挂载、一次性脉冲高亮。时长与缓动在 global.css 的 --dur-* / --ease 里。
+// 动效小工具：退出动画期间保持挂载、一次性脉冲高亮。时长与缓动在 styles/index.css 的 --dur-* / --ease 里。
 
 import { useEffect, useState } from "react";
 
-/** 与 global.css 的 --dur 一致；用户要求减少动效时为 0。 */
+/** 与 styles/index.css 的 --dur 一致；用户要求减少动效时为 0。 */
 export function exitMs(): number {
   if (typeof window === "undefined" || !window.matchMedia) return 0;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;

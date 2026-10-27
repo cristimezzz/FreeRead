@@ -11,7 +11,7 @@ import type { Anchor } from "../../api/ir";
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const PAGE_GAP = 20;
-const PADDING = 28; // 与 global.css 里 .pdf-view 的 padding 一致
+const PADDING = 28; // 与 styles/reader.css 里 .pdf-view 的 padding 一致
 const RESIZE_DEBOUNCE = 120;
 
 /** 有批注的块：原版没有文字层，按块的位置在左边距画一条色条 */

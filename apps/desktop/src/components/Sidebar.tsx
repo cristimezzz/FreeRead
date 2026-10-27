@@ -1,10 +1,21 @@
-// 应用侧栏（ADR-0007）：248px，品牌 + 主导航；文献库页下方是分类树，设置页下方是本页锚点。
-// 阅读器里收成 60px 图标栏，把宽度让给正文；展开 / 收起有宽度过渡。
+// 应用侧栏（shadcn Sidebar，ADR-0009）：品牌 + 主导航；文献库页下方是分类树，设置页下方是本页锚点。
+// 阅读器里收成图标栏（collapsible="icon"），把宽度让给正文；收展由当前页面决定。
 
 import { useApp, type View } from "../app/store";
 import { CollectionTree } from "../features/library/CollectionTree";
 import { SETTINGS_SECTIONS } from "../features/settings/sections";
 import { BrandMark, Icon, type IconName } from "./icons";
+import {
+  Sidebar as SidebarRoot,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "./ui/sidebar";
 
 type ReaderView = Extract<View, { name: "reader" }>;
 
@@ -31,41 +42,35 @@ export function Sidebar() {
   }
   items.push({ key: "settings", label: "设置", icon: "settings", onClick: () => navigate({ name: "settings" }) });
 
-  // 阅读器里收成 60px 图标栏；同一个元素，宽度有过渡
-  const collapsed = view.name === "reader";
   return (
-    <aside className={`side${collapsed ? " collapsed" : ""}`} aria-label="主导航">
-      <div className="brand serif">
-        <BrandMark />
-        <span className="brand-name">FreeRead</span>
-      </div>
-      <nav className="side-nav">
-        {items.map((it) => (
-          <button
-            key={it.key}
-            type="button"
-            className={`nav${view.name === it.key ? " on" : ""}`}
-            aria-current={view.name === it.key ? "page" : undefined}
-            aria-label={collapsed ? it.label : undefined}
-            title={collapsed ? it.label : undefined}
-            onClick={it.onClick}
-          >
-            <Icon name={it.icon} />
-            <span className="nav-label">{it.label}</span>
-          </button>
-        ))}
-      </nav>
-      {view.name === "library" && (
-        <div className="side-extra" key="library">
-          <LibrarySection />
+    <SidebarRoot collapsible="icon" aria-label="主导航">
+      <SidebarHeader className="pt-4">
+        <div className="flex items-center gap-2.5 overflow-hidden px-1.5 pb-2 font-serif text-xl font-semibold tracking-tight whitespace-nowrap">
+          <BrandMark />
+          <span className="transition-opacity group-data-[collapsible=icon]:opacity-0">FreeRead</span>
         </div>
-      )}
-      {view.name === "settings" && (
-        <div className="side-extra" key="settings">
-          <SettingsAnchors />
-        </div>
-      )}
-    </aside>
+        <SidebarMenu>
+          {items.map((it) => (
+            <SidebarMenuItem key={it.key}>
+              <SidebarMenuButton
+                isActive={view.name === it.key}
+                aria-current={view.name === it.key ? "page" : undefined}
+                tooltip={it.label}
+                onClick={it.onClick}
+                className="data-[active=true]:[&>svg]:text-brand-ink"
+              >
+                <Icon name={it.icon} />
+                <span>{it.label}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent className="animate-in fade-in-0 group-data-[collapsible=icon]:hidden" key={view.name}>
+        {view.name === "library" && <LibrarySection />}
+        {view.name === "settings" && <SettingsAnchors />}
+      </SidebarContent>
+    </SidebarRoot>
   );
 }
 
@@ -75,33 +80,46 @@ function LibrarySection() {
   const total = useApp((s) => s.libraryTotal);
   const setCollectionId = useApp((s) => s.setCollectionId);
   return (
-    <>
-      <div className="sec">分类</div>
-      <CollectionTree collections={collections} selected={selected} total={total} onSelect={setCollectionId} />
-    </>
+    <SidebarGroup>
+      <SidebarGroupLabel>分类</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <CollectionTree collections={collections} selected={selected} total={total} onSelect={setCollectionId} />
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }
 
 function SettingsAnchors() {
   const active = useApp((s) => s.settingsSection) ?? SETTINGS_SECTIONS[0].id;
   return (
-    <>
-      <div className="sec">本页</div>
-      {SETTINGS_SECTIONS.map((s) => (
-        <a
-          key={s.id}
-          className={`anchor${s.id === active ? " on" : ""}`}
-          href={`#${s.id}`}
-          aria-current={s.id === active ? "location" : undefined}
-          onClick={(e) => {
-            e.preventDefault();
-            document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-            useApp.setState({ settingsSection: s.id, settingsPinned: s.id });
-          }}
-        >
-          {s.label}
-        </a>
-      ))}
-    </>
+    <SidebarGroup>
+      <SidebarGroupLabel>本页</SidebarGroupLabel>
+      <SidebarGroupContent>
+        <SidebarMenu>
+          {SETTINGS_SECTIONS.map((s) => (
+            <SidebarMenuItem key={s.id}>
+              <SidebarMenuButton
+                asChild
+                size="sm"
+                isActive={s.id === active}
+                className="data-[active=true]:text-brand-ink data-[active=true]:bg-transparent"
+              >
+                <a
+                  href={`#${s.id}`}
+                  aria-current={s.id === active ? "location" : undefined}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    useApp.setState({ settingsSection: s.id, settingsPinned: s.id });
+                  }}
+                >
+                  {s.label}
+                </a>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ))}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
   );
 }

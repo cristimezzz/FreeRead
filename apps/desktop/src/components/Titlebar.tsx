@@ -6,6 +6,9 @@ import { useEffect, useState } from "react";
 import { isTauri } from "../api/core";
 import { Icon } from "./icons";
 
+const WINBTN =
+  "text-foreground/80 hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14 inline-flex h-(--titlebar-h) w-11.5 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
+
 export function Titlebar() {
   const tauri = isTauri();
   const [maximized, setMaximized] = useState(false);
@@ -26,21 +29,21 @@ export function Titlebar() {
   if (!tauri) return null;
   const win = getCurrentWindow();
   return (
-    <div className="titlebar" data-tauri-drag-region>
-      <div className="titlebar-controls">
-        <button type="button" className="winbtn" aria-label="最小化" title="最小化" onClick={() => win.minimize()}>
+    <div className="fixed inset-x-0 top-0 z-50 flex h-(--titlebar-h) justify-end select-none" data-tauri-drag-region>
+      <div className="flex">
+        <button type="button" className={WINBTN} aria-label="最小化" title="最小化" onClick={() => win.minimize()}>
           <Icon size={16} strokeWidth={1.25} name="winMin" />
         </button>
         <button
           type="button"
-          className="winbtn"
+          className={WINBTN}
           aria-label={maximized ? "还原" : "最大化"}
           title={maximized ? "还原" : "最大化"}
           onClick={() => win.toggleMaximize()}
         >
           <Icon size={16} strokeWidth={1.25} name={maximized ? "winRestore" : "winMax"} />
         </button>
-        <button type="button" className="winbtn close" aria-label="关闭" title="关闭" onClick={() => win.close()}>
+        <button type="button" className={`${WINBTN} hover:bg-[#c42b1c] hover:text-white active:bg-[#c42b1c] active:text-white`} aria-label="关闭" title="关闭" onClick={() => win.close()}>
           <Icon size={16} strokeWidth={1.25} name="winClose" />
         </button>
       </div>

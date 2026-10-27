@@ -1,5 +1,5 @@
-// 设计令牌：固定的暖中性色阶（浅色 / 深色）+ 一个强调色，写入 :root。见 ADR-0007。
-// 强调色只用于指认（选中项、引用编号、定位高亮、焦点环、进度），主按钮用墨色。
+// 主题：shadcn neutral 色阶（styles/index.css）+ 一个强调色 --brand，深色切 <html> 的 .dark 类。见 ADR-0009。
+// 强调色只用于指认（选中项、引用编号、定位高亮、焦点环、进度），主按钮用 --primary。
 
 export type ThemeMode = "system" | "light" | "dark";
 export type Contrast = "standard" | "medium" | "high";
@@ -13,64 +13,27 @@ export const ACCENT_PRESETS: { name: string; color: string }[] = [
   { name: "石板", color: "#6B6A63" },
 ];
 
-type Ramp = Record<
-  "bg" | "bg2" | "surface" | "ink" | "ink2" | "ink3" | "line" | "line2" | "hover" | "ok" | "err" | "btn" | "btn-ink" | "page" | "scrim",
-  string
->;
-
-const LIGHT: Ramp = {
-  bg: "#FAF9F5",
-  bg2: "#F0EEE6",
-  surface: "#FFFFFF",
-  ink: "#141413",
-  ink2: "#3D3D3A",
-  ink3: "#65645E",
-  line: "#E6E3DA",
-  line2: "#D4D0C4",
-  hover: "rgba(20, 20, 19, 0.05)",
-  ok: "#3F6B45",
-  err: "#A3402F",
-  btn: "#141413",
-  "btn-ink": "#FAF9F5",
-  page: "#FFFFFF",
-  scrim: "rgba(20, 20, 19, 0.32)",
-};
-
-const DARK: Ramp = {
-  bg: "#1F1E1D",
-  bg2: "#262624",
-  surface: "#30302E",
-  ink: "#F3F1EA",
-  ink2: "#D6D3C8",
-  ink3: "#A6A398",
-  line: "#3B3A37",
-  line2: "#4C4A45",
-  hover: "rgba(255, 255, 255, 0.06)",
-  ok: "#9CC79C",
-  err: "#EBA08C",
-  btn: "#F3F1EA",
-  "btn-ink": "#1F1E1D",
-  page: "#ECEAE3",
-  scrim: "rgba(0, 0, 0, 0.5)",
-};
-
-// 提高对比度：次级 / 辅助文字往主文字压，分隔线加深
-const CONTRAST: Record<"light" | "dark", Record<Exclude<Contrast, "standard">, Partial<Ramp>>> = {
+// 中性色阶用 shadcn neutral（styles/index.css 的 :root / .dark），这里只写对比度覆盖：
+// "中 / 高"把辅助文字往主文字压，分隔线、输入框描边加深
+const CONTRAST: Record<"light" | "dark", Record<Exclude<Contrast, "standard">, Record<string, string>>> = {
   light: {
-    medium: { ink2: "#2E2E2B", ink3: "#4F4E49", line: "#D4D0C4", line2: "#B9B4A6" },
-    high: { ink2: "#1F1F1D", ink3: "#3D3D3A", line: "#B9B4A6", line2: "#8F8A7D" },
+    medium: { "--muted-foreground": "oklch(0.45 0 0)", "--border": "oklch(0.86 0 0)", "--input": "oklch(0.82 0 0)" },
+    high: { "--muted-foreground": "oklch(0.32 0 0)", "--border": "oklch(0.72 0 0)", "--input": "oklch(0.62 0 0)" },
   },
   dark: {
-    medium: { ink2: "#E4E1D7", ink3: "#C2BFB3", line: "#4C4A45", line2: "#625F58" },
-    high: { ink2: "#F3F1EA", ink3: "#D6D3C8", line: "#625F58", line2: "#807C73" },
+    medium: { "--muted-foreground": "oklch(0.8 0 0)", "--border": "oklch(1 0 0 / 18%)", "--input": "oklch(1 0 0 / 24%)" },
+    high: { "--muted-foreground": "oklch(0.9 0 0)", "--border": "oklch(1 0 0 / 32%)", "--input": "oklch(1 0 0 / 40%)" },
   },
 };
 
 // 强调色文字：浅色向黑、深色向白混合；对比度越高混得越多
-const ACCENT_INK: Record<"light" | "dark", Record<Contrast, string>> = {
+const BRAND_INK: Record<"light" | "dark", Record<Contrast, string>> = {
   light: { standard: "70%", medium: "60%", high: "50%" },
   dark: { standard: "62%", medium: "50%", high: "40%" },
 };
+
+// 图谱连线色：three.js 读不了 oklch，单独给一组十六进制
+const KG_LINE = { light: "#737373", dark: "#a1a1a1" };
 
 // 图谱实体类型的分类色（--kg-method 等）：按这个顺序相邻两色在色觉障碍下也能区分；
 // 节点总带文字标签和图例，颜色不是唯一的区分方式。深色是单独选的一组，不是自动反色。
@@ -83,15 +46,14 @@ export const KG_COLORS: Record<string, { light: string; dark: string }> = {
   Concept: { light: "#C24D7C", dark: "#CB648D" },
 };
 
-/** 生成 CSS 变量表（纯函数，便于测试）。 */
+/** 生成写到 :root 行内的 CSS 变量（纯函数，便于测试）：强调色、对比度覆盖、图谱分类色。 */
 export function themeVars(accent: string, dark: boolean, contrast: Contrast): Record<string, string> {
   const tone = dark ? "dark" : "light";
-  const ramp: Ramp = { ...(dark ? DARK : LIGHT), ...(contrast === "standard" ? {} : CONTRAST[tone][contrast]) };
-  const vars: Record<string, string> = {};
-  for (const [k, v] of Object.entries(ramp)) vars[`--${k}`] = v;
-  vars["--accent"] = accent;
-  vars["--accent-ink"] = `color-mix(in oklab, var(--accent) ${ACCENT_INK[tone][contrast]}, ${dark ? "#fff" : "#000"})`;
-  vars["--accent-soft"] = `color-mix(in srgb, var(--accent) ${dark ? 22 : 14}%, transparent)`;
+  const vars: Record<string, string> = { ...(contrast === "standard" ? {} : CONTRAST[tone][contrast]) };
+  vars["--brand"] = accent;
+  vars["--brand-ink"] = `color-mix(in oklab, var(--brand) ${BRAND_INK[tone][contrast]}, ${dark ? "#fff" : "#000"})`;
+  vars["--brand-soft"] = `color-mix(in srgb, var(--brand) ${dark ? 22 : 14}%, transparent)`;
+  vars["--kg-line"] = KG_LINE[tone];
   for (const [type, colors] of Object.entries(KG_COLORS)) vars[`--kg-${type.toLowerCase()}`] = colors[tone];
   return vars;
 }
@@ -104,7 +66,10 @@ export function resolveDark(mode: ThemeMode): boolean {
 export function applyTheme(accent: string, mode: ThemeMode, contrast: Contrast): void {
   const dark = resolveDark(mode);
   const root = document.documentElement;
+  // 切换对比度时先清掉上一次的覆盖
+  for (const k of ["--muted-foreground", "--border", "--input"]) root.style.removeProperty(k);
   for (const [k, v] of Object.entries(themeVars(accent, dark, contrast))) root.style.setProperty(k, v);
+  root.classList.toggle("dark", dark);
   root.dataset.theme = dark ? "dark" : "light";
   root.style.colorScheme = dark ? "dark" : "light";
 }

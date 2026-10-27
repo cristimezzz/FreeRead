@@ -1,9 +1,17 @@
-// 自定义右键菜单：取代 WebView 的默认菜单（刷新、检查等）。全局只有一个，openMenu 打开。
+// 自定义右键菜单：取代 WebView 的默认菜单（刷新、检查等）。全局只有一个，openMenu 打开；
+// 渲染用 shadcn 的 DropdownMenu（键盘导航、焦点归还由 Radix 提供）。
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { create } from "zustand";
 import { Icon, type IconName } from "./icons";
-import { usePresence } from "./motion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 export type MenuItem =
   | {
@@ -26,6 +34,12 @@ const useMenu = create<MenuState>(() => ({ menu: null }));
 /** 在视口坐标 (x, y) 打开菜单；空列表不打开。 */
 export function openMenu(x: number, y: number, items: MenuItem[]): void {
   if (!items.length) return;
+  // 已经打开时先关掉，下一帧在新位置重新打开（锚点移动后 Radix 不会自己重新定位）
+  if (useMenu.getState().menu) {
+    useMenu.setState({ menu: null });
+    requestAnimationFrame(() => useMenu.setState({ menu: { x, y, items } }));
+    return;
+  }
   useMenu.setState({ menu: { x, y, items } });
 }
 
@@ -38,128 +52,63 @@ export const isMenuOpen = () => useMenu.getState().menu !== null;
 /** 快捷键提示里的修饰键：macOS 用 ⌘，其他平台用 Ctrl+ */
 export const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
-const EDGE = 8;
-
 export function ContextMenu() {
   const menu = useMenu((s) => s.menu);
   // 关闭时保留最后的内容播放退出动画
   const last = useRef(menu);
   if (menu) last.current = menu;
-  const { mounted, closing } = usePresence(Boolean(menu));
-  const ref = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
-  const restoreFocus = useRef<HTMLElement | null>(null);
-
-  // 量好尺寸后再定位：靠右 / 靠下放不下时往左 / 往上翻
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!menu || !el) return;
-    const { width, height } = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    let left = menu.x;
-    let top = menu.y;
-    if (left + width > vw - EDGE) left = Math.max(EDGE, menu.x - width);
-    if (top + height > vh - EDGE) top = Math.max(EDGE, vh - height - EDGE);
-    setPos({ left, top });
-  }, [menu]);
-
-  // 打开时聚焦第一项，关闭后把焦点还给原来的元素
-  useEffect(() => {
-    if (!menu) return;
-    if (!restoreFocus.current) restoreFocus.current = document.activeElement as HTMLElement | null;
-    items(ref.current)[0]?.focus();
-  }, [menu]);
-  useEffect(() => {
-    if (menu) return;
-    const el = restoreFocus.current;
-    restoreFocus.current = null;
-    if (el?.isConnected) el.focus({ preventScroll: true });
-  }, [menu]);
-
-  useEffect(() => {
-    if (!menu) return;
-    const outside = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) closeMenu();
-    };
-    window.addEventListener("pointerdown", outside, true);
-    window.addEventListener("scroll", outside, true);
-    window.addEventListener("wheel", outside, true);
-    window.addEventListener("resize", closeMenu);
-    window.addEventListener("blur", closeMenu);
-    return () => {
-      window.removeEventListener("pointerdown", outside, true);
-      window.removeEventListener("scroll", outside, true);
-      window.removeEventListener("wheel", outside, true);
-      window.removeEventListener("resize", closeMenu);
-      window.removeEventListener("blur", closeMenu);
-    };
-  }, [menu]);
-
-  if (!mounted || !last.current) return null;
   const shown = last.current;
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    const list = items(ref.current);
-    const i = list.indexOf(document.activeElement as HTMLButtonElement);
-    const move = (to: number) => list[(to + list.length) % list.length]?.focus();
-    switch (e.key) {
-      case "ArrowDown":
-        move(i + 1);
-        break;
-      case "ArrowUp":
-        move(i < 0 ? -1 : i - 1);
-        break;
-      case "Home":
-        move(0);
-        break;
-      case "End":
-        move(-1);
-        break;
-      case "Escape":
-      case "Tab":
-        closeMenu();
-        break;
-      default:
-        return;
-    }
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  // 滚动、缩放窗口、窗口失焦时关闭（Radix 只处理点外部和 Esc）
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => closeMenu();
+    window.addEventListener("wheel", close, true);
+    window.addEventListener("resize", close);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("wheel", close, true);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [menu]);
 
   return (
-    <div
-      ref={ref}
-      className="ctx-menu"
-      role="menu"
-      data-state={closing ? "closing" : "open"}
-      style={pos ? { left: pos.left, top: pos.top } : { left: shown.x, top: shown.y, visibility: "hidden" }}
-      onKeyDown={onKeyDown}
-      onContextMenu={(e) => e.preventDefault()}
-    >
-      {shown.items.map((it, i) =>
-        it === "separator" ? (
-          <div key={`sep-${i}`} className="ctx-sep" role="separator" />
-        ) : (
-          <button
-            key={`${i}-${it.label}`}
-            type="button"
-            role="menuitem"
-            className={it.danger ? "danger" : undefined}
-            disabled={it.disabled}
-            tabIndex={-1}
-            onClick={() => {
-              closeMenu();
-              it.onSelect();
-            }}
-          >
-            <span className="ctx-icon">{it.icon && <Icon name={it.icon} size={16} />}</span>
-            <span className="ctx-label">{it.label}</span>
-            {it.shortcut && <kbd>{it.shortcut}</kbd>}
-          </button>
-        ),
-      )}
-    </div>
+    <DropdownMenu open={Boolean(menu)} onOpenChange={(open) => !open && closeMenu()} modal={false}>
+      {/* 0 尺寸的锚点放在指针位置，菜单靠右 / 靠下放不下时由 Radix 翻转 */}
+      <DropdownMenuTrigger asChild>
+        <span
+          aria-hidden="true"
+          className="pointer-events-none fixed size-0"
+          style={shown ? { left: shown.x, top: shown.y } : undefined}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        side="bottom"
+        sideOffset={0}
+        collisionPadding={8}
+        className="min-w-48"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {shown?.items.map((it, i) =>
+          it === "separator" ? (
+            <DropdownMenuSeparator key={`sep-${i}`} />
+          ) : (
+            <DropdownMenuItem
+              key={`${i}-${it.label}`}
+              variant={it.danger ? "destructive" : "default"}
+              disabled={it.disabled}
+              onSelect={() => it.onSelect()}
+            >
+              <span className="flex size-4 items-center justify-center">{it.icon && <Icon name={it.icon} />}</span>
+              {it.label}
+              {it.shortcut && <DropdownMenuShortcut>{it.shortcut}</DropdownMenuShortcut>}
+            </DropdownMenuItem>
+          ),
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -246,8 +195,4 @@ function fieldItems(field: HTMLInputElement | HTMLTextAreaElement, onError: (m: 
       },
     },
   ];
-}
-
-function items(root: HTMLElement | null): HTMLButtonElement[] {
-  return root ? Array.from(root.querySelectorAll<HTMLButtonElement>("button[role=menuitem]:not(:disabled)")) : [];
 }

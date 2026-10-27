@@ -4,7 +4,11 @@ import { type Anchor, type Block, type Document, PLACEHOLDER_RE } from "../../ap
 import { type DocumentStatus, useApp } from "../../app/store";
 import { usePresence } from "../../components/motion";
 import { Resizer } from "../../components/Resizer";
-import { Button, Dialog, IconButton, Segmented, Spinner } from "../../components/ui";
+import { ActionDialog, IconButton, OptionToggle, Spinner } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { Button } from "../../components/ui/button";
+import { Slider } from "../../components/ui/slider";
+import { cn } from "../../lib/utils";
 import { useTranslations } from "../translate/useTranslations";
 import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
@@ -339,42 +343,51 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
         : "";
 
   return (
-    <div className="page reader-page">
-      <header className="reader-top">
+    <div className="animate-in fade-in-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <header className="flex flex-wrap items-center gap-3 border-b py-3 pr-5 pl-3">
         <IconButton icon="back" label="返回文献库" onClick={() => navigate({ name: "library" })} />
-        <div className="reader-title">
-          <h1 className="serif" title={title}>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate font-serif text-[19px] leading-snug font-medium" title={title}>
             {doc?.meta.title || title}
           </h1>
-          {byline && <div className="reader-byline">{byline}</div>}
+          {byline && <div className="text-muted-foreground truncate text-xs">{byline}</div>}
         </div>
         {statusText && (
-          <span className="reader-status" role="status" data-state={parsing ? "busy" : status?.parse_status}>
-            {parsing ? <Spinner size={12} /> : <span className="dot" />}
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs" role="status">
+            {parsing ? (
+              <Spinner size={12} />
+            ) : (
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  status?.parse_status === "failed" ? "bg-destructive" : "bg-success",
+                )}
+              />
+            )}
             {statusText}
           </span>
         )}
         {status && (
           <Button
             variant="ghost"
-            small
-            icon="upload"
+            size="sm"
             disabled={!ready}
             title="导出总结、批注、正文和译文为 Markdown"
             onClick={() => setExportOpen(true)}
           >
+            <Icon name="upload" />
             导出
           </Button>
         )}
         {status && (
           <Button
             variant="ghost"
-            small
-            icon="sync"
+            size="sm"
             disabled={Boolean(parsing)}
             title={parsing ? "正在解析，完成后可以重新解析" : "换一个解析引擎重新解析本文"}
             onClick={() => setReparseOpen(true)}
           >
+            <Icon name="sync" />
             重新解析
           </Button>
         )}
@@ -392,10 +405,10 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
         current={status?.parser_engine ?? undefined}
         onClose={() => setReparseOpen(false)}
       />
-      <div className="reader-toolbar" role="toolbar" aria-label="阅读工具">
-        <div className="tool-group">
-          <span className="lbl">视图</span>
-          <Segmented
+      <div className="flex flex-wrap items-center gap-4 border-b px-5 py-2.5" role="toolbar" aria-label="阅读工具">
+        <div className="flex items-center gap-1.5">
+          <span className="text-muted-foreground text-xs">视图</span>
+          <OptionToggle
             label="视图"
             value={layout}
             options={[
@@ -407,9 +420,9 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           />
         </div>
         {layout !== "pdf" && (
-          <div className="tool-group">
-            <span className="lbl">翻译</span>
-            <Segmented
+          <div className="flex items-center gap-1.5">
+            <span className="text-muted-foreground text-xs">翻译</span>
+            <OptionToggle
               label="翻译"
               value={prefs.mode}
               options={[
@@ -423,8 +436,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             {ready && (
               <Button
                 variant="ghost"
-                small
-                icon="translate"
+                size="sm"
                 disabled={translatingAll}
                 title={
                   translatingAll
@@ -433,6 +445,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                 }
                 onClick={() => void translation.translateAll()}
               >
+                <Icon name="translate" />
                 {translatingAll
                   ? `翻译中 ${Math.round((docJob?.progress ?? 0) * 100)}%`
                   : "翻译全文"}
@@ -441,56 +454,58 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           </div>
         )}
         {layout !== "pdf" && (
-          <label className="tool-group">
-            <span className="lbl">字号</span>
-            <input
-              type="range"
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground text-xs" id="reader-font-size">
+              字号
+            </span>
+            <Slider
+              className="w-24"
+              aria-labelledby="reader-font-size"
               min={14}
               max={24}
               step={1}
-              value={prefs.fontSize}
+              value={[prefs.fontSize]}
               title={`${prefs.fontSize}px`}
-              onChange={(e) => setPref("fontSize", Number(e.target.value))}
+              onValueChange={([v]) => setPref("fontSize", v)}
             />
-          </label>
+          </div>
         )}
         {ready && (
-          <div className="tool-actions">
+          // 打开的面板用强调色浅底标出
+          <div className="ml-auto flex gap-0.5 [&>[aria-pressed=true]]:bg-brand-soft [&>[aria-pressed=true]]:text-brand-ink">
             <Button
               variant="ghost"
-              small
-              icon="search"
+              size="sm"
               title="搜索本文（Ctrl+F）"
-              pressed={side === "search"}
               onClick={() => toggleSide("search")}
+              aria-pressed={side === "search"}
             >
+              <Icon name="search" />
               搜索
             </Button>
-            <Button variant="ghost" small icon="summary" pressed={side === "summary"} onClick={() => toggleSide("summary")}>
+            <Button variant="ghost" size="sm" onClick={() => toggleSide("summary")} aria-pressed={side === "summary"}>
+              <Icon name="summary" />
               总结
             </Button>
             <Button
               variant="ghost"
-              small
-              icon="qa"
-              pressed={side === "qa"}
+              size="sm"
               onClick={() => (side === "qa" && qaHidden ? setQaHidden(false) : toggleSide("qa"))}
+              aria-pressed={side === "qa"}
             >
+              <Icon name="qa" />
               问答
             </Button>
-            <Button
-              variant="ghost"
-              small
-              icon="glossary"
-              pressed={side === "glossary"}
-              onClick={() => toggleSide("glossary")}
-            >
+            <Button variant="ghost" size="sm" onClick={() => toggleSide("glossary")} aria-pressed={side === "glossary"}>
+              <Icon name="glossary" />
               术语
             </Button>
-            <Button variant="ghost" small icon="graph" pressed={side === "kg"} onClick={() => toggleSide("kg")}>
+            <Button variant="ghost" size="sm" onClick={() => toggleSide("kg")} aria-pressed={side === "kg"}>
+              <Icon name="graph" />
               图谱
             </Button>
-            <Button variant="ghost" small icon="edit" pressed={side === "notes"} onClick={() => toggleSide("notes")}>
+            <Button variant="ghost" size="sm" onClick={() => toggleSide("notes")} aria-pressed={side === "notes"}>
+              <Icon name="edit" />
               批注{ann.items.length ? ` ${ann.items.length}` : ""}
             </Button>
           </div>
@@ -513,7 +528,13 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
             </div>
           )}
           {side === "qa" && qaHidden && (
-            <Button small icon="qa" className="qa-return" onClick={() => setQaHidden(false)}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="animate-in fade-in-0 absolute bottom-4 left-1/2 z-5 -translate-x-1/2 shadow-sm"
+              onClick={() => setQaHidden(false)}
+            >
+              <Icon name="qa" />
               回到问答
             </Button>
           )}
@@ -609,7 +630,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           </>
         )}
       </div>
-      <Dialog
+      <ActionDialog
         open={Boolean(consent)}
         headline={`发送文档内容进行${consentFor ?? "处理"}？`}
         onClose={(v) => (v === "ok" ? void acceptConsent() : declineConsent())}
@@ -623,7 +644,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
           {settings?.providers.find((p) => p.id === consent?.providerId)?.name ?? consent?.providerId}。
           文档的其余数据都保存在本机。之后可以在 设置 › 隐私 中撤销。
         </p>
-      </Dialog>
+      </ActionDialog>
     </div>
   );
 }

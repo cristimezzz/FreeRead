@@ -1,14 +1,16 @@
 # FreeRead Desktop（Tauri 2 + React + TypeScript）
 
-界面采用"纸张、墨色与陶土"设计语言：固定的暖中性色阶 + 一个可选强调色，组件是基于原生元素的小组件，见 [ADR-0007](../../docs/adr/0007-paper-ink-clay-ui.md)。
+界面用 shadcn/ui（Radix + Tailwind CSS v4）默认的 neutral 主题 + 一个可选强调色；阅读区排版留在手写 CSS，见 [ADR-0009](../../docs/adr/0009-shadcn-ui.md)。新增控件：`npx shadcn@latest add <name>`（生成的 `cn` 导入改成 `@/lib/utils`）。
 
 ## 目录
 
 ```
 src/
-├─ app/          App（启动、布局）、store（Zustand：导航、设置、分类、任务推送）、theme（色阶 + 强调色 → CSS 变量）
+├─ app/          App（启动、布局）、store（Zustand：导航、设置、分类、任务推送）、theme（深浅色、强调色、对比度 → CSS 变量）
 ├─ api/          core（连接 sidecar）、client（openapi-fetch，类型由 OpenAPI 生成）、sse（fetch 读 SSE）、ir（IR 类型）
-├─ components/   ui.tsx（按钮、分段控件、开关、选择框、对话框、进度条）、Sidebar（248px 侧栏 / 阅读器 60px 图标栏）、Snackbar、icons
+├─ components/   ui/（shadcn/ui 组件）、controls（分段控件、选择框、文本框、开关、进度条、对话框等常用封装）、
+│                Sidebar（shadcn Sidebar，阅读器里收成图标栏）、SidePanel、ContextMenu、Snackbar（sonner）、icons（lucide）
+├─ styles/       index.css（Tailwind + shadcn 令牌）、reader.css（阅读区排版）
 └─ features/
    ├─ library/   分类树、文献列表、同步 / 导入
    ├─ reader/    PdfView（pdf.js）、ReflowView（按 IR 渲染）、locate（双向定位）、render（KaTeX / 表格净化）

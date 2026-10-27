@@ -1,8 +1,12 @@
 // 问答卡片：收起时只有 AI 标题；展开时是完整的一问一答（引用、选段下划线）、操作和输入框。
 // 另外两种临时卡片：流式输出中的卡片、写新问题的草稿卡片（另起 / 新话题）。
 
-import { type ReactNode, type RefObject } from "react";
+import { type ComponentProps, type ReactNode, type RefObject } from "react";
 import { Icon } from "../../components/icons";
+import { PanelNote } from "../../components/SidePanel";
+import { Button } from "../../components/ui/button";
+import { Textarea } from "../../components/ui/textarea";
+import { cn } from "../../lib/utils";
 import type { AnchorRange } from "./anchors";
 import type { QaNode } from "./useQa";
 
@@ -65,16 +69,18 @@ export interface ComposerProps {
 
 export function Composer({ label, aside, draft, setDraft, running, onSend, onStop, inputRef, autoFocus }: ComposerProps) {
   return (
-    <div className="composer qa-card-composer">
-      <div className="composer-target">
-        <span>{label}</span>
+    // 圆角输入卡：聚焦时整张卡片用强调色描边
+    <div className="qa-card-composer bg-card focus-within:border-brand focus-within:ring-brand-soft rounded-2xl border border-input pt-3 pr-3 pb-2.5 pl-4 shadow-xs transition-[border-color,box-shadow] focus-within:ring-3">
+      <div className="text-muted-foreground mb-1.5 flex items-center gap-2 text-xs">
+        <span className="min-w-0 flex-1 truncate">{label}</span>
         {aside && (
-          <button type="button" className="qa-link" onClick={aside.onClick}>
+          <QaLink className="flex-none" onClick={aside.onClick}>
             {aside.text}
-          </button>
+          </QaLink>
         )}
       </div>
-      <textarea
+      <Textarea
+        className="max-h-40 min-h-11.5 resize-none rounded-none border-0 bg-transparent p-0 leading-normal shadow-none focus-visible:ring-0 dark:bg-transparent"
         ref={inputRef}
         value={draft}
         rows={2}
@@ -89,16 +95,16 @@ export function Composer({ label, aside, draft, setDraft, running, onSend, onSto
           }
         }}
       />
-      <div className="composer-foot">
-        <span>只依据本文回答，并标出处</span>
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground flex-1 text-xs">只依据本文回答，并标出处</span>
         {running ? (
-          <button type="button" className="send" aria-label="停止" title="停止" onClick={onStop}>
-            <span className="stop-square" />
-          </button>
+          <Button size="icon-sm" aria-label="停止" title="停止" onClick={onStop}>
+            <span className="size-2.5 rounded-xs bg-current" />
+          </Button>
         ) : (
-          <button type="button" className="send" aria-label="发送" title="发送" disabled={!draft.trim()} onClick={onSend}>
+          <Button size="icon-sm" aria-label="发送" title="发送" disabled={!draft.trim()} onClick={onSend}>
             <Icon name="send" strokeWidth={2} />
-          </button>
+          </Button>
         )}
       </div>
     </div>
@@ -152,19 +158,19 @@ export function ExpandedCard({
           )}
           <div>{renderAnswer(node.answer, anchors, cited, blockText, onPick, onAnchor)}</div>
         </div>
-        {node.status === "stale" && <p className="search-note">原文已重新解析，部分引用已失效。</p>}
+        {node.status === "stale" && <PanelNote className="mx-0">原文已重新解析，部分引用已失效。</PanelNote>}
       </div>
-      <div className="qa-actions">
-        <button type="button" className="qa-link" disabled={running} onClick={onRetake}>
+      <div className="flex items-center gap-3.5">
+        <QaLink disabled={running} onClick={onRetake}>
           重答
-        </button>
-        <button type="button" className="qa-link" onClick={onDiverge}>
+        </QaLink>
+        <QaLink onClick={onDiverge}>
           另起
-        </button>
-        <button type="button" className="qa-link danger" disabled={running} onClick={onDelete}>
+        </QaLink>
+        <QaLink danger disabled={running} onClick={onDelete}>
           删除分支
-        </button>
-        <span className="qa-actions-hint">选中回答里的文字可以就此追问</span>
+        </QaLink>
+        <span className="text-muted-foreground flex-1 text-right text-xs">选中回答里的文字可以就此追问</span>
       </div>
       {composer}
     </article>
@@ -187,18 +193,18 @@ export function PendingCard({
     <article className="qa-card expanded pending" aria-busy="true">
       <header className="qa-card-head">
         <span className="qa-card-title">{short(question, 24)}</span>
-        <button type="button" className="qa-link" onClick={onStop}>
+        <QaLink onClick={onStop}>
           停止
-        </button>
+        </QaLink>
       </header>
       <div className="qa-card-body">
         {anchor && <Quote text={anchor} />}
         <div className="qa-question">{question}</div>
         <div className="qa-answer">
           {shown ? (
-            <span className="fade-in">{shown}</span>
+            <span className="animate-in fade-in-0">{shown}</span>
           ) : (
-            <span className="search-note fade-in">正在检索原文…</span>
+            <span className="text-muted-foreground animate-in fade-in-0 text-[12.5px]">正在检索原文…</span>
           )}
         </div>
       </div>
@@ -281,5 +287,20 @@ function renderAnswer(
     ) : (
       <span key={`t-${i}`}>{g.parts}</span>
     ),
+  );
+}
+
+/** 卡片里的文字按钮（重答、另起、停止 …）：灰色小字，悬停变深；danger 悬停变红。 */
+function QaLink({ danger, className, ...rest }: ComponentProps<"button"> & { danger?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "text-muted-foreground hover:text-foreground cursor-pointer text-xs transition-colors disabled:cursor-default disabled:opacity-40 disabled:hover:text-muted-foreground",
+        danger && "hover:text-destructive",
+        className,
+      )}
+      {...rest}
+    />
   );
 }

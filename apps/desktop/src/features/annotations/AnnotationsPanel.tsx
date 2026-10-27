@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Button, IconButton } from "../../components/ui";
+import { IconButton } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { PanelNote, SidePanel } from "../../components/SidePanel";
+import { Button } from "../../components/ui/button";
 import { type Annotation, COLORS, type useAnnotations } from "./useAnnotations";
 
 interface Props {
@@ -47,16 +50,21 @@ export function AnnotationsPanel({ state, quoteText, focusId, onPick, onExport, 
   }, [focusId]);
 
   return (
-    <aside className="side-panel ann-panel" aria-label="批注">
-      <div className="side-panel-head">
-        <h2 className="serif">批注</h2>
-        <Button small variant="ghost" icon="upload" onClick={onExport}>
-          导出
-        </Button>
-        <IconButton icon="close" label="关闭批注" onClick={onClose} />
-      </div>
+    <SidePanel
+      title="批注"
+      aria-label="批注"
+      actions={
+        <>
+          <Button variant="ghost" size="sm" onClick={onExport}>
+            <Icon name="upload" />
+            导出
+          </Button>
+          <IconButton icon="close" label="关闭批注" onClick={onClose} />
+        </>
+      }
+    >
       {!items.length && (
-        <p className="search-note">在重排视图里选中原文，就可以用颜色高亮或写批注。批注只保存在本机，可以导出为 Markdown。</p>
+        <PanelNote>在重排视图里选中原文，就可以用颜色高亮或写批注。批注只保存在本机，可以导出为 Markdown。</PanelNote>
       )}
       <ul className="ann-list" ref={list}>
         {items.map((a) => (
@@ -64,7 +72,7 @@ export function AnnotationsPanel({ state, quoteText, focusId, onPick, onExport, 
             <button type="button" className="ann-quote" data-color={a.color} onClick={() => onPick(a.block_id)}>
               {quoteText(a) || "（整块）"}
             </button>
-            {a.status === "stale" && <p className="search-note">原文已重新解析，找不到这段文字了。</p>}
+            {a.status === "stale" && <PanelNote className="mx-0">原文已重新解析，找不到这段文字了。</PanelNote>}
             <NoteEditor a={a} autoFocus={a.id === focusId} onSave={(note) => void update(a.id, { note })} />
             <div className="ann-tools">
               {COLORS.map((c) => (
@@ -85,6 +93,6 @@ export function AnnotationsPanel({ state, quoteText, focusId, onPick, onExport, 
           </li>
         ))}
       </ul>
-    </aside>
+    </SidePanel>
   );
 }

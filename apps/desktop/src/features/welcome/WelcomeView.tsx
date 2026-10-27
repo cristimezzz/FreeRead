@@ -7,7 +7,10 @@ import { isTauri } from "../../api/core";
 import { type Settings, useApp } from "../../app/store";
 import { BrandMark } from "../../components/icons";
 import { exitMs } from "../../components/motion";
-import { Button, Segmented, TextField } from "../../components/ui";
+import { OptionToggle, TextInput } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { Button } from "../../components/ui/button";
+import { cn } from "../../lib/utils";
 import {
   REMOTE_ENGINES,
   type RemoteEngine,
@@ -19,7 +22,7 @@ import {
   useEngines,
 } from "../settings/actions";
 import { RemoteParserCard } from "../settings/parsers";
-import { Row } from "../settings/Row";
+import { ConnState, FieldGrid, Hint, Panel, Row } from "../settings/Row";
 import { applyWelcomeProvider, draftFromSettings, PROVIDER_PRESETS, type ProviderKind, providerPreset } from "./model";
 
 const STEPS = ["大模型服务", "解析服务", "导入文献"] as const;
@@ -53,29 +56,48 @@ export function WelcomeView() {
   const back = step > 0 ? () => setStep((s) => s - 1) : undefined;
 
   return (
-    <div className="welcome">
-      <div className="welcome-col">
-        <header className="welcome-head">
+    <div className="animate-in fade-in-0 h-full overflow-auto px-6 pt-[calc(var(--titlebar-h)+28px)] pb-16 duration-300">
+      <div className="mx-auto max-w-3xl">
+        <header className="flex items-start gap-4.5 max-[560px]:flex-wrap">
           <BrandMark size={40} />
-          <div>
-            <h1 className="display serif">欢迎使用 FreeRead</h1>
-            <p className="page-sub">静下心来，开启你的阅读之旅。</p>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-serif text-4xl leading-tight font-medium tracking-tight">欢迎使用 FreeRead</h1>
+            <p className="text-muted-foreground mt-1.5">静下心来，开启你的阅读之旅。</p>
           </div>
-          <Button variant="ghost" small className="welcome-skip" disabled={finishing} onClick={() => void finish(false)}>
+          <Button variant="ghost" size="sm" className="flex-none" disabled={finishing} onClick={() => void finish(false)}>
             跳过向导
           </Button>
         </header>
 
-        <ol className="welcome-steps" aria-label="步骤">
+        <ol className="mt-8 flex gap-6 border-b" aria-label="步骤">
           {STEPS.map((label, i) => (
-            <li key={label} aria-current={i === step ? "step" : undefined} data-done={i < step || undefined}>
-              <i>{i + 1}</i>
+            <li
+              key={label}
+              aria-current={i === step ? "step" : undefined}
+              className={cn(
+                "text-muted-foreground -mb-px flex items-center gap-2 border-b-2 border-transparent px-1 pb-3 text-[13px] transition-colors",
+                i < step && "text-foreground/80",
+                i === step && "border-brand text-foreground font-medium",
+              )}
+            >
+              <i
+                className={cn(
+                  "grid size-5.5 place-items-center rounded-full border text-xs not-italic tabular-nums",
+                  i === step && "border-brand text-brand",
+                )}
+              >
+                {i + 1}
+              </i>
               {label}
             </li>
           ))}
         </ol>
 
-        <section className="welcome-step" key={step} aria-labelledby="welcome-step-h">
+        <section
+          className="animate-in fade-in-0 slide-in-from-bottom-1 pt-7 duration-300"
+          key={step}
+          aria-labelledby="welcome-step-h"
+        >
           {step === 0 && <ProviderStep settings={settings} onNext={next} />}
           {step === 1 && <ParseStep settings={settings} onBack={back} onNext={next} />}
           {step === 2 && <ImportStep settings={settings} busy={finishing} onBack={back} onFinish={finish} />}
@@ -114,16 +136,16 @@ function WelcomeIntro({ onDone }: { onDone: () => void }) {
 
   return (
     <div
-      className="boot welcome-intro"
+      className="welcome-intro text-muted-foreground flex h-full cursor-default flex-col items-center justify-center gap-5 p-6 text-center text-[13px] select-none"
       data-state={leaving ? "leaving" : undefined}
       role="presentation"
       onClick={() => setLeaving(true)}
     >
       <BrandMark size={56} />
-      <div className="boot-name serif">FreeRead</div>
+      <div className="text-foreground font-serif text-3xl font-medium tracking-tight">FreeRead</div>
       {/* 占住启动页进度条和状态文字的位置，Logo 与名称才不会移动 */}
       <span className="welcome-intro-rule" />
-      <p aria-hidden="true" className="welcome-intro-spacer">
+      <p aria-hidden="true" className="invisible">
         FreeRead
       </p>
     </div>
@@ -133,23 +155,23 @@ function WelcomeIntro({ onDone }: { onDone: () => void }) {
 function StepHead({ title, children }: { title: string; children: ReactNode }) {
   return (
     <>
-      <h2 id="welcome-step-h" className="serif">
+      <h2 id="welcome-step-h" className="mb-1 font-serif text-xl font-medium">
         {title}
       </h2>
-      <p className="set-hint">{children}</p>
+      <Hint>{children}</Hint>
     </>
   );
 }
 
 function StepActions({ onBack, children }: { onBack?: () => void; children: ReactNode }) {
   return (
-    <div className="welcome-actions">
+    <div className="mt-7 flex items-center gap-2">
       {onBack && (
         <Button variant="ghost" onClick={onBack}>
           上一步
         </Button>
       )}
-      <span className="welcome-actions-end">{children}</span>
+      <span className="ml-auto flex gap-2">{children}</span>
     </div>
   );
 }
@@ -219,9 +241,9 @@ function ProviderStep({ settings, onNext }: { settings: Settings; onNext: () => 
         翻译、总结、问答和知识图谱都要用到大模型。支持 OpenAI 兼容接口（OpenAI、DeepSeek、通义、Moonshot、vLLM
         等）、Anthropic 和本机的 Ollama。API Key 保存在系统钥匙串，不写入设置文件。
       </StepHead>
-      <div className="card provider">
-        <div className="provider-head">
-          <Segmented
+      <Panel>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <OptionToggle
             label="服务类型"
             value={draft.kind}
             options={(Object.keys(PROVIDER_PRESETS) as ProviderKind[]).map((k) => ({ value: k, label: PROVIDER_PRESETS[k].label }))}
@@ -230,22 +252,12 @@ function ProviderStep({ settings, onNext }: { settings: Settings; onNext: () => 
               setTested(null);
             }}
           />
-          <span className="provider-actions">
-            {tested === true && (
-              <span className="state ok">
-                <i />
-                连接正常
-              </span>
-            )}
-            {tested === false && (
-              <span className="state err">
-                <i />
-                连接失败
-              </span>
-            )}
+          <span className="ml-auto flex items-center gap-1">
+            {tested === true && <ConnState ok>连接正常</ConnState>}
+            {tested === false && <ConnState ok={false}>连接失败</ConnState>}
             <Button
               variant="ghost"
-              small
+              size="sm"
               disabled={!canSave || busy}
               onClick={() =>
                 run(async () => {
@@ -258,12 +270,12 @@ function ProviderStep({ settings, onNext }: { settings: Settings; onNext: () => 
             </Button>
           </span>
         </div>
-        <div className="grid">
-          <TextField label="名称" value={draft.name} onValue={(name) => edit({ name })} />
-          <TextField label="模型" mono value={draft.model} onValue={(model) => edit({ model })} />
-          <TextField label="Base URL" mono value={draft.base_url} onValue={(base_url) => edit({ base_url })} />
+        <FieldGrid>
+          <TextInput label="名称" value={draft.name} onValue={(name) => edit({ name })} />
+          <TextInput label="模型" mono value={draft.model} onValue={(model) => edit({ model })} />
+          <TextInput label="Base URL" mono value={draft.base_url} onValue={(base_url) => edit({ base_url })} />
           {needsKey && (
-            <TextField
+            <TextInput
               label={hasKey ? "API Key（已保存，输入新值可替换）" : "API Key"}
               type="password"
               mono
@@ -274,12 +286,13 @@ function ProviderStep({ settings, onNext }: { settings: Settings; onNext: () => 
               }}
             />
           )}
-        </div>
-      </div>
+        </FieldGrid>
+      </Panel>
       <StepActions>
-        <Button onClick={onNext}>跳过</Button>
+        <Button variant="outline" onClick={onNext}>
+          跳过
+        </Button>
         <Button
-          variant="primary"
           disabled={!canSave || busy}
           onClick={() =>
             run(async () => {
@@ -318,7 +331,7 @@ function ParseStep({ settings, onBack, onNext }: { settings: Settings; onBack?: 
         FreeRead 把 PDF 解析成段落、公式、表格和图片，再做翻译与问答。解析质量决定了阅读和翻译的效果。
       </StepHead>
       <Row title="解析引擎" desc={choice.desc}>
-        <Segmented
+        <OptionToggle
           label="解析引擎"
           value={choice.value}
           options={ENGINE_CHOICES.map((c) => ({ value: c.value, label: c.label }))}
@@ -345,16 +358,14 @@ function ParseStep({ settings, onBack, onNext }: { settings: Settings; onBack?: 
         />
       )}
       {heavy && info && (
-        <p className="set-hint">
+        <Hint>
           {info.available
             ? `${info.label} 已可用，导入的 PDF 会在后台升级成高质量版本。`
             : "可以先继续：安装或配置完成之前，先用快速模式解析。"}
-        </p>
+        </Hint>
       )}
       <StepActions onBack={onBack}>
-        <Button variant="primary" onClick={onNext}>
-          继续
-        </Button>
+        <Button onClick={onNext}>继续</Button>
       </StepActions>
     </>
   );
@@ -388,27 +399,28 @@ function ImportStep({
         FreeRead 读取 Zotero 里的条目、分类和 PDF 附件，不会改动 Zotero 的数据。Zotero 运行时用本地 API，没运行时读取数据库快照。以后可以随时在文献库里点「同步」。
       </StepHead>
       <Row title="Zotero 数据目录" desc="包含 zotero.sqlite 和 storage 文件夹；留空为默认的 用户目录\Zotero">
-        <TextField
+        <TextInput
           label="Zotero 数据目录"
           hideLabel
           mono
-          className="model-inp"
+          className="min-w-45"
           placeholder="~/Zotero"
           value={zotero.data_dir}
           commitOnChange
           onValue={(d) => setDir(d.trim())}
         />
         {isTauri() && (
-          <Button small onClick={() => void browse()}>
+          <Button variant="outline" size="sm" onClick={() => void browse()}>
             选择…
           </Button>
         )}
       </Row>
       <StepActions onBack={onBack}>
-        <Button disabled={busy} onClick={() => onFinish(false)}>
+        <Button variant="outline" disabled={busy} onClick={() => onFinish(false)}>
           暂不导入
         </Button>
-        <Button variant="primary" icon="sync" disabled={busy} onClick={() => onFinish(true)}>
+        <Button disabled={busy} onClick={() => onFinish(true)}>
+          <Icon name="sync" />
           从 Zotero 同步
         </Button>
       </StepActions>
