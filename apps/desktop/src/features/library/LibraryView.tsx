@@ -5,7 +5,11 @@ import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
 import { copyText, isMenuOpen, MOD, type MenuItem, openMenu } from "../../components/ContextMenu";
 import { Icon } from "../../components/icons";
-import { Button, Dialog, Progress } from "../../components/ui";
+import { ActionDialog } from "../../components/controls";
+import { isModalOpen } from "../../components/modal";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Progress } from "../../components/ui/progress";
 import { ReparseDialog } from "../reader/ReparseDialog";
 import { defaultDoc, formatAuthors, ItemList } from "./ItemList";
 
@@ -45,7 +49,7 @@ async function revealInZotero(key: string): Promise<void> {
 }
 
 function focusItem(id: string): void {
-  const el = document.querySelector<HTMLElement>(`.item-row[data-item-id="${CSS.escape(id)}"]`);
+  const el = document.querySelector<HTMLElement>(`button[data-item-id="${CSS.escape(id)}"]`);
   el?.focus({ preventScroll: true });
   el?.scrollIntoView({ block: "nearest" });
 }
@@ -322,7 +326,7 @@ export function LibraryView() {
   // 处理函数每次渲染都换成最新的，监听只注册一次。
   const onKey = useRef<(e: KeyboardEvent) => void>(() => {});
   onKey.current = (e) => {
-    if (e.defaultPrevented || isMenuOpen() || document.querySelector("dialog[open]")) return;
+    if (e.defaultPrevented || isMenuOpen() || isModalOpen()) return;
     const mod = e.ctrlKey || e.metaKey;
     const target = e.target instanceof Element ? e.target : null;
     const inSearch = target === searchRef.current;
@@ -451,7 +455,7 @@ export function LibraryView() {
 
   return (
     <div
-      className="page library"
+      className="animate-in fade-in-0 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
       onContextMenu={(e) => {
         // 条目已经弹了自己的菜单；文本框、选中的文字交给全局的编辑 / 复制菜单
         if (e.defaultPrevented || (e.target as Element).closest(TEXT_FIELD)) return;
@@ -460,62 +464,82 @@ export function LibraryView() {
         openMenu(e.clientX, e.clientY, listMenu());
       }}
     >
-      <header className="page-head">
+      <header className="flex flex-wrap items-end justify-between gap-5 px-12 pt-11 pb-6 max-[900px]:px-6">
         <div>
-          <h1 className="display serif">文献库</h1>
-          <p className="page-sub">
+          <h1 className="font-serif text-4xl leading-tight font-medium tracking-tight">文献库</h1>
+          <p className="text-muted-foreground mt-1.5">
             {scope} · {total} 篇
           </p>
         </div>
-        <div className="page-actions">
-          <Button icon="upload" onClick={importPdf} title={`导入 PDF（${KEYS.import}）`}>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={importPdf} title={`导入 PDF（${KEYS.import}）`}>
+            <Icon name="upload" />
             导入 PDF
           </Button>
-          <Button variant="primary" icon="sync" onClick={sync} title={KEYS.sync}>
+          <Button onClick={sync} title={KEYS.sync}>
+            <Icon name="sync" />
             {zoteroKey ? "同步此分类" : "从 Zotero 同步"}
           </Button>
         </div>
       </header>
-      <div className="library-tools">
-        <label className="field search">
-          <Icon name="search" />
-          <input
+      <div className="flex flex-wrap items-center gap-3 px-12 pb-2 max-[900px]:px-6">
+        <div className="relative max-w-[520px] flex-[1_1_320px]">
+          <Icon name="search" className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2" />
+          <Input
             ref={searchRef}
             type="search"
+            className="pl-9"
             value={query}
             placeholder={`搜索标题或作者（${KEYS.search}）`}
             aria-label="搜索文献"
             onChange={(e) => setQuery(e.target.value)}
           />
-        </label>
+        </div>
         {checkedItems.length ? (
-          <div className="library-batch" role="toolbar" aria-label="批量操作">
-            <span className="library-batch-count">已选 {checkedItems.length} 篇</span>
+          <div
+            className="animate-in fade-in-0 ml-auto flex flex-wrap items-center gap-1"
+            role="toolbar"
+            aria-label="批量操作"
+          >
+            <span className="text-foreground/80 mr-2 text-[13px] tabular-nums">已选 {checkedItems.length} 篇</span>
             <Button
               variant="ghost"
-              small
+              size="sm"
               disabled={checkedItems.length === items.length}
               onClick={checkAll}
               title={KEYS.checkAll}
             >
               全选
             </Button>
-            <Button variant="ghost" small icon="copy" onClick={() => copyMany(checkedItems, citation, "引用")}>
+            <Button variant="ghost" size="sm" onClick={() => copyMany(checkedItems, citation, "引用")}>
+              <Icon name="copy" />
               复制引用
             </Button>
-            <Button variant="ghost" small danger icon="delete" onClick={() => setRemoving(checkedItems)} title={KEYS.remove}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setRemoving(checkedItems)}
+              title={KEYS.remove}
+            >
+              <Icon name="delete" />
               移除
             </Button>
-            <Button variant="ghost" small icon="close" onClick={uncheck} title={KEYS.uncheck}>
+            <Button variant="ghost" size="sm" onClick={uncheck} title={KEYS.uncheck}>
+              <Icon name="close" />
               取消
             </Button>
           </div>
         ) : (
-          <span className="library-sort">按添加时间排序</span>
+          <span className="text-muted-foreground ml-auto text-[13px]">按添加时间排序</span>
         )}
       </div>
-      <section className="items" aria-label="文献列表" aria-busy={loading}>
-        {loading && <Progress className="items-loading" />}
+      <section
+        className="relative min-h-0 flex-1 overflow-auto px-11 pb-6 max-[900px]:px-5"
+        aria-label="文献列表"
+        aria-busy={loading}
+      >
+        {loading && <Progress className="absolute inset-x-12 top-0 h-0.5 w-auto" />}
         {items.length > 0 && (
           <ItemList
             items={items}
@@ -530,19 +554,19 @@ export function LibraryView() {
           />
         )}
         {!items.length && !loading && (
-          <div className="empty">
+          <div className="text-muted-foreground px-6 py-16 text-center">
             {debounced ? "没有匹配的文献" : "还没有文献。从 Zotero 同步，或导入本地 PDF。"}
           </div>
         )}
         {items.length < total && (
-          <div className="load-more">
+          <div className="flex justify-center pt-5">
             <Button variant="ghost" onClick={() => load(items.length)}>
               加载更多
             </Button>
           </div>
         )}
       </section>
-      <Dialog
+      <ActionDialog
         open={removing !== null}
         headline="移除文献"
         onClose={(v) => {
@@ -552,7 +576,11 @@ export function LibraryView() {
         }}
         actions={[
           { value: "cancel", label: "取消" },
-          { value: "ok", label: removing && removing.length > 1 ? `移除 ${removing.length} 篇` : "移除", primary: true },
+          {
+            value: "ok",
+            label: removing && removing.length > 1 ? `移除 ${removing.length} 篇` : "移除",
+            danger: true,
+          },
         ]}
       >
         <p>
@@ -565,7 +593,7 @@ export function LibraryView() {
           ) : (
             <p>这是 Zotero 条目，下次从 Zotero 同步时会重新出现；要彻底删除请在 Zotero 中删除。</p>
           ))}
-      </Dialog>
+      </ActionDialog>
       <ReparseDialog open={reparseDoc !== null} docId={reparseDoc ?? ""} onClose={() => setReparseDoc(null)} />
     </div>
   );

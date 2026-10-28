@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api, rawFetch, unwrap } from "../../api/client";
 import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
-import { Dialog, Select, Switch } from "../../components/ui";
+import { ActionDialog, LabeledSwitch, OptionSelect } from "../../components/controls";
 
 type Layout = "off" | "below" | "only";
 
@@ -21,6 +21,8 @@ export function safeFileName(title: string): string {
   const name = title.replace(/[\\/:*?"<>|\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   return `${name || "FreeRead 导出"}.md`;
 }
+
+const ROW = "flex min-h-10 items-center justify-between gap-4";
 
 export function ExportDialog({ open, docId, title, lang, onClose }: Props) {
   const toast = useApp((s) => s.toast);
@@ -58,14 +60,14 @@ export function ExportDialog({ open, docId, title, lang, onClose }: Props) {
   };
 
   const toggle = (key: keyof typeof opts, label: string) => (
-    <label className="export-row">
+    <label className={ROW}>
       <span>{label}</span>
-      <Switch label={label} checked={opts[key]} onValue={(v) => setOpts((o) => ({ ...o, [key]: v }))} />
+      <LabeledSwitch label={label} checked={opts[key]} onValue={(v) => setOpts((o) => ({ ...o, [key]: v }))} />
     </label>
   );
 
   return (
-    <Dialog
+    <ActionDialog
       open={open}
       headline="导出 Markdown"
       onClose={(v) => {
@@ -77,13 +79,14 @@ export function ExportDialog({ open, docId, title, lang, onClose }: Props) {
         { value: "ok", label: "导出", primary: true },
       ]}
     >
-      <div className="export-form">
+      <div className="flex min-w-80 flex-col gap-1">
         {toggle("summary", "总结")}
         {toggle("annotations", "高亮与批注")}
         {toggle("body", "正文")}
-        <label className="export-row">
+        <div className={ROW}>
           <span>译文</span>
-          <Select
+          <OptionSelect
+            className="w-40"
             label="译文"
             hideLabel
             value={translation}
@@ -94,10 +97,12 @@ export function ExportDialog({ open, docId, title, lang, onClose }: Props) {
             ]}
             onValue={setTranslation}
           />
-        </label>
+        </div>
         {toggle("qa", "问答记录")}
-        <p className="search-note">引用会换成页码，公式保留为 LaTeX，高亮写成 ==文字==（Obsidian、Typora 可显示）。</p>
+        <p className="text-muted-foreground mt-2 text-[12.5px] leading-relaxed">
+          引用会换成页码，公式保留为 LaTeX，高亮写成 ==文字==（Obsidian、Typora 可显示）。
+        </p>
       </div>
-    </Dialog>
+    </ActionDialog>
   );
 }

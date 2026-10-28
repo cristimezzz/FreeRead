@@ -96,18 +96,18 @@ describe("library helpers", () => {
 });
 
 describe("theme", () => {
-  it("uses a fixed warm ramp and only varies the accent", () => {
+  it("only writes the accent, contrast overrides and graph colours", () => {
     const light = themeVars("#D97757", false, "standard");
-    const dark = themeVars("#D97757", true, "standard");
-    expect(light["--bg"]).toBe("#FAF9F5");
-    expect(dark["--bg"]).toBe("#1F1E1D");
-    expect(light["--accent"]).toBe("#D97757");
-    // 换强调色不影响中性色阶
-    expect(themeVars("#4F74B8", false, "standard")["--ink"]).toBe(light["--ink"]);
-    // 提高对比度：辅助文字与分隔线加深
+    expect(light["--brand"]).toBe("#D97757");
+    // 标准对比度不覆盖 shadcn 色阶
+    expect(light["--muted-foreground"]).toBeUndefined();
+    // 换强调色只影响 --brand
+    expect(themeVars("#4F74B8", false, "standard")["--kg-line"]).toBe(light["--kg-line"]);
+    // 提高对比度：辅助文字与分隔线加深，强调色文字混得更多
     const high = themeVars("#D97757", false, "high");
-    expect(high["--ink3"]).not.toBe(light["--ink3"]);
-    expect(high["--line"]).not.toBe(light["--line"]);
-    expect(high["--accent-ink"]).not.toBe(light["--accent-ink"]);
+    expect(high["--muted-foreground"]).toBeDefined();
+    expect(high["--border"]).toBeDefined();
+    expect(high["--brand-ink"]).not.toBe(light["--brand-ink"]);
+    expect(themeVars("#D97757", true, "standard")["--brand-soft"]).not.toBe(light["--brand-soft"]);
   });
 });

@@ -1,8 +1,9 @@
-// 分类树（显示在侧栏里，样式同侧栏导航项）。后端返回扁平列表，这里按 parent_id 组装。
+// 分类树（显示在侧栏里，用 shadcn 侧栏的菜单按钮样式）。后端返回扁平列表，这里按 parent_id 组装。
 
 import { useMemo, useState } from "react";
 import type { Schemas } from "../../api/client";
 import { Icon } from "../../components/icons";
+import { SidebarMenuBadge, SidebarMenuButton } from "../../components/ui/sidebar";
 
 type Collection = Schemas["CollectionOut"];
 
@@ -50,43 +51,55 @@ export function CollectionTree({ collections, selected, total, onSelect }: Props
       const open = !collapsed.has(n.c.id);
       return (
         <div key={n.c.id} role="treeitem" aria-expanded={n.children.length ? open : undefined} aria-selected={selected === n.c.id}>
-          <button
-            type="button"
-            className={`nav tree-node${selected === n.c.id ? " on" : ""}`}
-            style={{ "--depth": depth } as React.CSSProperties}
-            onClick={() => onSelect(n.c.id)}
-          >
-            {n.children.length ? (
-              <span
-                className="tree-toggle"
-                role="button"
-                aria-label={open ? "收起" : "展开"}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggle(n.c.id);
-                }}
-              >
-                <Icon name={open ? "expandMore" : "chevronRight"} size={14} strokeWidth={2} />
-              </span>
-            ) : (
-              <Icon name="folder" />
+          <div className="relative">
+            <SidebarMenuButton
+              isActive={selected === n.c.id}
+              className="pr-8 data-[active=true]:[&>svg]:text-brand-ink"
+              style={{ paddingLeft: 8 + depth * 20 }}
+              onClick={() => onSelect(n.c.id)}
+            >
+              {n.children.length ? (
+                <span
+                  className="text-muted-foreground hover:bg-sidebar-border hover:text-sidebar-foreground inline-flex size-4 flex-none items-center justify-center rounded-sm"
+                  role="button"
+                  aria-label={open ? "收起" : "展开"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggle(n.c.id);
+                  }}
+                >
+                  <Icon name={open ? "expandMore" : "chevronRight"} size={14} strokeWidth={2} />
+                </span>
+              ) : (
+                <Icon name="folder" />
+              )}
+              <span>{n.c.name}</span>
+            </SidebarMenuButton>
+            {n.c.item_count > 0 && (
+              <SidebarMenuBadge className="text-muted-foreground tabular-nums">{n.c.item_count}</SidebarMenuBadge>
             )}
-            <span className="label">{n.c.name}</span>
-            {n.c.item_count > 0 && <span className="count">{n.c.item_count}</span>}
-          </button>
-          {n.children.length > 0 && open && <div role="group">{render(n.children, depth + 1)}</div>}
+          </div>
+          {n.children.length > 0 && open && (
+            <div role="group" className="flex flex-col gap-0.5">
+              {render(n.children, depth + 1)}
+            </div>
+          )}
         </div>
       );
     });
 
   return (
-    <div className="tree" role="tree" aria-label="分类">
-      <div role="treeitem" aria-selected={selected === null}>
-        <button type="button" className={`nav tree-node${selected === null ? " on" : ""}`} onClick={() => onSelect(null)}>
+    <div className="flex flex-col gap-0.5" role="tree" aria-label="分类">
+      <div role="treeitem" aria-selected={selected === null} className="relative">
+        <SidebarMenuButton
+          isActive={selected === null}
+          className="pr-8 data-[active=true]:[&>svg]:text-brand-ink"
+          onClick={() => onSelect(null)}
+        >
           <Icon name="all" />
-          <span className="label">全部文献</span>
-          {total != null && <span className="count">{total}</span>}
-        </button>
+          <span>全部文献</span>
+        </SidebarMenuButton>
+        {total != null && <SidebarMenuBadge className="text-muted-foreground tabular-nums">{total}</SidebarMenuBadge>}
       </div>
       {render(roots, 0)}
     </div>

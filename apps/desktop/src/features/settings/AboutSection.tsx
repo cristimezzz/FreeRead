@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "../../api/core";
 import { useApp } from "../../app/store";
-import { Button, Progress, Spinner } from "../../components/ui";
+import { ProgressBar, Spinner } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { Button } from "../../components/ui/button";
 import {
   appVersion,
   ASSET_LABEL,
@@ -19,7 +21,7 @@ import {
   REPO_URL,
   type UpdateInfo,
 } from "./about";
-import { Group, More, Row } from "./Row";
+import { Group, Hint, More, Row } from "./Row";
 
 type UpdateStep =
   | { s: "idle" }
@@ -85,7 +87,8 @@ export function AboutSection({ title }: { title: string }) {
         title={`FreeRead ${version ?? "开发版"}`}
         desc="开源的论文阅读与翻译工具，按 AGPL-3.0 协议发布"
       >
-        <Button small variant="ghost" icon="external" onClick={() => void openExternal(REPO_URL)}>
+        <Button variant="ghost" size="sm" onClick={() => void openExternal(REPO_URL)}>
+          <Icon name="external" />
           GitHub
         </Button>
       </Row>
@@ -93,44 +96,57 @@ export function AboutSection({ title }: { title: string }) {
       <Row title="检查更新" desc={updateDesc(step, desktop)}>
         {desktop && <UpdateActions step={step} onCheck={check} onDownload={download} onApply={apply} />}
       </Row>
-      {step.s === "downloading" && <Progress value={step.progress} className="about-bar" />}
+      {step.s === "downloading" && <ProgressBar value={step.progress} className="-mt-1.5 mb-2" />}
       {info?.available && info.notes.trim() && (
         <More label={`${info.latest} 更新说明`}>
-          <div className="about-notes">{plainNotes(info.notes)}</div>
+          <div className="text-foreground/80 mt-1.5 mb-1 max-h-[16em] overflow-auto rounded-md border px-3.5 py-3 text-[12.5px] leading-relaxed wrap-anywhere whitespace-pre-wrap">
+            {plainNotes(info.notes)}
+          </div>
         </More>
       )}
 
-      <h3 className="about-h">贡献者</h3>
+      <h3 className="mt-5.5 mb-1 text-sm font-medium">贡献者</h3>
       {!desktop ? (
-        <p className="set-hint">贡献者列表在桌面版里从 GitHub 获取。</p>
+        <Hint>贡献者列表在桌面版里从 GitHub 获取。</Hint>
       ) : peopleErr ? (
-        <p className="set-hint">无法获取贡献者列表：{peopleErr}</p>
+        <Hint>无法获取贡献者列表：{peopleErr}</Hint>
       ) : !people ? (
-        <p className="set-hint about-loading">
+        <Hint className="flex items-center gap-2">
           <Spinner size={14} />
           正在从 GitHub 获取…
-        </p>
+        </Hint>
       ) : (
-        <ul className="contributors">
+        <ul className="mt-2.5 grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
           {people.map((p) => (
             <li key={p.login}>
-              <button type="button" className="contributor" onClick={() => void openExternal(p.htmlUrl)}>
-                <img src={avatarSrc(p.avatarUrl, 36)} alt="" width={36} height={36} loading="lazy" />
-                <span>
-                  <b>{p.login}</b>
-                  <span>{p.contributions} 次提交</span>
+              <button
+                type="button"
+                className="bg-card hover:border-muted-foreground focus-visible:outline-ring flex w-full cursor-pointer items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                onClick={() => void openExternal(p.htmlUrl)}
+              >
+                <img
+                  className="bg-muted flex-none rounded-full"
+                  src={avatarSrc(p.avatarUrl, 36)}
+                  alt=""
+                  width={36}
+                  height={36}
+                  loading="lazy"
+                />
+                <span className="min-w-0">
+                  <b className="block truncate text-[13.5px] font-medium">{p.login}</b>
+                  <span className="text-muted-foreground block truncate text-xs">{p.contributions} 次提交</span>
                 </span>
               </button>
             </li>
           ))}
         </ul>
       )}
-      <p className="set-hint">
+      <Hint>
         欢迎提交问题和改进。
-        <Button variant="ghost" small onClick={() => void openExternal(`${REPO_URL}/graphs/contributors`)}>
+        <Button variant="ghost" size="sm" onClick={() => void openExternal(`${REPO_URL}/graphs/contributors`)}>
           在 GitHub 上查看全部
         </Button>
-      </p>
+      </Hint>
     </Group>
   );
 }
@@ -171,25 +187,32 @@ function UpdateActions({
   if (step.s === "checked" && step.info.available) {
     const { info } = step;
     return info.asset ? (
-      <Button small variant="primary" onClick={() => onDownload(info)}>
+      <Button size="sm" onClick={() => onDownload(info)}>
         下载更新
       </Button>
     ) : (
-      <Button small icon="external" onClick={() => void openExternal(info.releaseUrl)}>
+      <Button variant="outline" size="sm" onClick={() => void openExternal(info.releaseUrl)}>
+        <Icon name="external" />
         前往下载页
       </Button>
     );
   }
-  if (step.s === "downloading") return <Button small disabled>下载中…</Button>;
+  if (step.s === "downloading") {
+    return (
+      <Button variant="outline" size="sm" disabled>
+        下载中…
+      </Button>
+    );
+  }
   if (step.s === "downloaded") {
     return (
-      <Button small variant="primary" onClick={onApply}>
+      <Button size="sm" onClick={onApply}>
         {step.info.kind === "nsis" ? "安装并重启" : "在文件夹中显示"}
       </Button>
     );
   }
   return (
-    <Button small disabled={step.s === "checking"} onClick={onCheck}>
+    <Button variant="outline" size="sm" disabled={step.s === "checking"} onClick={onCheck}>
       {step.s === "checked" ? "重新检查" : "检查更新"}
     </Button>
   );

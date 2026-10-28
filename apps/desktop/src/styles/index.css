@@ -1,0 +1,197 @@
+/* 全局样式：shadcn/ui（neutral）+ Tailwind v4（ADR-0009）。
+   中性色阶在这里按 :root / .dark 定义；强调色 --brand 与对比度覆盖由 app/theme.ts 写入 :root 行内样式。
+   --brand 只用于指认：选中项、引用编号、定位高亮、焦点环、进度。主按钮用 --primary。
+   阅读区排版（重排正文、KaTeX、PDF、批注、问答回答、图谱）在 reader.css，放进 components 层，工具类能覆盖它。 */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "./reader.css" layer(components);
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.875rem;
+  --background: oklch(0.975 0.008 80);
+  --foreground: oklch(0.22 0.015 60);
+  --card: oklch(0.995 0.004 80);
+  --card-foreground: oklch(0.22 0.015 60);
+  --popover: oklch(0.995 0.004 80);
+  --popover-foreground: oklch(0.22 0.015 60);
+  --primary: oklch(0.3 0.02 55);
+  --primary-foreground: oklch(0.98 0.006 80);
+  --secondary: oklch(0.94 0.012 78);
+  --secondary-foreground: oklch(0.3 0.02 55);
+  --muted: oklch(0.94 0.012 78);
+  --muted-foreground: oklch(0.52 0.02 65);
+  --accent: oklch(0.93 0.018 65);
+  --accent-foreground: oklch(0.3 0.02 55);
+  --destructive: oklch(0.577 0.245 27.325);
+  --success: oklch(0.52 0.12 150);
+  --border: oklch(0.89 0.012 75);
+  --input: oklch(0.88 0.014 75);
+  --ring: var(--brand);
+  --sidebar: oklch(0.955 0.012 78);
+  --sidebar-foreground: oklch(0.22 0.015 60);
+  --sidebar-primary: oklch(0.3 0.02 55);
+  --sidebar-primary-foreground: oklch(0.98 0.006 80);
+  --sidebar-accent: oklch(0.92 0.02 68);
+  --sidebar-accent-foreground: oklch(0.3 0.02 55);
+  --sidebar-border: oklch(0.89 0.012 75);
+  --sidebar-ring: var(--brand);
+  /* 次级文字（介于 foreground 与 muted-foreground 之间），阅读区排版用 */
+  --text-2: color-mix(in oklab, var(--foreground) 80%, var(--background));
+  /* PDF 页面底色（深色下也保持接近白纸） */
+  --page: #ffffff;
+
+  /* 强调色默认值，theme.ts 启动时覆盖 */
+  --brand: #d97757;
+  --brand-ink: color-mix(in oklab, var(--brand) 70%, #000);
+  --brand-soft: color-mix(in srgb, var(--brand) 14%, transparent);
+
+  /* 自绘标题栏（Titlebar.tsx）的高度：只在 Tauri 里有，主区让出这条高度 */
+  --titlebar-h: 0px;
+
+  /* 动效：短、安静、不回弹，阅读区手写 CSS 用；prefers-reduced-motion 时归零（见文件末尾） */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --dur-slow: 280ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --font-ui: "IBM Plex Sans", "Source Han Sans SC", "Noto Sans SC", "Noto Sans CJK SC", "PingFang SC",
+    "Microsoft YaHei", system-ui, sans-serif;
+  --font-reading: "Source Serif 4 Variable", "Source Serif 4", "Source Han Serif SC", "Noto Serif SC",
+    "Noto Serif CJK SC", "Songti SC", "SimSun", Georgia, serif;
+  --font-code: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+
+:root[data-titlebar] {
+  --titlebar-h: 36px;
+}
+
+.dark {
+  --background: oklch(0.18 0.01 60);
+  --foreground: oklch(0.96 0.008 80);
+  --card: oklch(0.225 0.012 60);
+  --card-foreground: oklch(0.96 0.008 80);
+  --popover: oklch(0.235 0.012 60);
+  --popover-foreground: oklch(0.96 0.008 80);
+  --primary: oklch(0.93 0.012 80);
+  --primary-foreground: oklch(0.22 0.015 60);
+  --secondary: oklch(0.29 0.014 60);
+  --secondary-foreground: oklch(0.96 0.008 80);
+  --muted: oklch(0.29 0.014 60);
+  --muted-foreground: oklch(0.72 0.015 70);
+  --accent: oklch(0.32 0.02 55);
+  --accent-foreground: oklch(0.96 0.008 80);
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: oklch(0.75 0.12 150);
+  --border: oklch(0.96 0.02 80 / 11%);
+  --input: oklch(0.96 0.02 80 / 16%);
+  --sidebar: oklch(0.205 0.012 60);
+  --sidebar-foreground: oklch(0.96 0.008 80);
+  --sidebar-primary: oklch(0.93 0.012 80);
+  --sidebar-primary-foreground: oklch(0.22 0.015 60);
+  --sidebar-accent: oklch(0.29 0.02 55);
+  --sidebar-accent-foreground: oklch(0.96 0.008 80);
+  --sidebar-border: oklch(0.96 0.02 80 / 11%);
+  --page: #ecebe6;
+  --brand-ink: color-mix(in oklab, var(--brand) 62%, #fff);
+  --brand-soft: color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+@theme inline {
+  --font-sans: var(--font-ui);
+  --font-serif: var(--font-reading);
+  --font-mono: var(--font-code);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-foreground font-sans text-sm antialiased;
+  }
+  ::selection {
+    background: var(--brand-soft);
+  }
+}
+
+@keyframes progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
+/* 系统设置"减少动效"时，所有过渡与动画归零 */
+/* ai-elements/shimmer.tsx：高光从右扫到左 */
+@keyframes shimmer-sweep {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-fast: 0ms;
+    --dur: 0ms;
+    --dur-slow: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after,
+  *::backdrop {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

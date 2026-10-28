@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import type { Schemas } from "../../api/client";
-import { Button, Progress, Segmented, Select, TextField } from "../../components/ui";
+import { OptionSelect, OptionToggle, ProgressBar, TextInput } from "../../components/controls";
+import { Button } from "../../components/ui/button";
 import type { RemoteEngine } from "./actions";
-import { Row } from "./Row";
+import { ConnState, FieldGrid, Panel, Row } from "./Row";
 
 type Engine = Schemas["EngineOut"];
 type RemoteParser = Schemas["RemoteParser"];
@@ -84,28 +85,18 @@ export function RemoteParserCard({
   const [tested, setTested] = useState<boolean | null>(null);
   const isApi = cfg.mode === "api";
   return (
-    <div className="card provider">
-      <div className="provider-head">
-        <b>{label}</b>
-        {isApi && tested === true && (
-          <span className="state ok">
-            <i />
-            连接正常
-          </span>
-        )}
-        {isApi && tested === false && (
-          <span className="state err">
-            <i />
-            连接失败
-          </span>
-        )}
-        <span className="provider-actions">
+    <Panel>
+      <div className="flex flex-wrap items-center gap-2.5">
+        <b className="text-[15px] font-medium">{label}</b>
+        {isApi && tested === true && <ConnState ok>连接正常</ConnState>}
+        {isApi && tested === false && <ConnState ok={false}>连接失败</ConnState>}
+        <span className="ml-auto flex items-center gap-1">
           {isApi && (
-            <Button variant="ghost" small disabled={!cfg.base_url} onClick={async () => setTested(await onTest())}>
+            <Button variant="ghost" size="sm" disabled={!cfg.base_url} onClick={async () => setTested(await onTest())}>
               测试连接
             </Button>
           )}
-          <Segmented
+          <OptionToggle
             label={`${label} 运行位置`}
             value={cfg.mode}
             options={[
@@ -118,8 +109,8 @@ export function RemoteParserCard({
       </div>
       {isApi && (
         <>
-          <div className="grid">
-            <TextField
+          <FieldGrid>
+            <TextInput
               label="Base URL"
               mono
               placeholder={URL_PLACEHOLDER[engine]}
@@ -131,20 +122,19 @@ export function RemoteParserCard({
               }}
             />
             {engine === "mineru" && (
-              <Select label="质量档位（tier）" value={cfg.tier} options={TIERS} onValue={(tier) => onChange({ tier })} />
+              <OptionSelect label="质量档位（tier）" value={cfg.tier} options={TIERS} onValue={(tier) => onChange({ tier })} />
             )}
-            <TextField
+            <TextInput
               label={info?.has_key ? "API Key（已保存，输入新值可替换）" : "API Key（本机服务通常不需要）"}
               type="password"
               mono
               value={key}
               onValue={setKey}
             />
-          </div>
-          <div className="provider-keys">
+          </FieldGrid>
+          <div className="mt-3.5 flex gap-2">
             <Button
-              variant="primary"
-              small
+              size="sm"
               disabled={!key}
               onClick={() => {
                 onKey(key);
@@ -154,7 +144,7 @@ export function RemoteParserCard({
               保存 Key
             </Button>
             {info?.has_key && (
-              <Button small onClick={() => onKey(null)}>
+              <Button variant="outline" size="sm" onClick={() => onKey(null)}>
                 删除 Key
               </Button>
             )}
@@ -164,7 +154,7 @@ export function RemoteParserCard({
               title="需要你的允许"
               desc={`使用这个服务时，PDF 原文会上传到 ${urlHost(cfg.base_url)}。允许后才会用它解析。`}
             >
-              <Button small onClick={() => onChange({ consented_url: cfg.base_url })}>
+              <Button variant="outline" size="sm" onClick={() => onChange({ consented_url: cfg.base_url })}>
                 允许上传
               </Button>
             </Row>
@@ -181,7 +171,7 @@ export function RemoteParserCard({
           onMirror={onPypiMirror}
         />
       )}
-    </div>
+    </Panel>
   );
 }
 
@@ -208,8 +198,8 @@ function LocalInstall({
         title={`正在安装 ${label}… ${Math.round(job.progress * 100)}%`}
         desc={
           <>
-            <span className="install-msg">{job.message ?? "排队中"}</span>
-            <Progress value={job.progress} className="row-bar" />
+            <span className="block truncate font-mono">{job.message ?? "排队中"}</span>
+            <ProgressBar value={job.progress} className="mt-2 block w-55" />
           </>
         }
       />
@@ -224,7 +214,7 @@ function LocalInstall({
         title={failed ? "安装失败" : `本机未安装 ${label}`}
         desc={
           failed ? (
-            <span className="install-err">{job.error}</span>
+            <span className="text-destructive block max-h-[9em] overflow-auto font-mono break-all whitespace-pre-wrap">{job.error}</span>
           ) : (
             <>
               安装会下载 Python 3.12、PyTorch 与 {label}（共数 GB）到独立环境，首次解析时还会下载模型。也可以改用 API 服务。
@@ -232,7 +222,7 @@ function LocalInstall({
           )
         }
       >
-        <Button small variant={failed ? undefined : "primary"} onClick={onInstall}>
+        <Button variant={failed ? "outline" : "default"} size="sm" onClick={onInstall}>
           {failed ? "重试安装" : "安装"}
         </Button>
       </Row>
@@ -246,8 +236,8 @@ function PypiMirrorRow({ mirror, onMirror }: { mirror: string; onMirror: (url: s
   const [custom, setCustom] = useState(!known);
   return (
     <Row title="PyPI 镜像" desc="安装时下载 Python 包的源；PyTorch 仍从 PyTorch 官方源下载">
-      <span className="mirror-pick">
-        <Select
+      <span className="flex flex-wrap justify-end gap-2 [&>*]:w-65 [&>*]:max-w-full">
+        <OptionSelect
           label="PyPI 镜像"
           hideLabel
           value={custom ? CUSTOM_MIRROR : mirror}
@@ -258,7 +248,7 @@ function PypiMirrorRow({ mirror, onMirror }: { mirror: string; onMirror: (url: s
           }}
         />
         {custom && (
-          <TextField
+          <TextInput
             label="自定义 PyPI 镜像"
             hideLabel
             mono

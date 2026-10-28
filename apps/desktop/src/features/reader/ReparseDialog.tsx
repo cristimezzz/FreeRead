@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { useApp } from "../../app/store";
-import { Dialog } from "../../components/ui";
+import { ActionDialog } from "../../components/controls";
+import { Label } from "../../components/ui/label";
+import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
+import { cn } from "../../lib/utils";
 import { engineOptionLabel } from "../settings/SettingsView";
 
 type Engine = Schemas["EngineOut"];
@@ -61,7 +64,7 @@ export function ReparseDialog({
   const missing = engines.some((e) => e.heavy && !e.available);
 
   return (
-    <Dialog
+    <ActionDialog
       open={open}
       headline="重新解析"
       onClose={(v) => {
@@ -74,23 +77,30 @@ export function ReparseDialog({
       ]}
     >
       <p>选择解析引擎。译文、总结和问答里的引用会迁移到新结果，对不上的会标记为失效。</p>
-      <div className="reparse-options" role="radiogroup" aria-label="解析引擎">
+      <RadioGroup className="mt-3.5 mb-1 gap-1" aria-label="解析引擎" value={engine} onValueChange={setEngine}>
         {engines.map((e) => (
-          <label key={e.name} className="reparse-option" data-disabled={!e.available || undefined}>
-            <input
-              type="radio"
-              name="reparse-engine"
+          <Label
+            key={e.name}
+            className={cn(
+              "flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 font-normal",
+              e.available ? "hover:bg-accent" : "text-muted-foreground cursor-default",
+            )}
+          >
+            <RadioGroupItem
               value={e.name}
-              checked={engine === e.name}
               disabled={!e.available}
-              onChange={() => setEngine(e.name)}
+              className="data-[state=checked]:border-brand [&_svg]:fill-brand"
             />
             <span>{engineOptionLabel(e)}</span>
-            {e.name === current && <span className="reparse-current">当前</span>}
-          </label>
+            {e.name === current && <span className="text-muted-foreground ml-auto text-xs">当前</span>}
+          </Label>
         ))}
-      </div>
-      {missing && <p className="reparse-hint">未安装或未配置的引擎可以在 设置 › 解析 中安装，或改用 API 服务。</p>}
-    </Dialog>
+      </RadioGroup>
+      {missing && (
+        <p className="text-muted-foreground mt-2 text-[12.5px]">
+          未安装或未配置的引擎可以在 设置 › 解析 中安装，或改用 API 服务。
+        </p>
+      )}
+    </ActionDialog>
   );
 }

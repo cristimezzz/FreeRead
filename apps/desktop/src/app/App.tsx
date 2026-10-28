@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { connect } from "../api/client";
 import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
 import { ContextMenu, installDefaultMenu } from "../components/ContextMenu";
@@ -6,7 +6,9 @@ import { BrandMark } from "../components/icons";
 import { Sidebar } from "../components/Sidebar";
 import { Snackbar } from "../components/Snackbar";
 import { Titlebar } from "../components/Titlebar";
-import { Progress } from "../components/ui";
+import { Progress } from "../components/ui/progress";
+import { SidebarInset, SidebarProvider } from "../components/ui/sidebar";
+import { TooltipProvider } from "../components/ui/tooltip";
 import { JobsBar } from "../features/jobs/JobsBar";
 import { LibraryView } from "../features/library/LibraryView";
 import { ReaderView } from "../features/reader/ReaderView";
@@ -20,6 +22,8 @@ type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; messa
 export default function App() {
   const [boot, setBoot] = useState<Boot>({ state: "starting" });
   const view = useApp((s) => s.view);
+  // 阅读器里侧栏收成图标栏。用延后的值：先渲染新页面，等它挂载完再开始宽度动画，动画不会被页面挂载卡住
+  const sidebarOpen = useDeferredValue(view.name !== "reader");
   const settings = useApp((s) => s.settings);
 
   useEffect(() => {
@@ -73,26 +77,28 @@ export default function App() {
   if (boot.state !== "ready") {
     return (
       <>
-      <Titlebar />
-      <div className="boot">
-        <BrandMark size={56} />
-        <div className="boot-name serif">FreeRead</div>
-        {boot.state === "starting" ? (
-          <>
-            <Progress className="boot-bar" />
-            <p>正在启动 FreeRead…</p>
-          </>
-        ) : (
-          <div className="boot-error">
-            <h2 className="serif">无法连接 Core Service</h2>
-            <p>{boot.message}</p>
-            {boot.stderrTail && boot.stderrTail.length > 0 && (
-              <pre className="boot-log">{boot.stderrTail.join("\n")}</pre>
-            )}
-            <p>如果被杀毒软件拦截，请把 FreeRead 加入信任列表后重新打开。</p>
-          </div>
-        )}
-      </div>
+        <Titlebar />
+        <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-5 p-6 text-center text-[13px]">
+          <BrandMark size={56} />
+          <div className="text-foreground font-serif text-3xl font-medium tracking-tight">FreeRead</div>
+          {boot.state === "starting" ? (
+            <>
+              <Progress className="h-1 w-44" />
+              <p>正在启动 FreeRead…</p>
+            </>
+          ) : (
+            <div className="text-foreground/80 flex max-w-3xl flex-col items-center gap-2.5 leading-relaxed">
+              <h2 className="text-foreground font-serif text-xl font-medium">无法连接 Core Service</h2>
+              <p>{boot.message}</p>
+              {boot.stderrTail && boot.stderrTail.length > 0 && (
+                <pre className="bg-card max-h-[40vh] max-w-[min(720px,90vw)] overflow-auto rounded-lg border px-3.5 py-3 text-left font-mono text-xs leading-relaxed whitespace-pre-wrap">
+                  {boot.stderrTail.join("\n")}
+                </pre>
+              )}
+              <p>如果被杀毒软件拦截，请把 FreeRead 加入信任列表后重新打开。</p>
+            </div>
+          )}
+        </div>
       </>
     );
   }
@@ -100,27 +106,30 @@ export default function App() {
   // 新安装：先走欢迎向导（配置大模型、解析服务，询问是否从 Zotero 导入）
   if (settings && !settings.onboarding_done) {
     return (
-      <>
+      <TooltipProvider delayDuration={400}>
         <Titlebar />
         <WelcomeView />
         <Snackbar />
         <ContextMenu />
-      </>
+      </TooltipProvider>
     );
   }
 
   return (
-    <div className="app">
-      <Titlebar />
-      <Sidebar />
-      <main className="main">
-        {view.name === "library" && <LibraryView />}
-        {view.name === "reader" && <ReaderView key={view.docId} {...view} />}
-        {view.name === "settings" && <SettingsView />}
-        <JobsBar />
-      </main>
+    <TooltipProvider delayDuration={400}>
+      {/* 阅读器里侧栏收成图标栏，把宽度让给正文 */}
+      <SidebarProvider open={sidebarOpen} className="h-full min-h-0">
+        <Titlebar />
+        <Sidebar />
+        <SidebarInset className="min-w-0 min-h-0 pt-(--titlebar-h)">
+          {view.name === "library" && <LibraryView />}
+          {view.name === "reader" && <ReaderView key={view.docId} {...view} />}
+          {view.name === "settings" && <SettingsView />}
+          <JobsBar />
+        </SidebarInset>
+      </SidebarProvider>
       <Snackbar />
       <ContextMenu />
-    </div>
+    </TooltipProvider>
   );
 }

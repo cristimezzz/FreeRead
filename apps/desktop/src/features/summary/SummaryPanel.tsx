@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button, IconButton, Progress, Select } from "../../components/ui";
+import { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtHeader, ChainOfThoughtStep } from "../../components/ai-elements/chain-of-thought";
+import { Shimmer } from "../../components/ai-elements/shimmer";
+import { Citation } from "../../components/Citation";
+import { IconButton, OptionSelect } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { PanelFoot, PanelNote, SidePanel } from "../../components/SidePanel";
+import { Button } from "../../components/ui/button";
 import type { useSummary } from "./useSummary";
 
 interface Props {
@@ -33,13 +39,10 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
   };
 
   return (
-    <aside className="side-panel summary-panel" aria-label="总结">
-      <div className="side-panel-head">
-        <h2 className="serif">总结</h2>
-        <IconButton icon="close" label="关闭总结" onClick={onClose} />
-      </div>
-      <div className="summary-controls">
-        <Select
+    <SidePanel title="总结" aria-label="总结" actions={<IconButton icon="close" label="关闭总结" onClick={onClose} />}>
+      <div className="flex items-end gap-2 px-6 pb-2">
+        <OptionSelect
+          className="flex-1"
           label="模板"
           value={templateId}
           options={(templates.length ? templates : [{ id: "paper", name: "论文精读" }]).map((t) => ({
@@ -49,39 +52,46 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
           onValue={setTemplateId}
         />
         {running ? (
-          <Button small onClick={cancel}>
+          <Button variant="outline" size="sm" onClick={cancel}>
             停止
           </Button>
         ) : (
-          <Button small icon="sync" onClick={() => void generate(templateId)}>
+          <Button variant="outline" size="sm" onClick={() => void generate(templateId)}>
+            <Icon name="sync" />
             {summary ? "重新生成" : "生成"}
           </Button>
         )}
       </div>
 
       {running && (
-        <div className="summary-progress">
-          <Progress
-            value={!progress || progress.stage === "reduce" ? undefined : progress.total ? progress.done / progress.total : 0}
-          />
-          <span>
-            {!progress
-              ? "准备中…"
-              : progress.stage === "map"
-                ? `正在读各章节（${progress.done} / ${progress.total}）${progress.title ? `：${progress.title}` : ""}`
-                : "正在汇总…"}
-          </span>
+        <div className="mx-6 mt-2 mb-1">
+          {!progress ? (
+            <Shimmer className="text-xs">准备中…</Shimmer>
+          ) : (
+            <ChainOfThought defaultOpen>
+              <ChainOfThoughtHeader>正在生成总结</ChainOfThoughtHeader>
+              <ChainOfThoughtContent>
+                <ChainOfThoughtStep
+                  status={progress.stage === "map" ? "active" : "complete"}
+                  label={`读各章节（${progress.done} / ${progress.total}）`}
+                  description={progress.stage === "map" ? progress.title : undefined}
+                />
+                <ChainOfThoughtStep
+                  status={progress.stage === "map" ? "pending" : "active"}
+                  label={progress.stage === "map" ? "汇总" : <Shimmer>正在汇总…</Shimmer>}
+                />
+              </ChainOfThoughtContent>
+            </ChainOfThought>
+          )}
         </div>
       )}
-      {error && <p className="search-note error">{error}</p>}
-      {summary?.status === "stale" && (
-        <p className="search-note">原文已重新解析，部分引用已失效，可以重新生成。</p>
-      )}
+      {error && <PanelNote error>{error}</PanelNote>}
+      {summary?.status === "stale" && <PanelNote>原文已重新解析，部分引用已失效，可以重新生成。</PanelNote>}
       {!summary && !running && !error && (
-        <p className="search-note">
+        <PanelNote>
           按{templates.find((t) => t.id === templateId)?.description ?? "模板"}整理全文要点，每条都能点回原文。
           生成会把论文正文发送给总结所用的大模型服务（默认与翻译相同）。
-        </p>
+        </PanelNote>
       )}
 
       {summary && (
@@ -99,29 +109,21 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
                     >
                       {p.text}
                       {p.block_ids.map((id, j) => (
-                        <button
-                          type="button"
-                          key={id}
-                          className={`cite${id === active ? " active" : ""}`}
-                          title={blockText(id)?.slice(0, 200)}
-                          onClick={() => pick(id)}
-                        >
-                          {j + 1}
-                        </button>
+                        <Citation key={id} id={id} n={j + 1} active={id === active} blockText={blockText} onPick={pick} />
                       ))}
                       {p.untraced && <span className="untraced-tag">未溯源</span>}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="search-note">论文未涉及</p>
+                <PanelNote className="m-0 text-[13px]">论文未涉及</PanelNote>
               )}
             </section>
           ))}
         </div>
       )}
       {summary && (
-        <div className="panel-foot">
+        <PanelFoot>
           <span>{summary.model}</span>
           <span aria-hidden="true">·</span>
           <span>{fmtTime(summary.created_at)}</span>
@@ -131,8 +133,8 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
               <span>引用覆盖率 {Math.round(coverage * 100)}%</span>
             </>
           )}
-        </div>
+        </PanelFoot>
       )}
-    </aside>
+    </SidePanel>
   );
 }

@@ -235,7 +235,7 @@ export class KgScene {
     this.frameIds(new Set(this.nodes.keys()), 1, animate, 0.9);
   }
 
-  /** 主题变化（--kg-*、--ink3、--accent）后重新上色。 */
+  /** 主题变化（--kg-*、--kg-line、--brand）后重新上色。 */
   setTheme(): void {
     this.readColors();
     this.applyState();
@@ -278,7 +278,7 @@ export class KgScene {
   // ------------------------------------------------------------ 状态 → 外观
 
   private readColors(): void {
-    this.colors = { line: token("--ink3", "#65645E"), accent: token("--accent", "#D97757") };
+    this.colors = { line: token("--kg-line", "#737373"), accent: token("--brand", "#D97757") };
     for (const n of this.nodes.values())
       n.mesh.material.color.set(token(`--kg-${n.node.type.toLowerCase()}`, this.colors.line));
   }

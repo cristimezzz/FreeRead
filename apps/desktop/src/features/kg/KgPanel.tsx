@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Button, IconButton, Progress } from "../../components/ui";
+import { Shimmer } from "../../components/ai-elements/shimmer";
+import { Citation } from "../../components/Citation";
+import { IconButton, ProgressBar } from "../../components/controls";
+import { Icon } from "../../components/icons";
+import { PanelNote, SidePanel } from "../../components/SidePanel";
+import { Button } from "../../components/ui/button";
 import { KgCloud, type Selection } from "./KgCloud";
 import {
   ENTITY_TYPES,
@@ -28,11 +33,7 @@ type CiteProps = { blockText?: (id: string) => string | undefined; onPick: (id: 
 
 /** 出处块按阅读顺序编号（b_0000 显示为 1），悬停看原文。 */
 function Cite({ id, blockText, onPick }: CiteProps & { id: string }) {
-  return (
-    <button type="button" className="cite" title={blockText?.(id)} onClick={() => onPick(id)}>
-      {Number(id.replace(/\D/g, "")) + 1}
-    </button>
-  );
+  return <Citation id={id} n={Number(id.replace(/\D/g, "")) + 1} blockText={blockText} onPick={onPick} />;
 }
 
 function Swatch({ type }: { type: string }) {
@@ -207,38 +208,48 @@ export function KgPanel({ state, blockText, onPick: pick, onClose, expanded, sta
   };
 
   return (
-    <aside className="side-panel kg-panel" aria-label="知识图谱">
-      <div className="side-panel-head">
-        <h2 className="serif">图谱</h2>
-        {entities.length > 0 && (
-          <IconButton
-            icon={expanded ? "collapse" : "expand"}
-            label={expanded ? "收起图谱（Esc）" : "展开图谱到阅读区"}
-            onClick={() => onExpand(!expanded)}
-          />
-        )}
-        <IconButton icon="close" label="关闭图谱" onClick={onClose} />
-      </div>
-      <div className="summary-controls">
-        <span className="kg-count">
+    <SidePanel
+      title="图谱"
+      className="kg-panel"
+      aria-label="知识图谱"
+      actions={
+        <>
+          {entities.length > 0 && (
+            <IconButton
+              icon={expanded ? "collapse" : "expand"}
+              label={expanded ? "收起图谱（Esc）" : "展开图谱到阅读区"}
+              onClick={() => onExpand(!expanded)}
+            />
+          )}
+          <IconButton icon="close" label="关闭图谱" onClick={onClose} />
+        </>
+      }
+    >
+      <div className="flex items-end gap-2 px-6 pb-2">
+        <span className="text-muted-foreground flex-1 self-center text-[12.5px]">
           {entities.length > 0 && !doneMessage ? `${entities.length} 个实体 · ${relations.length} 条关系` : ""}
         </span>
-        <Button small icon="sync" disabled={extracting} onClick={() => void extract()}>
+        <Button variant="outline" size="sm" disabled={extracting} onClick={() => void extract()}>
+          <Icon name="sync" />
           {graph?.kg_status === "ready" ? "重新抽取" : "抽取图谱"}
         </Button>
       </div>
       {extracting && (
-        <div className="summary-progress">
-          <Progress value={job?.status === "running" && job.progress ? job.progress : undefined} />
-          <span>{job?.status === "queued" ? "等待抽取…" : (job?.message ?? "正在抽取实体和关系…")}</span>
+        <div className="text-muted-foreground mx-6 mt-2 mb-1 flex flex-col gap-2 text-xs">
+          <ProgressBar value={job?.status === "running" && job.progress ? job.progress : undefined} />
+          <Shimmer className="text-xs">{job?.status === "queued" ? "等待抽取…" : (job?.message ?? "正在抽取实体和关系…")}</Shimmer>
         </div>
       )}
-      {job?.status === "failed" && !extracting && <p className="search-note error kg-note">抽取失败：{job.error}</p>}
-      {doneMessage && <p className="search-note kg-note">{doneMessage}</p>}
+      {job?.status === "failed" && !extracting && (
+        <PanelNote error className="mt-0">
+          抽取失败：{job.error}
+        </PanelNote>
+      )}
+      {doneMessage && <PanelNote className="mt-0">{doneMessage}</PanelNote>}
       {graph && !entities.length && !extracting && (
-        <p className="search-note kg-note">
+        <PanelNote className="mt-0">
           还没有图谱。抽取会按章节把论文发给模型，找出这篇论文的核心方法、模型、数据集、指标和它们的关系，每条关系都标出原文出处。
-        </p>
+        </PanelNote>
       )}
       {entities.length > 0 && (
         <>
@@ -261,15 +272,17 @@ export function KgPanel({ state, blockText, onPick: pick, onClose, expanded, sta
           {expanded && stage ? (
             <>
               <div className="kg-cloud kg-cloud-away">
-                <p className="search-note">图谱已在阅读区展开。</p>
-                <Button small icon="collapse" onClick={() => onExpand(false)}>
+                <PanelNote className="m-0">图谱已在阅读区展开。</PanelNote>
+                <Button variant="outline" size="sm" onClick={() => onExpand(false)}>
+                  <Icon name="collapse" />
                   收起
                 </Button>
               </div>
               {createPortal(
                 <div className="kg-stage-inner">
                   <KgCloud all={all} nodes={data.nodes} links={data.links} selected={selected} onSelect={select} />
-                  <Button small icon="collapse" className="kg-stage-close" onClick={() => onExpand(false)}>
+                  <Button variant="outline" size="sm" className="kg-stage-close" onClick={() => onExpand(false)}>
+                    <Icon name="collapse" />
                     收起（Esc）
                   </Button>
                 </div>,
@@ -290,6 +303,6 @@ export function KgPanel({ state, blockText, onPick: pick, onClose, expanded, sta
           </div>
         </>
       )}
-    </aside>
+    </SidePanel>
   );
 }

@@ -2,7 +2,9 @@
 // 收起的卡片只显示 AI 标题，点开后是完整问答、操作和输入框（追问它）。另起 / 新话题时出现一张草稿卡片。
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Dialog, IconButton, Select } from "../../components/ui";
+import { ActionDialog, IconButton, OptionSelect } from "../../components/controls";
+import { PanelNote } from "../../components/SidePanel";
+import { Button } from "../../components/ui/button";
 import { anchorRanges } from "./anchors";
 import { QaCanvas } from "./QaCanvas";
 import {
@@ -197,12 +199,12 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
       onMouseUp={onSelect}
       onKeyUp={(e) => e.shiftKey && onSelect()}
     >
-      <div className="qa-board-bar">
-        <h2 className="serif">问答</h2>
-        <Select
+      <div className="bg-card absolute top-3 left-3 z-3 flex max-w-[calc(100%-24px)] items-center gap-1 rounded-xl border py-1 pr-1.5 pl-3.5">
+        <h2 className="mr-2 flex-none font-serif text-lg font-medium">问答</h2>
+        <OptionSelect
           label="对话"
           hideLabel
-          className="convsel"
+          className="text-foreground/80 h-8 max-w-55 min-w-0 flex-1 border-transparent bg-transparent shadow-none"
           value={current ?? NEW}
           options={[
             ...(current ? [] : [{ value: NEW, label: "新对话" }]),
@@ -211,7 +213,7 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
           onValue={(v) => void select(v === NEW ? null : v)}
         />
         <IconButton icon="add" label="新对话" disabled={!current} onClick={() => void select(null)} />
-        <Button small variant="ghost" disabled={!nodes.length || running} onClick={newTopic}>
+        <Button variant="ghost" size="sm" disabled={!nodes.length || running} onClick={newTopic}>
           新话题
         </Button>
         <IconButton icon="fit" label="适应窗口" disabled={!nodes.length} onClick={() => setFitKey((k) => k + 1)} />
@@ -233,24 +235,24 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
         onViewChange={() => selPop && setSelPop(null)}
       />
 
-      <div className="qa-board-notes">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-2 flex max-w-[min(520px,calc(100%-24px))] flex-col gap-1.5 [&>p]:pointer-events-auto [&>p]:m-0 [&>p]:rounded-lg [&>p]:border [&>p]:bg-card [&>p]:px-3 [&>p]:py-2">
         {!nodes.length && !pending && (
-          <p className="search-note">
+          <PanelNote>
             就这篇论文提问，回答会标出依据的原文，点编号跳回原文。每张卡片都可以接着追问、重答或另起一张；选中回答里的文字可以就此追问。提问会把检索到的段落发送给问答所用的大模型服务（默认与总结相同）。
-          </p>
+          </PanelNote>
         )}
         {noVector && (
-          <p className="search-note">
+          <PanelNote>
             这篇论文还没有语义索引，只按关键词找原文，回答可能不全。可在 设置 › 检索 中下载嵌入模型。
-          </p>
+          </PanelNote>
         )}
-        {error && <p className="search-note error">{error}</p>}
+        {error && <PanelNote error>{error}</PanelNote>}
       </div>
 
       {selPop && (
         <button
           type="button"
-          className="qa-sel-pop"
+          className="bg-primary text-primary-foreground animate-in fade-in-0 absolute z-4 -translate-x-1/2 -translate-y-[calc(100%+6px)] cursor-pointer rounded-md px-2.5 py-1 text-xs whitespace-nowrap"
           style={{ left: selPop.x, top: selPop.y }}
           onMouseDown={(e) => e.preventDefault()}
           onMouseUp={(e) => e.stopPropagation()}
@@ -260,7 +262,7 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
         </button>
       )}
 
-      <Dialog
+      <ActionDialog
         open={Boolean(doomed)}
         headline="删除这一支？"
         onClose={(v) => {
@@ -269,7 +271,7 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
         }}
         actions={[
           { value: "cancel", label: "取消" },
-          { value: "ok", label: "删除", primary: true },
+          { value: "ok", label: "删除", danger: true },
         ]}
       >
         {doomed && (
@@ -280,7 +282,7 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
               : "这张卡片会删除，不能恢复。"}
           </p>
         )}
-      </Dialog>
+      </ActionDialog>
     </div>
   );
 }

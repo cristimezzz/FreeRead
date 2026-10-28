@@ -1,4 +1,7 @@
 import type { Schemas } from "../../api/client";
+import { StatusTag, TagDot, tagClass } from "../../components/StatusTag";
+import { Checkbox } from "../../components/ui/checkbox";
+import { cn } from "../../lib/utils";
 
 type Item = Schemas["ItemOut"];
 type Doc = Schemas["DocRef"];
@@ -40,12 +43,8 @@ interface ItemListProps {
 
 export function ItemList({ items, onOpen, selectedId, onSelect, onMenu, checked, onCheck }: ItemListProps) {
   return (
-    <div
-      className="item-list"
-      role="list"
-      data-checkable={onCheck ? true : undefined}
-      data-checking={checked?.size ? true : undefined}
-    >
+    // 批量选择：复选框悬停时出现，勾选了任一条目后全部常显
+    <div className="group/list flex flex-col" role="list" data-checking={checked?.size ? true : undefined}>
       {items.map((it) => {
         const doc = defaultDoc(it);
         const meta = [formatAuthors(it.authors), it.year, it.venue].filter(Boolean).join(" · ");
@@ -55,7 +54,7 @@ export function ItemList({ items, onOpen, selectedId, onSelect, onMenu, checked,
         return (
           <div
             key={it.id}
-            className="item"
+            className={cn("group/item relative border-b", isChecked && "bg-brand-soft")}
             role="listitem"
             data-selected={selected || undefined}
             data-checked={isChecked || undefined}
@@ -70,20 +69,25 @@ export function ItemList({ items, onOpen, selectedId, onSelect, onMenu, checked,
             }}
           >
             {onCheck && (
-              <input
-                type="checkbox"
-                className="item-check"
+              <Checkbox
+                className="absolute top-5 left-3 opacity-0 transition-opacity group-hover/item:opacity-100 group-focus-within/item:opacity-100 group-data-checking/list:opacity-100 data-[state=checked]:border-brand data-[state=checked]:bg-brand"
                 checked={isChecked}
-                readOnly
                 // 键盘用空格勾选当前条目，复选框本身不进 Tab 顺序
                 tabIndex={-1}
                 aria-label={`选择「${it.title || "无标题"}」`}
-                onClick={(e) => onCheck(it, e.shiftKey)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onCheck(it, e.shiftKey);
+                }}
               />
             )}
             <button
               type="button"
-              className="item-row"
+              className={cn(
+                "hover:bg-accent/60 focus-visible:outline-ring grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-6 px-1 py-4 text-left transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2",
+                onCheck && "pl-10",
+                selected && "bg-brand-soft hover:bg-brand-soft",
+              )}
               data-item-id={it.id}
               aria-current={selected || undefined}
               // 只有选中项可 Tab 进入，其余用方向键移动（没有选中项时第一项可进入）
@@ -99,31 +103,31 @@ export function ItemList({ items, onOpen, selectedId, onSelect, onMenu, checked,
                 else onOpen(it);
               }}
             >
-              <span className="item-text">
-                <span className="item-title serif">{it.title || "（无标题）"}</span>
-                {meta && <span className="item-meta">{meta}</span>}
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="font-serif text-[17px] leading-snug font-medium">{it.title || "（无标题）"}</span>
+                {meta && <span className="text-muted-foreground text-[13px]">{meta}</span>}
               </span>
-              <span className="tag" data-status={status}>
-                <span className="dot" />
-                {doc ? STATUS_LABEL[status] : "无 PDF"}
-              </span>
+              <StatusTag status={status}>{doc ? STATUS_LABEL[status] : "无 PDF"}</StatusTag>
             </button>
             {it.documents.length > 1 && (
-              <div className="item-docs" aria-label="PDF 附件">
+              <div className={cn("flex flex-wrap gap-2 px-1 pb-3.5", onCheck && "pl-10")} aria-label="PDF 附件">
                 {it.documents.map((d) => {
                   const s = d.file_exists ? (d.parse_status ?? "pending") : "none";
                   return (
                     <button
                       key={d.attachment_id}
                       type="button"
-                      className="tag item-doc"
+                      className={tagClass(
+                        s,
+                        "hover:bg-accent max-w-full cursor-pointer disabled:cursor-not-allowed disabled:line-through disabled:opacity-60",
+                      )}
                       data-status={s}
                       disabled={!d.file_exists || !d.doc_id}
                       title={d.file_exists ? `${d.filename} · ${STATUS_LABEL[s]}` : `${d.filename} · 文件已不存在，重新同步后移除`}
                       onClick={() => onOpen(it, d)}
                     >
-                      <span className="dot" />
-                      <span className="item-doc-name">{d.filename}</span>
+                      <TagDot />
+                      <span className="truncate">{d.filename}</span>
                     </button>
                   );
                 })}

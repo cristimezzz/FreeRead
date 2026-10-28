@@ -8,7 +8,7 @@ import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "katex/dist/katex.min.css";
-import "./styles/global.css";
+import "./styles/index.css";
 import App from "./app/App";
 import { applyTheme, DEFAULT_ACCENT } from "./app/theme";
 
