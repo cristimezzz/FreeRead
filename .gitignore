@@ -42,6 +42,9 @@ core/pytest-of-*/
 
 .devenv
 
+# Claude Code 本地配置
+.claude/
+
 # 文档站点（VitePress）
 wiki/node_modules/
 wiki/.vitepress/dist/
