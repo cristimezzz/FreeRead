@@ -1,9 +1,15 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vitepress'
 
 // 使用说明站点：docs.freeread.work，由 Cloudflare Pages 从 wiki/ 构建（输出 .vitepress/dist）。
 // 设计文档（docs/）不上站，开发者指南里直接链接到 GitHub。
 
 const repo = 'https://github.com/cristimezzz/FreeRead'
+
+// 构建时的应用版本，页面打开后由 theme/release.ts 换成 GitHub 上的最新 Release
+const appVersion: string = JSON.parse(
+  readFileSync(new URL('../../apps/desktop/package.json', import.meta.url), 'utf8'),
+).version
 
 // 中文没有空格分词，按 Intl.Segmenter 切词后再交给 MiniSearch。
 // 这个函数会被序列化后送到浏览器执行，不能引用外部变量。
@@ -17,6 +23,7 @@ export default defineConfig({
   title: 'FreeRead 文档',
   description: 'FreeRead 使用说明：安装、导入文献、阅读、翻译、AI 总结、问答与知识图谱。',
   cleanUrls: true,
+  vite: { define: { __FREEREAD_VERSION__: JSON.stringify(appVersion) } },
   sitemap: { hostname: 'https://docs.freeread.work' },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
@@ -30,7 +37,7 @@ export default defineConfig({
 
     nav: [
       { text: '主页', link: 'https://freeread.work' },
-      { text: '下载', link: `${repo}/releases` },
+      { text: '下载', link: `${repo}/releases/latest` },
       { text: '问题反馈', link: `${repo}/issues` },
     ],
     socialLinks: [{ icon: 'github', link: repo }],

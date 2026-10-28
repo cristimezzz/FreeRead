@@ -4,7 +4,9 @@
 
 项目主页：<https://freeread.work>
 
-> 当前版本 **0.2.1**（新增 Linux 版）：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
+[![最新版本](https://img.shields.io/github/v/release/cristimezzz/FreeRead?label=%E6%9C%80%E6%96%B0%E7%89%88%E6%9C%AC)](https://github.com/cristimezzz/FreeRead/releases/latest)
+
+> 开发进度：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
 
 ## 功能
 

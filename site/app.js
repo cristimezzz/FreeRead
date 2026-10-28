@@ -536,5 +536,54 @@
     });
   }
 
+  /* ---------------------------------------------------------------- 最新版本 */
+
+  // 页面里写的是发布时的版本，作为无脚本 / 请求失败时的兜底；
+  // 打开时向 GitHub 查最新 Release，替换版本号和各安装包的文件名与链接。
+  // 结果在本地缓存一小时，避免触发 API 的匿名限流（每 IP 每小时 60 次）。
+  const RELEASE_API = "https://api.github.com/repos/cristimezzz/FreeRead/releases/latest";
+  const RELEASE_KEY = "freeread-site-release";
+  const RELEASE_TTL = 60 * 60 * 1000;
+  // 与 apps/desktop/src-tauri/src/update.rs 选择安装包的规则一致
+  const ASSET_SUFFIX = {
+    setup: "_x64-setup.exe",
+    portable: "_x64-portable.zip",
+    appimage: "_amd64.AppImage",
+    deb: "_amd64.deb",
+    rpm: ".x86_64.rpm",
+  };
+
+  async function latestRelease() {
+    try {
+      const c = JSON.parse(localStorage.getItem(RELEASE_KEY));
+      if (c && Date.now() - c.at < RELEASE_TTL) return c.release;
+    } catch {}
+    const r = await fetch(RELEASE_API, { headers: { Accept: "application/vnd.github+json" } });
+    if (!r.ok) throw new Error(`GitHub ${r.status}`);
+    const j = await r.json();
+    const release = {
+      version: j.tag_name.replace(/^v/, ""),
+      assets: j.assets.map((a) => ({ name: a.name, url: a.browser_download_url })),
+    };
+    try {
+      localStorage.setItem(RELEASE_KEY, JSON.stringify({ at: Date.now(), release }));
+    } catch {}
+    return release;
+  }
+
+  function applyRelease({ version, assets }) {
+    if (!version) return;
+    $$("[data-release-ver]").forEach((el) => (el.textContent = version));
+    for (const el of $$("[data-asset]")) {
+      const suffix = ASSET_SUFFIX[el.dataset.asset];
+      const asset = suffix && assets.find((a) => a.name.endsWith(suffix));
+      if (!asset) continue;
+      if (el.tagName === "A") el.href = asset.url;
+      else el.textContent = asset.name;
+    }
+  }
+
+  latestRelease().then(applyRelease, () => {});
+
   allSegs().forEach(placeThumb);
 })();

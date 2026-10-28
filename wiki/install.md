@@ -19,7 +19,11 @@
 
 ## 下载
 
-在 [Releases](https://github.com/cristimezzz/FreeRead/releases) 页面选择：
+最新版本 <LatestVersion />，直接下载：
+
+<LatestDownloads />
+
+各文件的区别（所有版本见 [Releases](https://github.com/cristimezzz/FreeRead/releases)）：
 
 | 文件 | 适合 |
 |---|---|
