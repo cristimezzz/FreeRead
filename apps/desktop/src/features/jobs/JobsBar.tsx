@@ -2,6 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { activeJobs, useApp } from "../../app/store";
+import {
+  Queue,
+  QueueItem,
+  QueueItemContent,
+  QueueItemDescription,
+  QueueItemIndicator,
+  QueueList,
+  QueueSection,
+  QueueSectionContent,
+  QueueSectionLabel,
+  QueueSectionTrigger,
+} from "../../components/ai-elements/queue";
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { Progress } from "../../components/ui/progress";
 import { cn } from "../../lib/utils";
@@ -29,6 +41,7 @@ export function JobsBar() {
   const running = active.filter((j) => j.status === "running");
   const current = running[0] ?? active[0];
   const label = KIND_LABEL[current.kind] ?? current.kind;
+  const rows = jobRows(active);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -60,25 +73,46 @@ export function JobsBar() {
             {running.length} 进行中 · {active.length - running.length} 排队
           </span>
         </div>
-        <ul className="divide-y overflow-y-auto px-1.5 pb-1.5">
-          {jobRows(active).map((r) => (
-            <li key={r.job.id} className="flex flex-col gap-1.5 px-2.5 py-2">
-              <div className="flex items-baseline gap-3">
-                <span className="min-w-0 flex-1 truncate">{r.label}</span>
-                <span
-                  className={cn(
-                    "flex-none tabular-nums",
-                    r.job.status === "running" ? "text-brand-ink" : "text-muted-foreground",
-                  )}
-                >
-                  {r.status}
-                </span>
-              </div>
-              {r.job.message && <div className="text-muted-foreground truncate text-xs">{r.job.message}</div>}
-              {r.progress !== null && <Progress value={r.progress === undefined ? undefined : r.progress * 100} />}
-            </li>
-          ))}
-        </ul>
+        <Queue className="overflow-y-auto px-1.5 pb-1.5">
+          {[
+            { key: "running", label: "进行中", rows: rows.filter((r) => r.job.status === "running") },
+            { key: "queued", label: "排队", rows: rows.filter((r) => r.job.status !== "running") },
+          ]
+            .filter((g) => g.rows.length)
+            .map((g) => (
+              <QueueSection key={g.key}>
+                <QueueSectionTrigger>
+                  <QueueSectionLabel label={g.label} count={g.rows.length} />
+                </QueueSectionTrigger>
+                <QueueSectionContent>
+                  <QueueList>
+                    {g.rows.map((r) => (
+                      <QueueItem key={r.job.id}>
+                        <div className="flex items-baseline gap-2">
+                          <QueueItemIndicator />
+                          <QueueItemContent className="min-w-0 flex-1 truncate">{r.label}</QueueItemContent>
+                          <span
+                            className={cn(
+                              "flex-none tabular-nums",
+                              r.job.status === "running" ? "text-brand-ink" : "text-muted-foreground",
+                            )}
+                          >
+                            {r.status}
+                          </span>
+                        </div>
+                        {r.job.message && (
+                          <QueueItemDescription className="truncate">{r.job.message}</QueueItemDescription>
+                        )}
+                        {r.progress !== null && (
+                          <Progress value={r.progress === undefined ? undefined : r.progress * 100} />
+                        )}
+                      </QueueItem>
+                    ))}
+                  </QueueList>
+                </QueueSectionContent>
+              </QueueSection>
+            ))}
+        </Queue>
       </PopoverContent>
     </Popover>
   );

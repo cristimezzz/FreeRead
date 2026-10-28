@@ -2,6 +2,9 @@
 // 另外两种临时卡片：流式输出中的卡片、写新问题的草稿卡片（另起 / 新话题）。
 
 import { type ComponentProps, type ReactNode, type RefObject } from "react";
+import { Message, MessageAction, MessageActions, MessageContent } from "../../components/ai-elements/message";
+import { Shimmer } from "../../components/ai-elements/shimmer";
+import { Citation } from "../../components/Citation";
 import { Icon } from "../../components/icons";
 import { PanelNote } from "../../components/SidePanel";
 import { Button } from "../../components/ui/button";
@@ -70,7 +73,7 @@ export interface ComposerProps {
 export function Composer({ label, aside, draft, setDraft, running, onSend, onStop, inputRef, autoFocus }: ComposerProps) {
   return (
     // 圆角输入卡：聚焦时整张卡片用强调色描边
-    <div className="qa-card-composer bg-card focus-within:border-brand focus-within:ring-brand-soft rounded-2xl border border-input pt-3 pr-3 pb-2.5 pl-4 shadow-xs transition-[border-color,box-shadow] focus-within:ring-3">
+    <div className="bg-card focus-within:border-brand focus-within:ring-brand-soft rounded-2xl border border-input pt-3 pr-3 pb-2.5 pl-4 shadow-xs transition-[border-color,box-shadow] focus-within:ring-3">
       <div className="text-muted-foreground mb-1.5 flex items-center gap-2 text-xs">
         <span className="min-w-0 flex-1 truncate">{label}</span>
         {aside && (
@@ -148,28 +151,41 @@ export function ExpandedCard({
       </header>
       <div className="qa-card-body">
         {anchor && <Quote text={anchor} />}
-        <div className="qa-question">{node.question}</div>
-        <div className={`qa-answer${node.untraced ? " untraced" : ""}`} data-node={node.id}>
-          {node.untraced && (
-            <span className="nofound">
-              <Icon name="alert" size={14} strokeWidth={1.8} />
-              未找到依据
-            </span>
-          )}
-          <div>{renderAnswer(node.answer, anchors, cited, blockText, onPick, onAnchor)}</div>
-        </div>
+        <Message from="user">
+          <MessageContent className="qa-question border">{node.question}</MessageContent>
+        </Message>
+        <Message from="assistant">
+          <MessageContent className="w-full">
+            <div className={`qa-answer${node.untraced ? " untraced" : ""}`} data-node={node.id}>
+              {node.untraced && (
+                <span className="nofound">
+                  <Icon name="alert" size={14} strokeWidth={1.8} />
+                  未找到依据
+                </span>
+              )}
+              <div>{renderAnswer(node.answer, anchors, cited, blockText, onPick, onAnchor)}</div>
+            </div>
+          </MessageContent>
+        </Message>
         {node.status === "stale" && <PanelNote className="mx-0">原文已重新解析，部分引用已失效。</PanelNote>}
       </div>
-      <div className="flex items-center gap-3.5">
-        <QaLink disabled={running} onClick={onRetake}>
-          重答
-        </QaLink>
-        <QaLink onClick={onDiverge}>
-          另起
-        </QaLink>
-        <QaLink danger disabled={running} onClick={onDelete}>
-          删除分支
-        </QaLink>
+      <div className="flex items-center gap-1">
+        <MessageActions>
+          <MessageAction tooltip="重答" disabled={running} onClick={onRetake}>
+            <Icon name="sync" />
+          </MessageAction>
+          <MessageAction tooltip="另起一张同级卡片" onClick={onDiverge}>
+            <Icon name="add" />
+          </MessageAction>
+          <MessageAction
+            tooltip="删除分支"
+            className="hover:text-destructive"
+            disabled={running}
+            onClick={onDelete}
+          >
+            <Icon name="delete" />
+          </MessageAction>
+        </MessageActions>
         <span className="text-muted-foreground flex-1 text-right text-xs">选中回答里的文字可以就此追问</span>
       </div>
       {composer}
@@ -199,14 +215,20 @@ export function PendingCard({
       </header>
       <div className="qa-card-body">
         {anchor && <Quote text={anchor} />}
-        <div className="qa-question">{question}</div>
-        <div className="qa-answer">
-          {shown ? (
-            <span className="animate-in fade-in-0">{shown}</span>
-          ) : (
-            <span className="text-muted-foreground animate-in fade-in-0 text-[12.5px]">正在检索原文…</span>
-          )}
-        </div>
+        <Message from="user">
+          <MessageContent className="qa-question border">{question}</MessageContent>
+        </Message>
+        <Message from="assistant">
+          <MessageContent className="w-full">
+            <div className="qa-answer">
+              {shown ? (
+                <span className="animate-in fade-in-0">{shown}</span>
+              ) : (
+                <Shimmer className="text-[12.5px]">正在检索原文…</Shimmer>
+              )}
+            </div>
+          </MessageContent>
+        </Message>
       </div>
     </article>
   );
@@ -253,15 +275,14 @@ function renderAnswer(
     if (marker && marker.end === b) {
       if (!numbers.has(marker.id)) numbers.set(marker.id, numbers.size + 1);
       part = (
-        <button
-          type="button"
+        <Citation
           key={`${a}-${marker.id}`}
-          className={`cite${marker.id === cited ? " active" : ""}`}
-          title={blockText(marker.id)?.slice(0, 200)}
-          onClick={() => onPick(marker.id)}
-        >
-          {numbers.get(marker.id)}
-        </button>
+          id={marker.id}
+          n={numbers.get(marker.id)!}
+          active={marker.id === cited}
+          blockText={blockText}
+          onPick={onPick}
+        />
       );
     } else {
       part = text.slice(a, b);
@@ -290,14 +311,13 @@ function renderAnswer(
   );
 }
 
-/** 卡片里的文字按钮（重答、另起、停止 …）：灰色小字，悬停变深；danger 悬停变红。 */
-function QaLink({ danger, className, ...rest }: ComponentProps<"button"> & { danger?: boolean }) {
+/** 卡片里的文字按钮（取消选段、停止 …）：灰色小字，悬停变深。 */
+function QaLink({ className, ...rest }: ComponentProps<"button">) {
   return (
     <button
       type="button"
       className={cn(
         "text-muted-foreground hover:text-foreground cursor-pointer text-xs transition-colors disabled:cursor-default disabled:opacity-40 disabled:hover:text-muted-foreground",
-        danger && "hover:text-destructive",
         className,
       )}
       {...rest}

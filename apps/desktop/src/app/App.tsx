@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 import { connect } from "../api/client";
 import { CoreExitedError, defaultExitSource, describeExit, getCoreInfo, waitForHealth } from "../api/core";
 import { ContextMenu, installDefaultMenu } from "../components/ContextMenu";
@@ -22,6 +22,8 @@ type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; messa
 export default function App() {
   const [boot, setBoot] = useState<Boot>({ state: "starting" });
   const view = useApp((s) => s.view);
+  // 阅读器里侧栏收成图标栏。用延后的值：先渲染新页面，等它挂载完再开始宽度动画，动画不会被页面挂载卡住
+  const sidebarOpen = useDeferredValue(view.name !== "reader");
   const settings = useApp((s) => s.settings);
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export default function App() {
   return (
     <TooltipProvider delayDuration={400}>
       {/* 阅读器里侧栏收成图标栏，把宽度让给正文 */}
-      <SidebarProvider open={view.name !== "reader"} className="h-full min-h-0">
+      <SidebarProvider open={sidebarOpen} className="h-full min-h-0">
         <Titlebar />
         <Sidebar />
         <SidebarInset className="min-w-0 min-h-0 pt-(--titlebar-h)">

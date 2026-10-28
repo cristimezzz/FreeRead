@@ -257,6 +257,9 @@ body.resizing .reader-pane {
   border-radius: 10px;
   cursor: pointer;
   scroll-margin: 96px;
+  /* 屏幕外的块不参与布局和绘制，长文档打开时不必一次排版整篇 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 5rem;
 }
 
 .rf-block:hover {
@@ -279,7 +282,17 @@ body.resizing .reader-pane {
 .rf-pair[data-mode="side"] {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 24px;
+  gap: 32px;
+}
+
+/* 原文与译文要一眼分得开：并排时中间画竖线，上下时译文缩进并带左侧竖线 */
+.rf-pair[data-mode="side"] .rf-translation {
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+
+.rf-pair {
+  padding-bottom: 8px;
 }
 
 .rf-translation {
@@ -287,7 +300,9 @@ body.resizing .reader-pane {
 }
 
 .rf-pair[data-mode="alternate"] .rf-translation {
-  margin-top: -0.6em;
+  margin-top: 0.5em;
+  padding-left: 14px;
+  border-left: 2px solid var(--brand-soft);
   color: var(--text-2);
   font-size: 0.94em;
 }
@@ -592,14 +607,11 @@ body.resizing .reader-pane {
   overscroll-behavior: contain;
 }
 
+/* 问题气泡的底色、圆角、对齐由 ai-elements 的 MessageContent 提供 */
 .qa-question {
-  align-self: flex-end;
   max-width: 90%;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--sidebar);
-  color: var(--foreground);
   font-size: 14px;
   white-space: pre-wrap;
 }

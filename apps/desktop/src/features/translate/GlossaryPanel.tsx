@@ -1,4 +1,5 @@
 import { type ReactNode, useState } from "react";
+import { Shimmer } from "../../components/ai-elements/shimmer";
 import { IconButton, ProgressBar } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { PanelFoot, PanelNote, SidePanel } from "../../components/SidePanel";
@@ -163,7 +164,7 @@ export function GlossaryPanel({ state, onClose, globalOnly }: Props) {
       {extracting && (
         <div className="text-muted-foreground mx-6 mt-2 mb-1 flex flex-col gap-2 text-xs">
           <ProgressBar />
-          <span>{job?.status === "queued" ? "等待抽取…" : "正在从论文中抽取术语…"}</span>
+          <Shimmer className="text-xs">{job?.status === "queued" ? "等待抽取…" : "正在从论文中抽取术语…"}</Shimmer>
         </div>
       )}
       {job?.status === "failed" && !extracting && <PanelNote error>抽取失败：{job.error}</PanelNote>}

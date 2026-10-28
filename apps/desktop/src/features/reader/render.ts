@@ -25,8 +25,18 @@ export function splitPlaceholders(text: string, inlines: Inline[] = []): Segment
   return out;
 }
 
+// katex.renderToString 是同步的，一篇论文有几百条公式；打开文档、翻译进度更新、批注变化都会重新渲染块，按公式缓存结果
+const MATH_CACHE_MAX = 2000;
+const mathCache = new Map<string, string>();
+
 export function renderMath(latex: string, displayMode = false): string {
-  return katex.renderToString(latex, { displayMode, throwOnError: false, strict: "ignore", trust: false });
+  const key = `${displayMode ? "d" : "i"}:${latex}`;
+  const hit = mathCache.get(key);
+  if (hit !== undefined) return hit;
+  const html = katex.renderToString(latex, { displayMode, throwOnError: false, strict: "ignore", trust: false });
+  if (mathCache.size >= MATH_CACHE_MAX) mathCache.delete(mathCache.keys().next().value!);
+  mathCache.set(key, html);
+  return html;
 }
 
 const TABLE_TAGS = ["table", "thead", "tbody", "tfoot", "tr", "td", "th", "math", "sup", "sub", "b", "i", "br"];

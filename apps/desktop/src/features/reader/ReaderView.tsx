@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, rawFetch, unwrap } from "../../api/client";
 import { type Anchor, type Block, type Document, PLACEHOLDER_RE } from "../../api/ir";
 import { type DocumentStatus, useApp } from "../../app/store";
+import { Shimmer } from "../../components/ai-elements/shimmer";
 import { usePresence } from "../../components/motion";
 import { Resizer } from "../../components/Resizer";
 import { ActionDialog, IconButton, OptionToggle, Spinner } from "../../components/controls";
@@ -53,15 +54,26 @@ function loadPrefs(): Prefs {
   }
 }
 
-/** 观察元素宽度（分隔条的上下限要按当前宽度算）。 */
+/** 观察元素宽度（分隔条的上下限要按当前宽度算）。第一次立即取，之后防抖：侧栏收展的动画里宽度每帧都在变。 */
 function useWidth(ref: React.RefObject<HTMLElement | null>): number {
   const [w, setW] = useState(0);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setW(el.clientWidth));
+    let t: ReturnType<typeof setTimeout> | undefined;
+    let first = true;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(t);
+      if (first) {
+        first = false;
+        setW(el.clientWidth);
+      } else t = setTimeout(() => setW(el.clientWidth), 120);
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
   }, [ref]);
   return w;
 }
@@ -163,6 +175,8 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId, version, parsedAt, toast]);
 
+  // 重排正文要渲染全部块和公式，放在低优先级里：打开文献时界面和侧栏动画不被它占住
+  const reflowDoc = useDeferredValue(doc);
   const index = useMemo(() => (doc ? buildPageIndex(doc.blocks) : new Map()), [doc]);
   const byId = useMemo(() => new Map(doc?.blocks.map((b) => [b.id, b]) ?? []), [doc]);
 
@@ -446,9 +460,11 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
                 onClick={() => void translation.translateAll()}
               >
                 <Icon name="translate" />
-                {translatingAll
-                  ? `翻译中 ${Math.round((docJob?.progress ?? 0) * 100)}%`
-                  : "翻译全文"}
+                {translatingAll ? (
+                  <Shimmer>{`翻译中 ${Math.round((docJob?.progress ?? 0) * 100)}%`}</Shimmer>
+                ) : (
+                  "翻译全文"
+                )}
               </Button>
             )}
           </div>
@@ -559,9 +575,9 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               onReset={() => setPref("split", DEFAULT_PREFS.split)}
             />
           )}
-          {layout !== "pdf" && doc && (
+          {layout !== "pdf" && reflowDoc && (
             <ReflowView
-              doc={doc}
+              doc={reflowDoc}
               mode={prefs.mode}
               translations={states}
               located={located}

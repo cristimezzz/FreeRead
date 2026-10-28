@@ -8,6 +8,7 @@ import { TRANSLATABLE } from "../../api/ir";
 import { pulse } from "../../components/motion";
 import { type Mark, placeSegments, selectionRange, splitByMarks } from "../annotations/offsets";
 import { COLORS, type AnnotationColor } from "../annotations/useAnnotations";
+import { Shimmer } from "../../components/ai-elements/shimmer";
 import type { TranslationState } from "../translate/useTranslations";
 import { useAssetUrl } from "./useAssetUrl";
 import { renderMath, renderTableHtml } from "./render";
@@ -219,7 +220,9 @@ const BlockView = memo(function BlockView({
         {translation.status === "needs_review" && <div className="rf-review">译文未通过校验，显示原文</div>}
       </div>
     ) : translation?.status === "pending" ? (
-      <div className="rf-pending">翻译中…</div>
+      <div className="rf-pending">
+        <Shimmer>翻译中…</Shimmer>
+      </div>
     ) : translation?.status === "error" ? (
       <div className="rf-review">翻译失败：{translation.message}</div>
     ) : null;

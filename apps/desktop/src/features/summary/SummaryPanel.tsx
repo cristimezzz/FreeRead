@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { IconButton, OptionSelect, ProgressBar } from "../../components/controls";
+import { ChainOfThought, ChainOfThoughtContent, ChainOfThoughtHeader, ChainOfThoughtStep } from "../../components/ai-elements/chain-of-thought";
+import { Shimmer } from "../../components/ai-elements/shimmer";
+import { Citation } from "../../components/Citation";
+import { IconButton, OptionSelect } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { PanelFoot, PanelNote, SidePanel } from "../../components/SidePanel";
 import { Button } from "../../components/ui/button";
@@ -61,17 +64,25 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
       </div>
 
       {running && (
-        <div className="text-muted-foreground mx-6 mt-2 mb-1 flex flex-col gap-2 text-xs">
-          <ProgressBar
-            value={!progress || progress.stage === "reduce" ? undefined : progress.total ? progress.done / progress.total : 0}
-          />
-          <span>
-            {!progress
-              ? "准备中…"
-              : progress.stage === "map"
-                ? `正在读各章节（${progress.done} / ${progress.total}）${progress.title ? `：${progress.title}` : ""}`
-                : "正在汇总…"}
-          </span>
+        <div className="mx-6 mt-2 mb-1">
+          {!progress ? (
+            <Shimmer className="text-xs">准备中…</Shimmer>
+          ) : (
+            <ChainOfThought defaultOpen>
+              <ChainOfThoughtHeader>正在生成总结</ChainOfThoughtHeader>
+              <ChainOfThoughtContent>
+                <ChainOfThoughtStep
+                  status={progress.stage === "map" ? "active" : "complete"}
+                  label={`读各章节（${progress.done} / ${progress.total}）`}
+                  description={progress.stage === "map" ? progress.title : undefined}
+                />
+                <ChainOfThoughtStep
+                  status={progress.stage === "map" ? "pending" : "active"}
+                  label={progress.stage === "map" ? "汇总" : <Shimmer>正在汇总…</Shimmer>}
+                />
+              </ChainOfThoughtContent>
+            </ChainOfThought>
+          )}
         </div>
       )}
       {error && <PanelNote error>{error}</PanelNote>}
@@ -98,15 +109,7 @@ export function SummaryPanel({ state, blockText, onPick, onClose }: Props) {
                     >
                       {p.text}
                       {p.block_ids.map((id, j) => (
-                        <button
-                          type="button"
-                          key={id}
-                          className={`cite${id === active ? " active" : ""}`}
-                          title={blockText(id)?.slice(0, 200)}
-                          onClick={() => pick(id)}
-                        >
-                          {j + 1}
-                        </button>
+                        <Citation key={id} id={id} n={j + 1} active={id === active} blockText={blockText} onPick={pick} />
                       ))}
                       {p.untraced && <span className="untraced-tag">未溯源</span>}
                     </li>

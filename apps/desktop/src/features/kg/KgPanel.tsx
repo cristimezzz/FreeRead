@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { Shimmer } from "../../components/ai-elements/shimmer";
+import { Citation } from "../../components/Citation";
 import { IconButton, ProgressBar } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { PanelNote, SidePanel } from "../../components/SidePanel";
@@ -31,11 +33,7 @@ type CiteProps = { blockText?: (id: string) => string | undefined; onPick: (id: 
 
 /** 出处块按阅读顺序编号（b_0000 显示为 1），悬停看原文。 */
 function Cite({ id, blockText, onPick }: CiteProps & { id: string }) {
-  return (
-    <button type="button" className="cite" title={blockText?.(id)} onClick={() => onPick(id)}>
-      {Number(id.replace(/\D/g, "")) + 1}
-    </button>
-  );
+  return <Citation id={id} n={Number(id.replace(/\D/g, "")) + 1} blockText={blockText} onPick={onPick} />;
 }
 
 function Swatch({ type }: { type: string }) {
@@ -239,7 +237,7 @@ export function KgPanel({ state, blockText, onPick: pick, onClose, expanded, sta
       {extracting && (
         <div className="text-muted-foreground mx-6 mt-2 mb-1 flex flex-col gap-2 text-xs">
           <ProgressBar value={job?.status === "running" && job.progress ? job.progress : undefined} />
-          <span>{job?.status === "queued" ? "等待抽取…" : (job?.message ?? "正在抽取实体和关系…")}</span>
+          <Shimmer className="text-xs">{job?.status === "queued" ? "等待抽取…" : (job?.message ?? "正在抽取实体和关系…")}</Shimmer>
         </div>
       )}
       {job?.status === "failed" && !extracting && (

@@ -2,6 +2,7 @@
 
 - 状态：已接受（开发中，`feat/shadcn-ui` 分支；取代 [ADR-0007](0007-paper-ink-clay-ui.md) 的组件实现与视觉部分）
 - 日期：2026-10-28
+- 后续：AI 相关界面的组件见 [ADR-0010](0010-ai-elements.md)
 
 ## 背景
 
