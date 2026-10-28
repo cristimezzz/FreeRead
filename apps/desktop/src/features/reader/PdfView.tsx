@@ -54,11 +54,15 @@ export function PdfView({ docId, highlight, marks, scrollKey, onPoint, onError, 
     let cancelled = false;
     task.promise.then(
       async (doc) => {
-        const list: PageSize[] = [];
-        for (let i = 1; i <= doc.numPages; i++) {
-          const vp = (await doc.getPage(i)).getViewport({ scale: 1 });
-          list.push({ width: vp.width, height: vp.height });
-        }
+        // 并行取：逐页 await 要和 worker 往返 numPages 次，长文档首屏会等很久
+        const list: PageSize[] = await Promise.all(
+          Array.from({ length: doc.numPages }, (_, i) =>
+            doc.getPage(i + 1).then((p) => {
+              const vp = p.getViewport({ scale: 1 });
+              return { width: vp.width, height: vp.height };
+            }),
+          ),
+        );
         if (cancelled) return;
         setSizes(list);
         setPdf(doc);
@@ -171,6 +175,14 @@ function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PagePro
       task?.cancel();
     };
   }, [visible, pdf, index, scale]);
+
+  // 离开预渲染范围就交还像素缓冲；回来时由上面的 effect 重新渲染
+  useEffect(() => {
+    if (visible || !canvas.current) return;
+    canvas.current.width = 0;
+    canvas.current.height = 0;
+    void pdf.getPage(index + 1).then((page) => page.cleanup());
+  }, [visible, pdf, index]);
 
   const click = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
