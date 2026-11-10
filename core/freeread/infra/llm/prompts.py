@@ -4,6 +4,7 @@
 """
 
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -54,20 +55,37 @@ class Prompt:
     task: TaskKind
     system: Template
     user: Template
+    # 文档级的稳定内容（标题、摘要、术语表、全文…），接在 system 后面成为同一条 system 消息
+    context: Template | None = None
 
     @property
     def ref(self) -> str:
         return f"{self.id}@{self.version}"
 
-    def render(self, **variables: Any) -> list[Message]:
-        """渲染为 [system, user]；system 为空时省略。"""
+    def render(self, *, history: Sequence[Message] = (), **variables: Any) -> list[Message]:
+        """渲染为 [system, *history, user]；system 为空时省略。
+
+        前缀稳定约定（服务商按请求开头的相同前缀缓存，见 ADR-0005）：system 与 context
+        只能引用同一文档、同一语言内不变的变量，逐次调用变化的内容一律放在 user 里；
+        history 只能在末尾追加。
+        """
         try:
-            system = self.system.render(variables).strip()
+            parts = [self.system.render(variables).strip()]
+            if self.context is not None:
+                parts.append(self.context.render(variables).strip())
             user = self.user.render(variables).strip()
         except UndefinedError as exc:
             raise PromptError(f"{self.ref}: {exc}") from None
+        system = "\n\n".join(p for p in parts if p)
         messages = [Message("system", system)] if system else []
-        return [*messages, Message("user", user)]
+        return [*messages, *history, Message("user", user)]
+
+    def user_message(self, **variables: Any) -> Message:
+        """只渲染 user 模板：用来重建历史轮次里当时发出的那条 user 消息。"""
+        try:
+            return Message("user", self.user.render(variables).strip())
+        except UndefinedError as exc:
+            raise PromptError(f"{self.ref}: {exc}") from None
 
 
 def _parse(path: Path) -> Prompt:
@@ -79,6 +97,7 @@ def _parse(path: Path) -> Prompt:
             task=TaskKind(data["task"]),
             system=_env.from_string(data.get("system") or ""),
             user=_env.from_string(data["user"]),
+            context=_env.from_string(data["context"]) if data.get("context") else None,
         )
     except (KeyError, TypeError, ValueError) as exc:
         raise PromptError(f"{path.name}: invalid prompt: {exc}") from None

@@ -160,10 +160,11 @@ def summary_responder(model: str, messages: list[Message]) -> str:
 def qa_responder(model: str, messages: list[Message]) -> str:
     """看得懂 qa_answer 提示词的确定性回复（测试与 --fake 评测用）：引用上下文里的前两块，
     再故意带一个不存在的编号 b_9999，用来覆盖引用校验；末行是卡片标题。其他请求交给 summary_responder。"""
-    user = messages[-1].content
-    if "检索到的原文：" not in user:
+    system, user = messages[0].content, messages[-1].content
+    if "问答树" not in system or "问题：" not in user:
         return summary_responder(model, messages)
-    ids = [bid for bid, _ in _BLOCK_LINE_RE.findall(user)]
+    # 检索模式下原文在 user 里，全文模式下在 system 里
+    ids = [bid for bid, _ in _BLOCK_LINE_RE.findall(user if "检索到的原文：" in user else system)]
     if not ids:
         return "论文中没有找到相关内容。"
     first, second = ids[0], ids[min(1, len(ids) - 1)]

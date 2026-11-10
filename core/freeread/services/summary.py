@@ -24,7 +24,7 @@ from freeread.domain.summary.grouping import Group, SourceBlock, group_blocks
 from freeread.domain.summary.parse_json import extract_json, json_objects
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import SummaryRow
-from freeread.infra.llm.default_gateway import DefaultGateway, TaskLimiter
+from freeread.infra.llm.default_gateway import DefaultGateway, TaskLimiter, parses
 from freeread.infra.llm.errors import LLMError
 from freeread.infra.llm.gateway import Message, TaskKind
 from freeread.infra.llm.prompts import Prompt, PromptRegistry
@@ -274,7 +274,7 @@ class SummaryService:
         parse: Callable[[str], T],
         salvage: Callable[[list[str]], T] | None = None,
     ) -> T:
-        """parse 抛 ValueError 时不走缓存重试一次（缓存里是那条坏回复）；
+        """parse 抛 ValueError 时不走缓存重试一次（坏回复不进缓存，见 accept）；
         仍失败且给了 salvage 时，用它从两次回复里尽量取回结果。"""
         texts: list[str] = []
         for attempt in range(2):
@@ -284,6 +284,7 @@ class SummaryService:
                 prompt_id=prompt.ref,
                 doc_id=doc_id,
                 use_cache=attempt == 0,
+                accept=parses(parse),
                 **self.llm_opts,
             )
             texts.append(result.text)

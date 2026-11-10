@@ -42,6 +42,29 @@ async def test_complete():
     assert body == {"model": "m", "messages": [{"role": "user", "content": "hi"}], "temperature": 0}
 
 
+@pytest.mark.parametrize(
+    ("usage", "cached"),
+    [
+        # DeepSeek
+        ({"prompt_tokens": 50, "prompt_cache_hit_tokens": 32, "prompt_cache_miss_tokens": 18}, 32),
+        # OpenAI / 通义 / Moonshot
+        ({"prompt_tokens": 50, "prompt_tokens_details": {"cached_tokens": 40}}, 40),
+        ({"prompt_tokens": 50, "prompt_tokens_details": None}, 0),
+        ({"prompt_tokens": 50}, 0),
+    ],
+)
+async def test_usage_reports_provider_cached_tokens(usage, cached):
+    body = {"choices": [{"message": {"content": "ok"}}], "usage": usage | {"completion_tokens": 1}}
+    provider, _ = make(lambda r: httpx.Response(200, json=body))
+    result = await provider.complete("m", MSGS)
+    assert (result.usage.input_tokens, result.usage.cached_tokens) == (50, cached)
+
+    sse = f"data: {json.dumps({'choices': [], 'usage': body['usage']})}\n\ndata: [DONE]\n\n"
+    provider, _ = make(lambda r: httpx.Response(200, text=sse))
+    chunks = [c async for c in provider.stream("m", MSGS)]
+    assert chunks[-1].usage.cached_tokens == cached
+
+
 async def test_stream_parses_sse_and_usage():
     events = [
         {"choices": [{"delta": {"role": "assistant"}}]},

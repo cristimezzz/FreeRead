@@ -127,7 +127,11 @@ async def test_ask_streams_validates_saves_and_threads_history(ctx, tmp_path):
     assert kinds[0] == "context" and kinds[-1] == "answer"
     assert "delta" in kinds and set(kinds[1:-1]) == {"delta"}
     context = events[0][1]
-    assert context.block_ids and context.modes == ["fts"]
+    assert context.block_ids and context.modes == ["full"]  # 短论文：全文进提示词前缀，不检索
+    first_messages = fake.calls[-1][1]
+    assert [m.role for m in first_messages] == ["system", "user"]
+    assert f"[{context.block_ids[0]}] " in first_messages[0].content
+    assert "检索到的原文" not in first_messages[1].content
 
     first = events[-1][1]
     assert "b_9999" not in first.answer and first.stats["invalid_ids"] == 1
@@ -139,11 +143,12 @@ async def test_ask_streams_validates_saves_and_threads_history(ctx, tmp_path):
     events = await collect(ctx.qa.ask(session.id, "And the limitations?", parent_id=first.id))
     second = events[-1][1]
     assert second.parent_id == first.id
-    prompt = fake.calls[-1][1][-1].content
-    assert "此前这一支的对话" in prompt and "What does the benchmark measure?" in prompt
-    assert (
-        "[b_" not in prompt.split("此前这一支的对话")[1].split("检索到的原文")[0]
-    )  # 历史去掉了标记
+    # 追问是真正的多轮消息，只在末尾追加：上一问的请求是这一问的前缀（服务商前缀缓存）
+    messages = fake.calls[-1][1]
+    assert [m.role for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[:2] == first_messages
+    assert messages[2].content == f"{first.answer}\n标题：{first.title}"
+    assert messages[3].content == "问题：And the limitations?"
 
     # 卡片标题：模型末行的"标题：…"，不留在回答里；对话标题取第一张卡片的标题
     assert first.title == "What doe要点" and "标题" not in first.answer
@@ -172,8 +177,7 @@ async def test_tree_branches_see_only_their_ancestors(ctx, tmp_path):
         return (await collect(ctx.qa.ask(session.id, q, **kw)))[-1][1]
 
     def history():
-        prompt = fake.calls[-1][1][-1].content
-        return prompt.split("检索到的原文")[0]
+        return "\n".join(m.content for m in fake.calls[-1][1][1:-1])
 
     root = await ask("Root question about the benchmark?")
     a = await ask("Child A about accuracy?", parent_id=root.id)
@@ -185,7 +189,7 @@ async def test_tree_branches_see_only_their_ancestors(ctx, tmp_path):
     assert "Root question" in history() and "Child A" in history() and "Child B" not in history()
 
     other = await ask("A brand new topic?")  # 新话题：新的根
-    assert other.parent_id is None and "此前这一支的对话" not in history()
+    assert other.parent_id is None and history() == ""
 
     # 就此追问：选中的文字存进节点、写进提示词
     spawned = await ask("这是什么意思？", parent_id=root.id, anchor="  第一点\n 见此处 ")
@@ -208,6 +212,38 @@ async def test_tree_branches_see_only_their_ancestors(ctx, tmp_path):
     left = {n.id for n in ctx.qa.get_session(session.id).nodes}
     assert a.id not in left and {root.id, b.id, other.id, spawned.id, again.id} == left
     assert ctx.qa.delete_node(a.id) == 0
+
+
+async def test_long_documents_and_ollama_fall_back_to_retrieval(ctx, tmp_path):
+    fake = FakeProvider("p1", responder=qa_responder)
+    configure(ctx, fake)
+    doc_id = await parsed_doc(ctx, tmp_path)
+    session = ctx.qa.create_session(doc_id)
+
+    ctx.qa.fulltext_max = 10  # 论文比上限长：检索
+    events = await collect(ctx.qa.ask(session.id, "What does the benchmark measure?"))
+    context, first = events[0][1], events[-1][1]
+    assert context.modes == ["fts"] and first.stats["modes"] == ["fts"]
+    system, user = fake.calls[-1][1]
+    assert "论文全文" not in system.content and f"[{context.block_ids[0]}] " not in system.content
+    assert "检索到的原文：" in user.content and f"[{context.block_ids[0]}] " in user.content
+    assert first.citations and all(c in context.block_ids for c in first.citations)
+
+    # 追问：历史轮次里不重放当时的检索片段，本次的片段在最后一条 user 里
+    await collect(ctx.qa.ask(session.id, "And the limitations?", parent_id=first.id))
+    messages = fake.calls[-1][1]
+    assert [m.role for m in messages] == ["system", "user", "assistant", "user"]
+    assert messages[0] == system and messages[1].content == f"问题：{first.question}"
+    assert "检索到的原文：" in messages[3].content
+
+    # 本地 Ollama 上下文窗口小：论文再短也检索
+    ctx.qa.fulltext_max = 30000
+    s = ctx.settings.get()
+    ctx.settings.put(
+        s.model_copy(update={"providers": [s.providers[0].model_copy(update={"kind": "ollama"})]})
+    )
+    events = await collect(ctx.qa.ask(session.id, "Which datasets are used?"))
+    assert events[0][1].modes == ["fts"]
 
 
 async def test_unanswerable_and_preflight(ctx, tmp_path):

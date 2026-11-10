@@ -1,6 +1,7 @@
 import asyncio
 
 import pytest
+import yaml
 from sqlalchemy import select
 
 from freeread.infra.db.models import LLMCacheRow, LLMCallRow
@@ -12,7 +13,7 @@ from freeread.infra.llm.errors import (
     RouteNotConfigured,
 )
 from freeread.infra.llm.fake import FakeProvider, RecordingProvider
-from freeread.infra.llm.gateway import Message, TaskKind
+from freeread.infra.llm.gateway import LLMResult, Message, TaskKind, Usage
 from freeread.infra.llm.prompts import PromptError, PromptRegistry
 from freeread.infra.llm.secrets import SecretStore
 from freeread.services.settings import AppSettings, ModelRoute, ProviderConfig
@@ -299,26 +300,209 @@ async def test_record_replay(tmp_path):
 
 
 def test_prompts_render_translate():
-    prompt = PromptRegistry().get("translate@1")
-    assert prompt.ref == "translate@1" and prompt.task is TaskKind.TRANSLATE
-    system, user = prompt.render(
-        source_lang="en", target_lang="zh-CN", title="T", section_title="S", text="Hello"
-    )
-    assert system.role == "system" and "zh-CN" in system.content
-    assert user.content.endswith("Hello") and "术语表" not in user.content
-    _, user = prompt.render(
-        source_lang="en",
-        target_lang="zh-CN",
-        title="T",
+    prompt = PromptRegistry().get("translate@2")
+    assert prompt.ref == "translate@2" and prompt.task is TaskKind.TRANSLATE
+    doc = {"source_lang": "en", "target_lang": "zh-CN", "title": "My Paper"}
+    system, user = prompt.render(**doc, section_title="S", text="Hello")
+    assert system.role == "system" and "zh-CN" in system.content and "My Paper" in system.content
+    assert user.content.endswith("Hello") and "术语" not in user.content
+    term = {"source": "transformer", "target": "Transformer"}
+    system2, user = prompt.render(
+        **doc,
+        abstract="An abstract.",
+        glossary=[term],
         section_title="S",
         text="Hello",
-        glossary=[{"source": "transformer", "target": "Transformer"}],
+        hits=[term],
     )
+    assert "An abstract." in system2.content and "transformer → Transformer" in system2.content
     assert "transformer → Transformer" in user.content
+    # 段落级变量只影响 user：system 不变，前缀缓存才能命中
+    system3, _ = prompt.render(
+        **doc, section_title="Other", text="Bye", prev_text="Before", hits=[term]
+    )
+    assert system3 == system
     with pytest.raises(PromptError, match="text"):
-        prompt.render(source_lang="en", target_lang="zh", title="T", section_title="S")
+        prompt.render(**doc, section_title="S")
     with pytest.raises(PromptError):
         PromptRegistry().get("translate@99")
+
+
+def test_prompt_prefix_only_uses_document_level_variables():
+    """system / context 是服务商前缀缓存的前缀：不能引用逐次调用变化的变量。"""
+    from jinja2 import Environment, meta
+
+    from freeread.infra.llm.prompts import DEFAULT_PROMPTS_DIR
+
+    stable = {"source_lang", "target_lang", "title", "abstract", "glossary", "fulltext"}
+    env = Environment()
+    for path in sorted(DEFAULT_PROMPTS_DIR.glob("*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        prefix = (data.get("system") or "") + (data.get("context") or "")
+        used = meta.find_undeclared_variables(env.parse(prefix))
+        assert used <= stable, f"{path.name}: {sorted(used - stable)} in system/context"
+
+
+def test_prompt_history_goes_between_system_and_user():
+    prompt = PromptRegistry().get("qa_answer")
+    turn = [prompt.user_message(question="Q1"), Message("assistant", "A1")]
+    messages = prompt.render(
+        history=turn, target_lang="中文", title="T", fulltext="[b_0001] text", question="Q2"
+    )
+    assert [m.role for m in messages] == ["system", "user", "assistant", "user"]
+    assert "[b_0001] text" in messages[0].content and messages[1].content == "问题：Q1"
+    first = prompt.render(target_lang="中文", title="T", fulltext="[b_0001] text", question="Q1")
+    assert messages[:2] == first  # 上一问的请求是这一问的前缀
+
+
+# ---------------------------------------------------------------- 坏回复不进缓存
+
+
+async def test_rejected_reply_is_returned_but_not_cached(ctx, gateway, fake):
+    fake._script = ["bad", "good"]
+    ok = lambda text: text == "good"
+    r = await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1", accept=ok)
+    assert r.text == "bad"
+    with ctx.sessions() as s:
+        assert s.scalars(select(LLMCacheRow)).all() == []
+    r = await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1", accept=ok)
+    assert r.text == "good" and not r.cache_hit
+    r = await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1", accept=ok)
+    assert r.cache_hit and len(fake.calls) == 2
+    assert len(calls(ctx)) == 3  # 被拒的回复也花了钱，照常记账
+
+
+async def test_cached_reply_that_fails_accept_is_treated_as_a_miss(gateway, fake):
+    fake._script = ["old bad reply", "good"]
+    await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")  # 旧版本缓存下来的坏回复
+    r = await gateway.complete(
+        TaskKind.TRANSLATE, MSGS, prompt_id="t@1", accept=lambda text: text == "good"
+    )
+    assert r.text == "good" and not r.cache_hit
+    assert (await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")).text == "good"
+
+
+async def test_empty_stream_is_not_cached(ctx, gateway, fake):
+    fake._script = ["", "answer"]
+    chunks = [c async for c in gateway.stream(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")]
+    assert "".join(c.delta for c in chunks) == ""
+    chunks = [c async for c in gateway.stream(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")]
+    assert "".join(c.delta for c in chunks) == "answer" and len(fake.calls) == 2
+
+
+# ---------------------------------------------------------------- 前缀缓存：计量与预热
+
+
+async def test_provider_cached_tokens_are_recorded(ctx, gateway):
+    class Cached(FakeProvider):
+        async def complete(self, model, messages, **opts):
+            return LLMResult("ok", model, Usage(100, 5, cached_tokens=80))
+
+    gateway._factory = lambda c, k: Cached("p1")
+    r = await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")
+    assert r.usage.cached_tokens == 80
+    hit = await gateway.complete(TaskKind.TRANSLATE, MSGS, prompt_id="t@1")
+    assert hit.cache_hit and hit.usage.cached_tokens == 80
+    rows = calls(ctx)
+    assert [(r.input_tokens, r.cached_input_tokens) for r in rows] == [(100, 80), (0, 0)]
+
+
+LONG_SYSTEM = Message("system", "rules " * 400)
+
+
+def warm_msgs(i: int) -> list[Message]:
+    return [LONG_SYSTEM, Message("user", f"block {i}")]
+
+
+async def settle() -> None:
+    for _ in range(50):
+        await asyncio.sleep(0.001)
+
+
+async def test_first_request_warms_the_prefix_before_the_rest_fan_out(gateway):
+    gated = GatedProvider()
+    gateway._factory = lambda config, key: gated
+    tasks = [
+        asyncio.create_task(gateway.complete(TaskKind.TRANSLATE, warm_msgs(i), prompt_id="t@1"))
+        for i in range(4)
+    ]
+    await settle()
+    assert gated.running == 1  # 其余三个在等第一个把前缀缓存建起来
+    gated.gate.set()
+    await asyncio.gather(*tasks)
+
+    # 前缀已经热了：新请求不再排队，直接并发
+    gated.gate.clear()
+    gated.peak = 0
+    tasks = [
+        asyncio.create_task(gateway.complete(TaskKind.TRANSLATE, warm_msgs(i), prompt_id="t@1"))
+        for i in range(4, 7)
+    ]
+    await settle()
+    assert gated.running == 3
+    gated.gate.set()
+    await asyncio.gather(*tasks)
+
+    # 太久没用：服务商那边多半已经淘汰，重新预热
+    now = gateway._clock()
+    gateway._clock = lambda: now + 301
+    gated.gate.clear()
+    tasks = [
+        asyncio.create_task(gateway.complete(TaskKind.TRANSLATE, warm_msgs(i), prompt_id="t@1"))
+        for i in range(7, 9)
+    ]
+    await settle()
+    assert gated.running == 1
+    gated.gate.set()
+    await asyncio.gather(*tasks)
+
+
+async def test_failed_or_cancelled_warm_up_releases_the_waiters(gateway):
+    class FailFirst(GatedProvider):
+        async def complete(self, model, messages, **opts):
+            first = not self.calls and self.running == 0
+            result = await super().complete(model, messages, **opts)
+            if first:
+                raise ProviderError("401", 401)
+            return result
+
+    failing = FailFirst()
+    gateway._factory = lambda config, key: failing
+    tasks = [
+        asyncio.create_task(gateway.complete(TaskKind.TRANSLATE, warm_msgs(i), prompt_id="t@1"))
+        for i in range(3)
+    ]
+    await settle()
+    assert failing.running == 1
+    failing.gate.set()
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    assert isinstance(results[0], ProviderError)
+    assert [r.text for r in results[1:]] == ["[fake:m-small] block 1", "[fake:m-small] block 2"]
+
+    # 预热请求被取消（用户滚走了）：等待者照常继续
+    gated = GatedProvider()
+    gateway._factory = lambda config, key: gated
+    other = [Message("system", "other " * 400), Message("user", "x")]
+    leader = asyncio.create_task(gateway.complete(TaskKind.TRANSLATE, other, prompt_id="t@1"))
+    await settle()
+    follower = asyncio.create_task(
+        gateway.complete(TaskKind.TRANSLATE, [other[0], Message("user", "y")], prompt_id="t@1")
+    )
+    await settle()
+    assert gated.running == 1
+    leader.cancel()
+    await settle()
+    assert gated.running == 1  # 现在跑的是 follower
+    gated.gate.set()
+    assert (await follower).text == "[fake:m-small] y"
+    assert gateway._warming == {}
+
+
+async def test_short_system_prompts_are_not_gated(gateway):
+    gated = GatedProvider()
+    gateway._factory = lambda config, key: gated
+    await run_gated(gateway, gated, 3, "s")
+    assert gated.peak == 3
 
 
 def test_prompts_dir_when_frozen(monkeypatch, tmp_path):

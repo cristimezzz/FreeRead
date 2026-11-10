@@ -420,6 +420,8 @@ class LLMCallRow(Base):
     prompt_id: Mapped[str | None] = mapped_column(String)
     input_tokens: Mapped[int] = mapped_column(Integer, default=0)
     output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    # input_tokens 里命中服务商前缀缓存的部分（本地 llm_cache 命中时为 0）
+    cached_input_tokens: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     cost_estimate: Mapped[float | None] = mapped_column(Float)
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)
     cache_hit: Mapped[bool] = mapped_column(default=False)

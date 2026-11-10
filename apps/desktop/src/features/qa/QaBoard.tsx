@@ -188,7 +188,8 @@ export function QaBoard({ state, blockText, onPick, onClose }: Props) {
     );
   };
 
-  const noVector = lastModes && !lastModes.includes("vector");
+  // full：论文较短，全文都给了模型，没有检索，也就不需要语义索引
+  const noVector = lastModes && !lastModes.includes("vector") && !lastModes.includes("full");
 
   return (
     <div
