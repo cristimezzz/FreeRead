@@ -67,7 +67,15 @@ jobs:
           node-version: lts/*
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
+      # 本机 .npmrc 用镜像时 npm install 会把镜像地址写进 lock；CI 连镜像很慢甚至 504，换了缓存键就会卡住
+      - name: package-lock.json uses registry.npmjs.org
+        run: |
+          if grep -nE '"resolved": "https?://' package-lock.json | grep -v '"resolved": "https://registry.npmjs.org/'; then
+            echo "::error file=apps/desktop/package-lock.json::下载地址必须是 https://registry.npmjs.org/（把 registry.npmmirror.com 等替换掉）"
+            exit 1
+          fi
       - run: npm ci
+        timeout-minutes: 10
       - run: npm run build
       - run: npm test
       - name: API types are up to date
