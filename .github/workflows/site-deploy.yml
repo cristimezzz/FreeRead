@@ -1,0 +1,49 @@
+name: Site deploy
+
+# 项目主页 freeread.work：把 site/ 原样发布到 Cloudflare Pages 项目 freeread（无构建）。
+# 2e0d97e 删掉 GitHub Pages 的 pages.yml 后没有自动发布，主页一直停在当时手动上传的版本。
+# 需要仓库 secret：
+#   CLOUDFLARE_API_TOKEN   Cloudflare › My Profile › API Tokens，权限 Account › Cloudflare Pages › Edit
+#   CLOUDFLARE_ACCOUNT_ID  Cloudflare 控制台 Workers & Pages 页面右侧的 Account ID
+# 没有设置时跳过。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site-deploy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secrets
+        id: secrets
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$ACCOUNT" ]; then
+            echo "::notice::未设置 CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID，跳过发布"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v7
+        if: steps.secrets.outputs.ok == 'true'
+      - name: Deploy site/ to Cloudflare Pages
+        if: steps.secrets.outputs.ok == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site --project-name=freeread --branch=main --commit-dirty=true
