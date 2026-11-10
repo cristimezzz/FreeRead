@@ -536,5 +536,81 @@
     });
   }
 
+  /* ---------------------------------------------------------------- 最新版本 */
+
+  // 下载段默认写着发布时的版本；打开页面时向 GitHub 取最新 Release，替换版本号和下载链接。
+  // 请求失败、被限流或不认识的数据都保留页面上的静态内容。
+  const REPO = "cristimezzz/FreeRead";
+  const DL_PREFIX = `https://github.com/${REPO}/releases/download/`;
+  const ASSETS = {
+    setup: /_x64-setup\.exe$/,
+    portable: /_x64-portable\.zip$/,
+    appimage: /_amd64\.AppImage$/,
+    deb: /_amd64\.deb$/,
+    rpm: /\.x86_64\.rpm$/,
+  };
+  const CACHE_KEY = "freeread-site-release";
+  const CACHE_MS = 60 * 60 * 1000;
+
+  async function latestRelease() {
+    try {
+      const c = JSON.parse(sessionStorage.getItem(CACHE_KEY));
+      if (c && Date.now() - c.at < CACHE_MS) return c.rel;
+    } catch {}
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+        headers: { Accept: "application/vnd.github+json" },
+        signal: ctl.signal,
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      const rel = {
+        tag: j.tag_name,
+        url: j.html_url,
+        date: j.published_at,
+        assets: (j.assets ?? []).map((a) => ({ name: a.name, url: a.browser_download_url })),
+      };
+      try {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), rel }));
+      } catch {}
+      return rel;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  function applyRelease(rel) {
+    if (!rel || !/^v\d+\.\d+\.\d+$/.test(rel.tag ?? "")) return;
+    const version = rel.tag.slice(1);
+    const page = typeof rel.url === "string" && rel.url.startsWith(`https://github.com/${REPO}/releases/`)
+      ? rel.url
+      : `https://github.com/${REPO}/releases/latest`;
+    const assets = rel.assets.filter(
+      (a) => typeof a.name === "string" && typeof a.url === "string" && a.url.startsWith(DL_PREFIX),
+    );
+    for (const [kind, re] of Object.entries(ASSETS)) {
+      const a = assets.find((x) => re.test(x.name));
+      for (const el of $$(`[data-asset="${kind}"]`)) {
+        // 新版本里没有这类包时，按钮改指向 Release 页面，不留旧版本的链接
+        if (el.tagName === "A") el.href = a ? a.url : page;
+        else el.textContent = a ? a.name : "见 Release 页面";
+      }
+    }
+    $$('[data-rel="version"]').forEach((el) => (el.textContent = version));
+    const d = new Date(rel.date);
+    const dateEl = $('[data-rel="date"]');
+    if (dateEl && !Number.isNaN(d.getTime())) {
+      const ymd = d.toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+      dateEl.textContent = `${version} 发布于 ${ymd}。`;
+      dateEl.hidden = false;
+    }
+  }
+
+  latestRelease().then(applyRelease);
+
   allSegs().forEach(placeThumb);
 })();

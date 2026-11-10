@@ -31,6 +31,7 @@ export default defineConfig({
     nav: [
       { text: '主页', link: 'https://freeread.work' },
       { text: '下载', link: `${repo}/releases` },
+      { text: '更新历史', link: '/changelog' },
       { text: '问题反馈', link: `${repo}/issues` },
     ],
     socialLinks: [{ icon: 'github', link: repo }],
@@ -58,6 +59,7 @@ export default defineConfig({
       ] },
       { text: '其他', items: [
         { text: '常见问题', link: '/faq' },
+        { text: '更新历史', link: '/changelog' },
         { text: '开发者指南', link: '/developer' },
       ] },
     ],

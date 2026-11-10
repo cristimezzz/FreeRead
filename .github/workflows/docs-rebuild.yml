@@ -1,0 +1,25 @@
+name: Docs rebuild
+
+# 发布、修改或删除 Release 后触发 Cloudflare Pages 重新构建文档站，
+# 让 docs.freeread.work/changelog 的静态内容与 GitHub Releases 一致（页面在浏览器里也会再取一次）。
+# 需要仓库 secret CLOUDFLARE_DOCS_DEPLOY_HOOK：Cloudflare Pages 项目 › Settings › Builds › Deploy hooks
+# 新建一个指向 main 的 hook，把 URL 存进去。没有设置时跳过。
+
+on:
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Cloudflare Pages build
+        env:
+          HOOK: ${{ secrets.CLOUDFLARE_DOCS_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::notice::未设置 CLOUDFLARE_DOCS_DEPLOY_HOOK，跳过"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK" -o /dev/null

@@ -226,6 +226,34 @@
   background: var(--accent);
 }
 
+/* 更新历史：版本标题下的日期与链接 */
+.vp-doc .release-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: -8px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink3);
+}
+
+.vp-doc .release-meta a {
+  color: var(--ink3);
+}
+
+.vp-doc .release-meta a:hover {
+  color: var(--accent-ink);
+}
+
+.vp-doc .release-pre {
+  padding: 0 6px;
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--ink2);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition-duration: 0ms !important;
