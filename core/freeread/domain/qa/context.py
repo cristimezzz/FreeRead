@@ -71,6 +71,23 @@ def build_context(
                 break
 
     ordered = [b for b in usable if b.id in chosen]
+    return QAContext([b.id for b in ordered], format_blocks(ordered, section_titles), used)
+
+
+def full_context(
+    blocks: Sequence[ContextBlock],
+    section_titles: dict[str, str],
+    token_len: Callable[[str], int],
+) -> QAContext:
+    """全文模式：所有可用块按阅读顺序。结果只取决于文档本身，
+    同一篇论文的每次提问都逐字节相同（放在提示词前缀里，供服务商的前缀缓存命中）。"""
+    usable = [b for b in blocks if b.text and b.type != "heading"]
+    tokens = sum(token_len(b.text) + 4 for b in usable)
+    return QAContext([b.id for b in usable], format_blocks(usable, section_titles), tokens)
+
+
+def format_blocks(ordered: Sequence[ContextBlock], section_titles: dict[str, str]) -> str:
+    """[b_xxxx] 行；章节变化时加一行章节标题，标题不带编号（不希望被引用）。"""
     lines: list[str] = []
     section: object = object()
     for b in ordered:
@@ -80,4 +97,4 @@ def build_context(
             if title:
                 lines.append(f"## {title}")
         lines.append(f"[{b.id}] {b.text}")
-    return QAContext([b.id for b in ordered], "\n\n".join(lines), used)
+    return "\n\n".join(lines)

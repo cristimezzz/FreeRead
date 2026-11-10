@@ -1,8 +1,12 @@
 """单篇论文问答（问答树）。见 docs/01-architecture.md §5.7、docs/m2/qa.md、docs/m3/qa-tree.md。
 
 0. 位置：新问题挂在 parent_id 下（None 为新的根）；历史只取这条祖先链，兄弟分支互不可见；
-1. 检索：当前问题（追问时拼上父节点问题与选中的文字）→ SearchService 混合检索 top-k 块；
-2. 上下文：命中块加同章节邻块、摘要，按预算截断（domain/qa/context.py）；
+1. 上下文，两种模式：
+   - 全文模式：论文不超过 FULLTEXT_MAX token 且不是本地 Ollama 时，全文放进提示词前缀，
+     同一篇论文的每次提问共享这段前缀（服务商前缀缓存），不检索；
+   - 检索模式：当前问题（追问时拼上父节点问题与选中的文字）→ SearchService 混合检索 top-k 块，
+     命中块加同章节邻块、摘要，按预算截断（domain/qa/context.py）；
+2. 历史：祖先链渲染成真正的 user / assistant 轮次，只在末尾追加；
 3. 生成：qa_answer@N，要求每个论断后用 [b_xxxx] 标注出处；流式输出；
 4. 校验：先取出末行"标题：…"作为卡片标题（没有则为空，界面退回问题），再把不存在的编号从正文删除（domain/qa/citations.py），存库与展示的引用 100% 存在；
 5. 存库：qa_sessions / qa_nodes，parent_id 指向父节点；重答（regenerate）跳过缓存。
@@ -19,12 +23,12 @@ from pydantic import BaseModel
 from sqlalchemy import delete, func, select
 
 from freeread.config import DataPaths
-from freeread.domain.qa.citations import strip_markers, validate_answer
-from freeread.domain.qa.context import ContextBlock, build_context
+from freeread.domain.qa.citations import validate_answer
+from freeread.domain.qa.context import ContextBlock, build_context, full_context
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import QANodeRow, QASessionRow
 from freeread.infra.llm.default_gateway import DefaultGateway
-from freeread.infra.llm.gateway import TaskKind
+from freeread.infra.llm.gateway import Message, TaskKind
 from freeread.infra.llm.prompts import PromptRegistry
 from freeread.infra.search.chunker import approx_tokens
 from freeread.services.doc_blocks import LoadedDoc, load_doc
@@ -37,8 +41,9 @@ from freeread.services.translate import _lang_name
 PROMPT_ID = "qa_answer"
 SEARCH_K = 12
 CONTEXT_BUDGET = 4000  # token
+FULLTEXT_MAX = 30000  # token；全文不超过这么多时整篇放进提示词前缀，不检索
 HISTORY_TURNS = 3
-HISTORY_ANSWER_CHARS = 600
+HISTORY_ANSWER_CHARS = 2000
 ANCHOR_CHARS = 500
 TITLE_CHARS = 40
 NODE_TITLE_CHARS = 16
@@ -90,8 +95,9 @@ class QASessionDetail(QASessionOut):
 
 class QAContextOut(BaseModel):
     block_ids: list[str]
-    # 检索方式：没有 vector 时说明语义索引还没建，界面提示下载嵌入模型
-    modes: list[Literal["fts", "vector"]]
+    # 检索方式：没有 vector 时说明语义索引还没建，界面提示下载嵌入模型；
+    # full 表示论文较短，全文都给了模型，没有检索
+    modes: list[Literal["fts", "vector", "full"]]
 
 
 class QADelta(BaseModel):
@@ -119,6 +125,13 @@ class QAService:
         self._search = search
         # 透传给 provider 的额外请求参数（评测脚本用，见 SummaryService.llm_opts）
         self.llm_opts: dict[str, Any] = {}
+        # 全文不超过这么多 token 时走全文模式；0 表示总是检索（评测脚本、测试可改）
+        self.fulltext_max = FULLTEXT_MAX
+
+    def _long_context(self, provider_id: str) -> bool:
+        """本地 Ollama 的上下文窗口通常只有几千 token，放不下全文。"""
+        config = next((p for p in self._settings.get().providers if p.id == provider_id), None)
+        return config is not None and config.kind != "ollama"
 
     # ------------------------------------------------------------ 会话
 
@@ -214,36 +227,51 @@ class QAService:
         prompt = self._prompts.get(PROMPT_ID)
 
         previous = _ancestors(by_id, parent_id)[-HISTORY_TURNS:]
-        query = " ".join(
-            [
-                question,
-                *([previous[-1].question] if previous else []),
-                *([anchor] if anchor else []),
-            ]
-        )
-        found = await self._search.search_document(doc.doc_id, query, k=SEARCH_K)
         blocks = [ContextBlock(b.id, b.type, b.section_id, b.text) for b in source_blocks(doc)]
-        context = build_context(
-            [h.block_id for h in found.hits],
-            blocks,
-            doc.section_titles,
-            approx_tokens,
-            CONTEXT_BUDGET,
-        )
+        full = full_context(blocks, doc.section_titles, approx_tokens)
+        modes: list[str]
+        if full.block_ids and full.tokens <= self.fulltext_max and self._long_context(provider_id):
+            # 全文模式：全文在提示词前缀里，同一篇论文的每次提问共享（服务商前缀缓存），不必检索
+            context, modes = full, ["full"]
+        else:
+            query = " ".join(
+                [
+                    question,
+                    *([previous[-1].question] if previous else []),
+                    *([anchor] if anchor else []),
+                ]
+            )
+            found = await self._search.search_document(doc.doc_id, query, k=SEARCH_K)
+            context = build_context(
+                [h.block_id for h in found.hits],
+                blocks,
+                doc.section_titles,
+                approx_tokens,
+                CONTEXT_BUDGET,
+            )
+            modes = list(found.modes)
         if not context.block_ids:
             # 扫描版等没有文字层的 PDF：不必调用模型（它只会说没有原文）
             raise QAError("no_text", "这篇论文没有可检索的正文（可能是扫描版 PDF），暂时无法问答")
-        yield "context", QAContextOut(block_ids=context.block_ids, modes=found.modes)
+        yield "context", QAContextOut(block_ids=context.block_ids, modes=modes)
 
-        history = [
-            {"question": n.question, "answer": strip_markers(n.answer)[:HISTORY_ANSWER_CHARS]}
-            for n in previous
-        ]
+        # 追问链是真正的多轮消息，只在末尾追加：上一问的请求是这一问的前缀
+        history: list[Message] = []
+        for n in previous:
+            history.append(
+                prompt.user_message(anchor=(n.anchor or {}).get("text"), question=n.question)
+            )
+            answer = n.answer[:HISTORY_ANSWER_CHARS]
+            history.append(
+                Message("assistant", f"{answer}\n标题：{n.title}" if n.title else answer)
+            )
+        is_full = modes == ["full"]
         messages = prompt.render(
+            history=history,
             target_lang=_lang_name(lang),
             title=doc.title,
-            history=history,
-            context=context.text,
+            fulltext=context.text if is_full else "",
+            context="" if is_full else context.text,
             anchor=anchor,
             question=question,
         )
@@ -264,7 +292,7 @@ class QAService:
             "invalid_ids": checked.invalid_ids,
             "out_of_context": checked.out_of_context,
             "context_ids": context.block_ids,
-            "modes": found.modes,
+            "modes": modes,
             "elapsed_ms": int((time.perf_counter() - started) * 1000),
         }
         node = await asyncio.to_thread(

@@ -25,6 +25,8 @@ class Message:
 class Usage:
     input_tokens: int
     output_tokens: int
+    # input_tokens 里命中服务商前缀缓存（prompt cache）的部分；服务商不报告时为 0
+    cached_tokens: int = 0
 
 
 @dataclass

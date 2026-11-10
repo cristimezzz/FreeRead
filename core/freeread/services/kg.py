@@ -25,7 +25,7 @@ from freeread.infra.db.models import DocumentRow, KGEntityRow, KGMentionRow, KGR
 from freeread.infra.jobs.events import EventBus
 from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
-from freeread.infra.llm.default_gateway import DefaultGateway
+from freeread.infra.llm.default_gateway import DefaultGateway, parses
 from freeread.infra.llm.errors import LLMError, ProviderError
 from freeread.infra.llm.gateway import Message, TaskKind
 from freeread.infra.llm.prompts import Prompt, PromptRegistry
@@ -226,7 +226,7 @@ class KGService:
     async def _complete_json(
         self, doc_id: str, prompt: Prompt, messages: list[Message], parse: Callable[[str], T]
     ) -> T:
-        """parse 抛 ValueError 时不走缓存重试一次（缓存里是那条坏回复）。"""
+        """parse 抛 ValueError 时不走缓存重试一次（坏回复不进缓存，见 accept）。"""
         for attempt in range(2):
             result = await self._gateway.complete(
                 TaskKind.KG_EXTRACT,
@@ -234,6 +234,7 @@ class KGService:
                 prompt_id=prompt.ref,
                 doc_id=doc_id,
                 use_cache=attempt == 0,
+                accept=parses(parse),
                 **self.llm_opts,
             )
             try:

@@ -5,10 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from freeread.infra.db.models import BlockRow, LLMCallRow, TranslationRow
+from freeread.infra.db.models import BlockRow, LLMCacheRow, LLMCallRow, TranslationRow
 from freeread.infra.llm.errors import RetryableError
 from freeread.infra.llm.fake import FakeProvider
 from freeread.infra.llm.gateway import LLMResult, TaskKind, Usage
+from freeread.services.glossary import TermIn
 from freeread.services.settings import AppSettings, ModelRoute, ProviderConfig
 from freeread.services.translate import TranslateError
 
@@ -84,7 +85,7 @@ async def test_translates_saves_and_serves_from_cache(ctx, tmp_path):
 
     saved = ctx.translate.list_for_doc(doc_id, "zh-CN")
     assert {t.block_id for t in saved} == set(para)
-    assert saved[0].model == "p1/m1" and saved[0].prompt_version == "translate@1"
+    assert saved[0].model == "p1/m1" and saved[0].prompt_version == "translate@2"
 
     again = await collect(ctx.translate.translate_blocks(doc_id, para))
     assert [e.cached for e in again] == [True, True, True]
@@ -100,10 +101,29 @@ async def test_prompt_context_has_title_section_and_previous_paragraph(ctx, tmp_
     # 找一个前一块也是段落的段落
     i = next(i for i in paras if i - 1 in paras)
     await collect(ctx.translate.translate_blocks(doc_id, [ordered[i][0]]))
-    user = fake.calls[0][1][-1].content
-    assert "A Synthetic Study of Layout Parsing" in user
+    system, user = (m.content for m in fake.calls[0][1])
+    assert "A Synthetic Study of Layout Parsing" in system and "简体中文" in system
     assert ordered[i - 1][2][:40] in user
-    assert "简体中文" in fake.calls[0][1][0].content
+
+
+async def test_prompt_prefix_is_identical_for_every_block_of_a_document(ctx, tmp_path):
+    """服务商按请求开头的相同前缀缓存：同一文档各段的 system 必须逐字节相同，变化的都在 user 里。"""
+    fake = FakeProvider("p1", responder=zh)
+    configure(ctx, fake)
+    doc_id, _, ordered = await parsed_doc(ctx, tmp_path)
+    paras = [(b, text) for b, t, text in ordered if t == "paragraph"][:4]
+    words = " ".join(text for _, text in paras).split()
+    first, other = list(dict.fromkeys(w.lower() for w in words if w.isalpha() and len(w) > 4))[:2]
+    ctx.glossary.create(TermIn(source=first, target="术语甲"))
+    ctx.glossary.create(TermIn(source=other, target="术语乙"))
+
+    await collect(ctx.translate.translate_blocks(doc_id, [b for b, _ in paras]))
+    await collect(ctx.translate.translate_blocks(doc_id, [ordered[-1][0], paras[0][0]]))  # 另一批
+    systems = {messages[0].content for _, messages, _ in fake.calls}
+    assert len(fake.calls) >= 4 and len(systems) == 1
+    [system] = systems
+    assert "术语甲" in system and "术语乙" in system  # 整篇文档的术语表在前缀里
+    assert len({messages[-1].content for _, messages, _ in fake.calls}) == len(fake.calls)
 
 
 async def test_placeholder_mismatch_retries_without_cache_then_needs_review(ctx, tmp_path):
@@ -126,6 +146,9 @@ async def test_placeholder_mismatch_retries_without_cache_then_needs_review(ctx,
     assert event.text == next(o for o in ordered if o[0] == other_id)[2]  # 回退原文
     saved = {t.block_id: t.status for t in ctx.translate.list_for_doc(doc_id, "zh-CN")}
     assert saved == {block_id: "ok", other_id: "needs_review"}
+    # 占位符对不上的译文不进 llm_cache：缓存里只有第一块那条合格的
+    with ctx.sessions() as s:
+        assert [r.response["text"] for r in s.query(LLMCacheRow)] == ["译文 ⟦CITE1⟧"]
 
 
 async def test_preflight_errors_come_after_cached_translations(ctx, tmp_path):

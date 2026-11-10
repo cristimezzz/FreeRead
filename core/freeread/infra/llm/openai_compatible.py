@@ -20,9 +20,16 @@ _BODY_SNIPPET = 300
 def _usage(data: dict[str, Any] | None) -> Usage | None:
     if not data:
         return None
+    # 前缀缓存命中：DeepSeek 报 prompt_cache_hit_tokens，
+    # OpenAI / 通义 / Moonshot 等报 prompt_tokens_details.cached_tokens
+    details = data.get("prompt_tokens_details")
+    cached = data.get("prompt_cache_hit_tokens") or (
+        details.get("cached_tokens") if isinstance(details, dict) else 0
+    )
     return Usage(
         input_tokens=int(data.get("prompt_tokens") or 0),
         output_tokens=int(data.get("completion_tokens") or 0),
+        cached_tokens=int(cached or 0),
     )
 
 

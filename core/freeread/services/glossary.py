@@ -4,8 +4,9 @@
   并覆盖全局同名条目；
 - 自动抽取（任务 glossary_extract）写入文档条目，origin=auto；重新抽取只替换 auto 条目，
   用户添加或改过的条目（origin=user）不会被覆盖；
-- 翻译时只注入在该块里出现的条目（architecture §5.5）。术语表进入渲染后的提示词，
-  所以改了术语后同一段落不会命中旧缓存。
+- 翻译时，整篇文档里出现的条目放在提示词的稳定前缀里（terms_for_doc，每一段都相同，
+  供服务商前缀缓存命中），该块里出现的条目再在 user 里强调一遍（terms_for_block，
+  architecture §5.5）。术语表进入渲染后的提示词，所以改了术语后同一段落不会命中旧缓存。
 """
 
 import asyncio
@@ -39,6 +40,7 @@ PROMPT_ID = "glossary_extract"
 EXTRACT_CHARS = 12000  # 送给模型的原文上限（标题、摘要、章节标题优先）
 MAX_TERMS = 60  # 一次抽取最多收多少条
 MAX_HITS = 24  # 一个块最多注入多少条
+MAX_DOC_TERMS = 150  # 提示词前缀里整篇文档的术语表最多多少条
 
 Origin = Literal["user", "auto"]
 
@@ -184,6 +186,19 @@ class GlossaryService:
                     break
         return hits
 
+    def terms_for_doc(self, doc_id: str, lang: str, text: str) -> list[dict[str, str]]:
+        """整篇文档（text 为全文）里出现的条目，放在 translate 提示词的稳定前缀里。
+
+        同一文档、同一术语表下结果逐字节相同（按原文排序，与数据库返回顺序无关），
+        这样每一段的请求前缀一致，服务商的前缀缓存才能命中。"""
+        hits = [
+            {"source": term.source, "target": term.target}
+            for term in self._entries(doc_id, lang)
+            if term.pattern.search(text)
+        ]
+        hits.sort(key=lambda t: (t["source"].lower(), t["source"]))
+        return hits[:MAX_DOC_TERMS]
+
     def _entries(self, doc_id: str, lang: str) -> list[_Compiled]:
         key = (doc_id, lang)
         with self._lock:
@@ -316,7 +331,8 @@ class GlossaryService:
                 messages,
                 prompt_id=prompt.ref,
                 doc_id=doc_id,
-                use_cache=attempt == 0,  # 坏回复已进缓存，重试必须绕开
+                use_cache=attempt == 0,
+                accept=lambda text: _parse_terms(text) is not None,  # 坏回复不进缓存
             )
             terms = _parse_terms(result.text)
             if terms is not None:

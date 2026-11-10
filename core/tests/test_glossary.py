@@ -24,12 +24,15 @@ TERMS_REPLY = json.dumps(
 )
 
 
+HITS_MARK = "本段出现的术语（务必使用这些译法）："
+
+
 def responder(model, messages):
     """抽取任务回 JSON；翻译回原文加前缀，并把注入的术语表抄在最前面，便于断言。"""
     user = messages[-1].content
     if MARK not in user:
         return "好的，结果如下：\n```json\n" + TERMS_REPLY + "\n```"
-    glossary = user.split("术语表：", 1)[1].split("\n\n")[0] if "术语表：" in user else ""
+    glossary = user.split(HITS_MARK, 1)[1].split("\n\n")[0] if HITS_MARK in user else ""
     return f"[{glossary.strip()}]译：" + user.split(MARK, 1)[1].strip()
 
 
@@ -116,6 +119,9 @@ async def test_translation_injects_hit_terms(ctx, tmp_path):
     assert event.status == "ok"
     assert event.text.startswith(f"[- {word} → 术语译法]译：")
     assert "不出现" not in event.text
+    # 提示词前缀里是整篇文档出现的术语；文档里没有的全局条目不进前缀
+    system = fake.calls[-1][1][0].content
+    assert f"- {word} → 术语译法" in system and "不出现" not in system
 
     # 改了术语后，同一段落不再命中旧缓存
     with ctx.sessions.begin() as s:

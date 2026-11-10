@@ -6,6 +6,10 @@
   退避等待不占并发名额，缓存命中不受限。
 - 重试：RetryableError（429 / 5xx / 网络）指数退避，最多 3 次尝试；流式只在首个 chunk 之前重试。
 - 审计：每次成功的调用（含缓存命中）写一行 llm_calls。失败的调用只记日志，不写表。
+- 坏回复不进缓存：complete(accept=...) 校验不过的回复照常返回，但不写 llm_cache；
+  缓存里已有的坏回复按未命中处理。流式回复为空时也不写。
+- 前缀预热：服务商的前缀缓存（prompt cache）要等第一个请求处理完才建立。system 足够长时，
+  同一前缀的第一个请求先单独发出，其余的等它完成（流式等到首个 chunk）再并发。
 """
 
 import asyncio
@@ -39,6 +43,10 @@ BACKOFF_MAX = 30.0
 DEFAULT_RATE = 5.0  # 每个 provider 每秒请求数
 DEFAULT_BURST = 5
 EMBED_PROMPT_ID = "embed@1"
+WARM_MIN_CHARS = 1000  # system 短于此不值得预热（服务商也不会缓存这么短的前缀）
+WARM_TTL = 300.0  # 秒；超过这么久没用过的前缀视为已被服务商淘汰
+WARM_WAIT = 10.0  # 秒；等预热请求的上限，超时照常发出
+_WARM_KEEP = 256
 # 没有单独配置时沿用哪个任务的模型：总结 / 问答默认和翻译用同一个服务（设置里"与翻译相同"）。
 # 嵌入不回退：向量要求同一模型，不能悄悄换成聊天模型。
 ROUTE_FALLBACK: dict[TaskKind, TaskKind] = {
@@ -96,6 +104,19 @@ class TaskLimiter:
         return self._current[1]
 
 
+def parses(parse: Callable[[str], Any]) -> Callable[[str], bool]:
+    """把"解析失败抛 ValueError"的函数变成 complete(accept=...) 用的判定。"""
+
+    def accept(text: str) -> bool:
+        try:
+            parse(text)
+        except ValueError:
+            return False
+        return True
+
+    return accept
+
+
 def canonical_input(messages: list[Message], opts: dict[str, Any]) -> str:
     return json.dumps(
         {"messages": [[m.role, m.content] for m in messages], "opts": opts},
@@ -130,6 +151,52 @@ class DefaultGateway:
         self._http: httpx.AsyncClient | None = None
         self._factory = provider_factory or self._default_factory
         self._sleep = asyncio.sleep  # 测试里替换
+        self._clock = time.monotonic  # 测试里替换
+        self._warm: dict[str, float] = {}  # 前缀 → 上次成功使用的时间
+        self._warming: dict[str, asyncio.Event] = {}  # 正在预热的前缀
+
+    # ---- 前缀预热 ----
+
+    @staticmethod
+    def _warm_key(provider_id: str, model: str, messages: list[Message]) -> str | None:
+        if not messages or messages[0].role != "system":
+            return None
+        system = messages[0].content
+        if len(system) < WARM_MIN_CHARS:
+            return None
+        raw = f"{provider_id}|{model}|{system}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    async def _warm_enter(self, key: str | None) -> asyncio.Event | None:
+        """前缀还没热：成为预热请求（返回要在结束时交给 _warm_exit 的事件），
+        或者等正在预热的那个请求。已经热了直接返回 None。"""
+        if key is None:
+            return None
+        if self._clock() - self._warm.get(key, float("-inf")) < WARM_TTL:
+            return None
+        pending = self._warming.get(key)
+        if pending is None:
+            event = self._warming[key] = asyncio.Event()
+            return event
+        try:
+            await asyncio.wait_for(pending.wait(), WARM_WAIT)
+        except TimeoutError:
+            pass
+        return None
+
+    def _warm_exit(self, key: str | None, event: asyncio.Event | None, ok: bool) -> None:
+        """预热请求结束（成功、失败、被取消都要调用）：放行等待者。可重复调用。"""
+        if key is None:
+            return
+        if ok:
+            if len(self._warm) >= _WARM_KEEP:
+                cutoff = self._clock() - WARM_TTL
+                self._warm = {k: t for k, t in self._warm.items() if t >= cutoff}
+            self._warm[key] = self._clock()
+        if event is not None and not event.is_set():
+            if self._warming.get(key) is event:
+                del self._warming[key]
+            event.set()
 
     # ---- provider ----
 
@@ -239,6 +306,7 @@ class DefaultGateway:
                     # 缓存命中不计费
                     input_tokens=0 if cache_hit else usage.input_tokens,
                     output_tokens=0 if cache_hit else usage.output_tokens,
+                    cached_input_tokens=0 if cache_hit else usage.cached_tokens,
                     latency_ms=int((time.perf_counter() - started) * 1000),
                     cache_hit=cache_hit,
                     doc_id=doc_id,
@@ -275,36 +343,53 @@ class DefaultGateway:
     # ---- LLMGateway ----
 
     async def complete(
-        self, task: TaskKind, messages: list[Message], *, prompt_id: str, **opts
+        self,
+        task: TaskKind,
+        messages: list[Message],
+        *,
+        prompt_id: str,
+        accept: Callable[[str], bool] | None = None,
+        **opts,
     ) -> LLMResult:
+        """accept：回复是否可用（占位符齐全、JSON 能解析等）。不可用的回复照常返回，
+        但不写缓存；缓存里已有的不可用回复按未命中处理。"""
         started = time.perf_counter()
         provider_id, model, doc_id, use_cache, opts, key = self._prepare(
             task, messages, prompt_id, opts
         )
         audit = self._audit(task, provider_id, model, prompt_id, started, doc_id)
 
-        if use_cache and (cached := await asyncio.to_thread(self._cache_get, key)) is not None:
+        cached = await asyncio.to_thread(self._cache_get, key) if use_cache else None
+        if cached is not None and (accept is None or accept(cached["text"])):
             usage = Usage(**cached["usage"])
             await asyncio.to_thread(self._record, usage=usage, cache_hit=True, **audit)
             return LLMResult(cached["text"], cached["model"], usage, cache_hit=True)
 
         provider = self.provider(provider_id)
-        for attempt in range(1, MAX_ATTEMPTS + 1):
-            try:
-                async with self._slot(provider_id):
-                    await self._bucket(provider_id).acquire()
-                    result = await provider.complete(model, messages, **opts)
-                break
-            except RetryableError as exc:
-                if attempt == MAX_ATTEMPTS:
-                    raise
-                await self._backoff(attempt, exc)
+        warm_key = self._warm_key(provider_id, model, messages)
+        warming = await self._warm_enter(warm_key)
+        ok = False
+        try:
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                try:
+                    async with self._slot(provider_id):
+                        await self._bucket(provider_id).acquire()
+                        result = await provider.complete(model, messages, **opts)
+                    break
+                except RetryableError as exc:
+                    if attempt == MAX_ATTEMPTS:
+                        raise
+                    await self._backoff(attempt, exc)
+            ok = True
+        finally:
+            self._warm_exit(warm_key, warming, ok)
 
-        await asyncio.to_thread(
-            self._cache_put,
-            key,
-            {"text": result.text, "model": result.model, "usage": vars(result.usage)},
-        )
+        if accept is None or accept(result.text):
+            await asyncio.to_thread(
+                self._cache_put,
+                key,
+                {"text": result.text, "model": result.model, "usage": vars(result.usage)},
+            )
         await asyncio.to_thread(self._record, usage=result.usage, cache_hit=False, **audit)
         return result
 
@@ -326,29 +411,38 @@ class DefaultGateway:
         provider = self.provider(provider_id)
         parts: list[str] = []
         usage: Usage | None = None
-        for attempt in range(1, MAX_ATTEMPTS + 1):
-            try:
-                async with self._slot(provider_id):
-                    await self._bucket(provider_id).acquire()
-                    async for chunk in provider.stream(model, messages, **opts):
-                        if chunk.delta:
-                            parts.append(chunk.delta)
-                            yield LLMChunk(delta=chunk.delta)
-                        if chunk.done:
-                            usage = chunk.usage
-                            break
-                break
-            except RetryableError as exc:
-                # 已经向调用方输出过内容就不能透明重试了
-                if parts or attempt == MAX_ATTEMPTS:
-                    raise
-                await self._backoff(attempt, exc)
+        warm_key = self._warm_key(provider_id, model, messages)
+        warming = await self._warm_enter(warm_key)
+        try:
+            for attempt in range(1, MAX_ATTEMPTS + 1):
+                try:
+                    async with self._slot(provider_id):
+                        await self._bucket(provider_id).acquire()
+                        async for chunk in provider.stream(model, messages, **opts):
+                            if chunk.delta:
+                                if not parts:
+                                    # 首个 chunk 说明服务商已处理完输入：不必让等待者等到整段输出结束
+                                    self._warm_exit(warm_key, warming, True)
+                                parts.append(chunk.delta)
+                                yield LLMChunk(delta=chunk.delta)
+                            if chunk.done:
+                                usage = chunk.usage
+                                break
+                    break
+                except RetryableError as exc:
+                    # 已经向调用方输出过内容就不能透明重试了
+                    if parts or attempt == MAX_ATTEMPTS:
+                        raise
+                    await self._backoff(attempt, exc)
+        finally:
+            self._warm_exit(warm_key, warming, False)
 
         text = "".join(parts)
         usage = usage or Usage(0, 0)
-        await asyncio.to_thread(
-            self._cache_put, key, {"text": text, "model": model, "usage": vars(usage)}
-        )
+        if text.strip():  # 空回复不进缓存，否则同一问题之后一直拿到空
+            await asyncio.to_thread(
+                self._cache_put, key, {"text": text, "model": model, "usage": vars(usage)}
+            )
         await asyncio.to_thread(self._record, usage=usage, cache_hit=False, **audit)
         yield LLMChunk(delta="", done=True, usage=usage)
 

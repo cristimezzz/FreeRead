@@ -3,7 +3,9 @@
 1. 前端上报可视区域的 block_id → 已有译文立即返回，其余按阅读顺序、受限并发调用 LLM；
 2. 占位保护（domain/translate/placeholders.py）：校验失败不走缓存重试一次，仍失败记
    needs_review，译文回退为原文；
-3. 上下文：论文标题、当前章节标题、上一段原文、块里出现的术语（prompt translate@N）；
+3. 提示词（translate@N）分成稳定前缀和可变后缀：规则、论文标题、摘要、整篇文档的术语表
+   在 system 里，同一文档每一段都相同（服务商前缀缓存）；当前章节标题、上一段原文、
+   块里出现的术语、待译段落在 user 里；
 4. 结果写入 translations（同一块同一语言只有一行 is_active），并逐块产出事件。
 首次向某个 provider 发送文档内容前，必须由用户在前端确认（settings.consented_providers）。
 
@@ -15,13 +17,13 @@ import asyncio
 import logging
 from collections import Counter
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 from sqlalchemy import select, update
 
-from freeread.domain.ir.models import TRANSLATABLE_TYPES, BlockType
+from freeread.domain.ir.models import PLACEHOLDER_RE, TRANSLATABLE_TYPES, BlockType
 from freeread.domain.translate.placeholders import PlaceholderMismatch, protect, restore
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import BlockRow, DocumentRow, TranslationRow
@@ -41,6 +43,7 @@ log = logging.getLogger(__name__)
 
 PROMPT_ID = "translate"
 DOC_BATCH = 30  # 整篇翻译每批的块数
+ABSTRACT_CHARS = 1500  # 提示词前缀里摘要的上限
 TRANSLATABLE = frozenset(t.value for t in TRANSLATABLE_TYPES)
 LANG_NAMES = {
     "zh": "中文",
@@ -94,6 +97,9 @@ class _DocContext:
     blocks: dict[str, _Block]
     order: list[str]
     section_titles: dict[str, str]
+    abstract: str = ""  # 提示词前缀用：去掉占位符、截断后的摘要
+    # 提示词前缀用：整篇文档里出现的术语（translate_blocks 按目标语言填一次）
+    glossary: list[dict[str, str]] = field(default_factory=list)
 
 
 def _lang_name(code: str | None) -> str:
@@ -180,6 +186,11 @@ class TranslateService:
             return
 
         provider_id, model, lang = self.preflight(lang)
+        if self.glossary:
+            fulltext = "\n".join(b.text for b in doc.blocks.values() if b.type in TRANSLATABLE)
+            doc.glossary = await asyncio.to_thread(
+                self.glossary.terms_for_doc, doc_id, lang, fulltext
+            )
         keys = [(doc_id, block.id, lang) for block in todo]
         tasks = [self._task(doc, block, lang, provider_id, model) for block in todo]
         try:
@@ -213,20 +224,31 @@ class TranslateService:
     ) -> TranslationEvent:
         prompt = self._prompts.get(PROMPT_ID)
         protected = protect(block.text)
-        glossary = (
+        hits = (
             await asyncio.to_thread(self.glossary.terms_for_block, doc.doc_id, lang, block.text)
             if self.glossary
             else []
         )
+        # 前缀（system + context）只用文档级变量，同一文档的每一段都相同；段落级的都在 user 里
         messages = prompt.render(
             source_lang=_lang_name(doc.source_lang),
             target_lang=_lang_name(lang),
             title=doc.title,
+            abstract=doc.abstract,
+            glossary=doc.glossary,
             section_title=doc.section_titles.get(block.section_id or "", ""),
+            hits=hits,
             prev_text=self._prev_text(doc, block.id),
             text=protected.text,
-            glossary=glossary,
         )
+
+        def accept(reply: str) -> bool:  # 占位符对不上的译文不进缓存
+            try:
+                restore(protected, reply.strip())
+            except PlaceholderMismatch:
+                return False
+            return True
+
         status, text = "ok", None
         async with self._limit.semaphore():
             for attempt in range(2):
@@ -236,8 +258,8 @@ class TranslateService:
                         messages,
                         prompt_id=prompt.ref,
                         doc_id=doc.doc_id,
-                        # 第一次的结果已进缓存；重试必须绕开，否则拿回同一个错误译文
                         use_cache=attempt == 0,
+                        accept=accept,
                     )
                 except (RouteNotConfigured, MissingAPIKey) as e:
                     return TranslationEvent(block_id=block.id, status="error", message=str(e))
@@ -359,7 +381,11 @@ class TranslateService:
         for b in blocks.values():
             if b.type == BlockType.HEADING and b.section_id and b.section_id not in section_titles:
                 section_titles[b.section_id] = b.text
-        return _DocContext(doc_id, title, language, blocks, order, section_titles)
+        abstract = " ".join(
+            PLACEHOLDER_RE.sub("", b.text) for b in blocks.values() if b.type == BlockType.ABSTRACT
+        )
+        abstract = " ".join(abstract.split())[:ABSTRACT_CHARS]
+        return _DocContext(doc_id, title, language, blocks, order, section_titles, abstract)
 
     def _save(
         self,
