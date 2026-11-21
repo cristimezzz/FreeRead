@@ -89,7 +89,7 @@ FreeRead 目前没有代码签名，SmartScreen 会拦截首次运行。点 **�
 - **Linux AppImage**：下载新的 AppImage 到“下载”文件夹（已加上可执行权限）并打开该文件夹，退出 FreeRead 后用它替换旧文件即可。
 - **Linux deb / rpm**：下载同类安装包到“下载”文件夹并打开该文件夹，退出 FreeRead 后用上面的 `apt install` / `dnf install` 命令安装新包即可覆盖旧版本。
 - **AUR**：不在应用里下载，用 AUR 助手更新（例如 `yay -Syu`）。
-- **macOS**：暂不支持应用内更新，到 Releases 下载新的 dmg，退出 FreeRead 后把新版本拖进“应用程序”覆盖即可。
+- **macOS**：下载完点 **安装并重启**，FreeRead 会关闭，用新版本替换“应用程序”里的旧版，再自动重新打开，数据和 API Key 都保留。如果当前账户没有写入“应用程序”文件夹的权限，会改为在 Finder 里显示下载好的 dmg，退出 FreeRead 后手动拖进去覆盖即可。
 
 0.1.0 没有这个功能，从 0.1.0 升级需要手动下载新版安装包覆盖安装（或替换便携版目录）。文献库、设置和 API Key 都会保留。
 

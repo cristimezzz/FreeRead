@@ -59,5 +59,6 @@ describe("关于：下载完成提示", () => {
     expect(downloadedHint("appImage", "/home/a/Downloads/x.AppImage")).toContain("替换旧的 AppImage");
     expect(downloadedHint("deb", "/home/a/Downloads/x.deb")).toContain("apt install");
     expect(downloadedHint("rpm", "/home/a/Downloads/x.rpm")).toContain("dnf install");
+    expect(downloadedHint("macApp", "/tmp/x.dmg")).toContain("自动重新打开");
   });
 });
