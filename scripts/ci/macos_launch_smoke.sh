@@ -31,7 +31,7 @@ if [ -z "$sidecar" ]; then
   exit 1
 fi
 shell_pid=$(ps -o ppid= -p "$sidecar" | tr -d ' ')
-echo "sidecar $sidecar，壳 $shell_pid：$(ps -o args= -p "$shell_pid")"
+echo "sidecar ${sidecar}，壳 ${shell_pid}：$(ps -o args= -p "$shell_pid")"
 
 kill -KILL "$shell_pid"
 for _ in $(seq 1 10); do

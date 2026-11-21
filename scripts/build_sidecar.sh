@@ -88,4 +88,4 @@ mkdir -p "$(dirname "$target")"
 cp -R "$onedir" "$target"
 files=$(find "$target" -type f | wc -l | tr -d ' ')
 size=$(du -sh "$target" | cut -f1)
-echo "    $target（$files 个文件，$size）"
+echo "    ${target}（${files} 个文件，${size}）"
