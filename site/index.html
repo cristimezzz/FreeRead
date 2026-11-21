@@ -114,7 +114,7 @@
             <a class="btn lg" href="https://github.com/cristimezzz/FreeRead"><svg class="ico"><use href="#i-github" /></svg>查看源码</a>
           </div>
           <div class="hero-meta rv" style="--i: 5">
-            <span>Windows 10 / 11 · Linux</span>
+            <span>Windows 10 / 11 · Linux<span data-needs-asset="dmg" hidden> · macOS</span></span>
             <span>开源 · AGPL-3.0</span>
             <span>数据保存在本机</span>
           </div>
@@ -608,7 +608,7 @@
           <div class="sec-head rv">
             <div class="eyebrow">下载 · <span data-rel="version">最新版</span></div>
             <h2>现在就开始读</h2>
-            <p>支持 Windows 10 / 11 x64 和 Linux x86_64。免费、开源，以 AGPL-3.0-or-later 发布。</p>
+            <p>支持 Windows 10 / 11 x64、Linux x86_64<span data-needs-asset="dmg" hidden> 和 macOS 14 以上（Apple 芯片）</span>。免费、开源，以 AGPL-3.0-or-later 发布。</p>
           </div>
           <div class="dl">
             <div class="card rv">
@@ -638,6 +638,13 @@
                 <a class="btn" data-asset="rpm" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>rpm</a>
                 <a class="btn" href="https://aur.archlinux.org/packages/freeread-bin">AUR</a>
               </div>
+            </div>
+            <!-- 最新 Release 里有 dmg 时才显示（app.js 的 applyRelease） -->
+            <div class="card rv wide" style="--i: 4" data-needs-asset="dmg" hidden>
+              <h3>macOS</h3>
+              <div class="file" data-asset="dmg">FreeRead_*_aarch64.dmg</div>
+              <p>Apple 芯片（M1 及更新），macOS 14 以上。打开 dmg 把 FreeRead 拖进“应用程序”；暂未公证，首次打开时在 Finder 里右键 › 打开。</p>
+              <a class="btn" data-asset="dmg" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>下载 dmg</a>
             </div>
           </div>
           <p class="dl-note rv">Linux 版需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12、Fedora 36 及更新），详见<a href="https://docs.freeread.work/install">安装说明</a>。程序暂未签名，Windows 的 SmartScreen 提示时选"更多信息 → 仍要运行"。<span data-rel="date" hidden></span>各版本的改动见<a href="https://docs.freeread.work/changelog">更新历史</a>，安装包也可以在 <a href="https://github.com/cristimezzz/FreeRead/releases">Releases</a> 下载。</p>

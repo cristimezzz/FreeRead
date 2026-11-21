@@ -651,7 +651,7 @@ img {
   font-size: 13px;
 }
 
-.hero-meta span {
+.hero-meta > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2081,6 +2081,15 @@ img {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* 按最新 Release 是否带某类包显示（app.js），各处自己的 display 不能盖过 hidden */
+[data-needs-asset][hidden] {
+  display: none !important;
+}
+
+.dl .card.wide {
+  grid-column: 1 / -1;
 }
 
 .dl .card h3 {

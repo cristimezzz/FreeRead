@@ -548,6 +548,7 @@
     appimage: /_amd64\.AppImage$/,
     deb: /_amd64\.deb$/,
     rpm: /\.x86_64\.rpm$/,
+    dmg: /_aarch64\.dmg$/,
   };
   const CACHE_KEY = "freeread-site-release";
   const CACHE_MS = 60 * 60 * 1000;
@@ -599,6 +600,11 @@
         if (el.tagName === "A") el.href = a ? a.url : page;
         else el.textContent = a ? a.name : "见 Release 页面";
       }
+    }
+    // 只在部分版本提供的包（如 macOS dmg）：最新 Release 里有才显示对应的卡片和平台说明
+    for (const el of $$("[data-needs-asset]")) {
+      const re = ASSETS[el.dataset.needsAsset];
+      el.hidden = !(re && assets.some((x) => re.test(x.name)));
     }
     $$('[data-rel="version"]').forEach((el) => (el.textContent = version));
     const d = new Date(rel.date);
