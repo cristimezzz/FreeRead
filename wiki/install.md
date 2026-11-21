@@ -13,6 +13,11 @@
 - WebKitGTK 4.1（包管理器会自动安装）
 - 一个 Secret Service 服务用来保存 API Key：GNOME 自带 GNOME Keyring，KDE 的 KWallet 也支持；没有时 API Key 无法保存
 
+**macOS**（0.2.2 之后的版本起）
+
+- Apple 芯片（M1 及更新），macOS 14 以上；暂不提供 Intel 版
+- API Key 保存在系统钥匙串（“钥匙串访问”里名为 FreeRead 的条目）
+
 **通用**
 
 - 可选：Zotero 7（导入文献库）；NVIDIA 显卡（在本机运行 MinerU / Docling 时加速）
@@ -28,6 +33,7 @@
 | `FreeRead_<版本>_amd64.AppImage` | 任意 Linux 发行版，免安装，单个文件 |
 | `FreeRead_<版本>_amd64.deb` | Debian、Ubuntu 及其衍生版 |
 | `FreeRead-<版本>-1.x86_64.rpm` | Fedora、openSUSE 等 |
+| `FreeRead_<版本>_aarch64.dmg` | macOS（Apple 芯片） |
 
 便携版只是"免安装"：文献库、设置、缓存仍保存在 `%APPDATA%\FreeRead`，API Key 仍在系统凭据管理器里，与安装版共用，不会随文件夹一起带走。解压后请保持 `freeread-desktop.exe` 与 `freeread-core` 文件夹在同一目录。
 
@@ -64,6 +70,12 @@ yay -S freeread-bin
 
 用包管理器装好后在应用菜单里找 FreeRead。程序装在 `/usr/lib/FreeRead`；无论哪种方式，文献库、设置、缓存保存在 `~/.local/share/FreeRead`（设置了 `XDG_DATA_HOME` 时在其下），API Key 保存在 Secret Service（GNOME Keyring / KWallet）里。
 
+## macOS 安装
+
+打开 dmg，把 FreeRead 拖进“应用程序”文件夹。
+
+FreeRead 暂未经过 Apple 公证，第一次打开时系统会提示“无法验证开发者”：在 Finder 里右键 FreeRead › **打开**，再在弹窗里点 **打开**；之后可以正常双击启动。如果没有出现“打开”按钮，到“系统设置 › 隐私与安全性”底部点 **仍要打开**。
+
 ## 首次运行提示"Windows 已保护你的电脑"
 
 FreeRead 目前没有代码签名，SmartScreen 会拦截首次运行。点 **更多信息 → 仍要运行** 即可。部分杀毒软件也可能对未签名程序报警，可以把安装目录加入信任。
@@ -77,6 +89,7 @@ FreeRead 目前没有代码签名，SmartScreen 会拦截首次运行。点 **�
 - **Linux AppImage**：下载新的 AppImage 到“下载”文件夹（已加上可执行权限）并打开该文件夹，退出 FreeRead 后用它替换旧文件即可。
 - **Linux deb / rpm**：下载同类安装包到“下载”文件夹并打开该文件夹，退出 FreeRead 后用上面的 `apt install` / `dnf install` 命令安装新包即可覆盖旧版本。
 - **AUR**：不在应用里下载，用 AUR 助手更新（例如 `yay -Syu`）。
+- **macOS**：暂不支持应用内更新，到 Releases 下载新的 dmg，退出 FreeRead 后把新版本拖进“应用程序”覆盖即可。
 
 0.1.0 没有这个功能，从 0.1.0 升级需要手动下载新版安装包覆盖安装（或替换便携版目录）。文献库、设置和 API Key 都会保留。
 
@@ -95,5 +108,7 @@ yay -R freeread-bin            # Arch
 AppImage 直接删掉文件即可。
 
 卸载不会删除数据。要彻底清除，再删掉 `~/.local/share/FreeRead`，并在“密码和密钥”（Seahorse）或 KWallet 里删除名为 FreeRead 的条目。
+
+**macOS**：退出 FreeRead 后把“应用程序”里的 FreeRead 移到废纸篓。数据不会一起删除；要彻底清除，再删掉 `~/Library/Application Support/FreeRead`，并在“钥匙串访问”里删除名为 FreeRead 的条目。
 
 下一步：[快速上手](/quick-start)
