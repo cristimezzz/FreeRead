@@ -332,6 +332,6 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 改为问答树（迁�
 
 ## 9. 迁移策略
 
-- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0010`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1`）。
+- 所有结构变更通过 Alembic 迁移（`infra/db/migrations/versions/`，当前 head 为 `0010`）；应用启动时自动升级，已有数据时升级前备份为 `freeread.db.bak-<旧版本>`。打包版的迁移脚本随 sidecar 一起分发（`scripts/build_sidecar.ps1` / `scripts/build_sidecar.sh`）。
 - 更换嵌入来源 / 模型时清空向量索引和 embedding_chunks，所有文档 `embed_status` 置回 `pending` 并重新排队（`EmbedService.enqueue_missing`，启动和保存设置时调用）。
 - IR 主版本升级见 [02-document-ir.md §9](02-document-ir.md)。

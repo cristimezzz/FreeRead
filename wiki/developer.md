@@ -21,8 +21,9 @@ pytest
 
 桌面应用（需要 Node 22、Rust stable、uv）：
 
-```powershell
-pwsh scripts/build_sidecar.ps1    # 在仓库根目录：PyInstaller onedir 打包 sidecar
+```bash
+pwsh scripts/build_sidecar.ps1    # Windows，在仓库根目录：PyInstaller onedir 打包 sidecar
+scripts/build_sidecar.sh          # Linux / macOS
 cd apps/desktop
 npm install
 npm run tauri dev                 # 完整桌面应用

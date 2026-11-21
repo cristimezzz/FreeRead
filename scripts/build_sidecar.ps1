@@ -8,7 +8,7 @@
   2. --onedir 打包到 build/sidecar/dist/freeread-core/，再整个目录复制到
      apps/desktop/src-tauri/binaries/freeread-core/，由 tauri.conf.json 的 bundle.resources
      安装到 <resource_dir>/freeread-core/，壳从那里启动 freeread-core[.exe]（apps/desktop/src-tauri/src/lib.rs）。
-     Windows 和 Linux 共用这个脚本（Linux 上用 pwsh 运行，见 .github/workflows/desktop-build.yml）。
+     只在 Windows 上用；Linux / macOS 用 scripts/build_sidecar.sh（步骤和参数保持一致）。
      不用 externalBin：它只能带单个可执行文件，onedir 的 _internal/ 带不上。
      选 onedir 而不是 onefile 的原因见 docs/m0-tauri-sidecar.md（热启动快约 2 s，且不往 %TEMP% 解压）。
   3. 一起打进去的数据文件：Alembic 迁移脚本（按文件路径加载）、core/prompts/*.yaml、PyMuPDF 包元数据、

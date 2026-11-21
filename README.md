@@ -68,8 +68,9 @@ freeread-core --port 8765
 
 桌面应用（需要 Node 22、Rust stable、uv）：
 
-```powershell
-pwsh scripts/build_sidecar.ps1    # 打包 sidecar 到 src-tauri/binaries/
+```bash
+pwsh scripts/build_sidecar.ps1    # Windows：打包 sidecar 到 src-tauri/binaries/
+scripts/build_sidecar.sh          # Linux / macOS
 cd apps/desktop
 npm install
 npm run tauri dev
