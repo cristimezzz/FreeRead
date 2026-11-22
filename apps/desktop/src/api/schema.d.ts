@@ -977,8 +977,9 @@ export interface components {
             /**
              * @default {
              *       "theme_mode": "system",
+             *       "style": "native",
              *       "seed_color": "#D97757",
-             *       "follow_system_accent": false,
+             *       "follow_system_accent": true,
              *       "contrast": "standard"
              *     }
              */
@@ -1080,13 +1081,19 @@ export interface components {
              */
             theme_mode: "system" | "light" | "dark";
             /**
+             * Style
+             * @default native
+             * @enum {string}
+             */
+            style: "native" | "freeread";
+            /**
              * Seed Color
              * @default #D97757
              */
             seed_color: string;
             /**
              * Follow System Accent
-             * @default false
+             * @default true
              */
             follow_system_accent: boolean;
             /**

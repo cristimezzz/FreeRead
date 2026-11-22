@@ -26,10 +26,14 @@ LEGACY_DEFAULT_SEED = "#6750A4"
 
 class Appearance(_Strict):
     theme_mode: Literal["system", "light", "dark"] = "system"
+    # 界面风格：native 在 macOS / Windows 上用系统样式（ADR-0011），Linux 上等同 freeread；
+    # freeread 是暖色"纸张"风格（ADR-0009）
+    style: Literal["native", "freeread"] = "native"
     # 强调色（字段名沿用 M3 时期的 seed_color）：预设陶土 #D97757、墨蓝 #4F74B8、
     # 苔绿 #6F8546、石板 #6B6A63，或自定义；见 ADR-0007
     seed_color: str = DEFAULT_ACCENT
-    follow_system_accent: bool = False
+    # 跟随系统强调色（macOS controlAccentColor / Windows DWM AccentColor），读不到时用 seed_color
+    follow_system_accent: bool = True
     contrast: Literal["standard", "medium", "high"] = "standard"
 
     @field_validator("seed_color")

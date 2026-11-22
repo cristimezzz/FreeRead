@@ -1,11 +1,14 @@
 /* 全局样式：shadcn/ui（neutral）+ Tailwind v4（ADR-0009）。
    中性色阶在这里按 :root / .dark 定义；强调色 --brand 与对比度覆盖由 app/theme.ts 写入 :root 行内样式。
    --brand 只用于指认：选中项、引用编号、定位高亮、焦点环、进度。主按钮用 --primary。
+   原生界面风格（macOS / WinUI 3）的令牌与控件覆盖在 native.css（ADR-0011）。
    阅读区排版（重排正文、KaTeX、PDF、批注、问答回答、图谱）在 reader.css，放进 components 层，工具类能覆盖它。 */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./reader.css" layer(components);
+/* 原生界面风格（ADR-0011）：不进 layer，按 data-style / data-platform 覆盖令牌与控件 */
+@import "./native.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -56,6 +59,8 @@
   --dur-fast: 120ms;
   --dur: 200ms;
   --dur-slow: 280ms;
+  /* 侧栏收展（进出阅读器）：宽度变化大，比其他过渡慢一些 */
+  --dur-sidebar: 400ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
@@ -73,6 +78,43 @@
 /* macOS 原生红绿灯占左上角，侧栏顶部内容往下让开 */
 :root[data-titlebar="mac"] {
   --traffic-lights-h: 28px;
+}
+
+/* macOS 侧栏收成图标栏（阅读器）时，红绿灯（x 14–75px）比 3rem 的图标栏宽，会伸到内容区上。
+   图标栏加宽到 5.5rem，红绿灯两侧留白相同；收起时 Logo 和菜单按钮放大到 --rail-item（2.5rem，图标 20px），
+   居中在红绿灯下方。尺寸、内边距随收展过渡（--dur-sidebar），和侧栏宽度同步。
+   SidebarProvider 把 --sidebar-width-icon 写在行内样式，要 !important 才盖得住。 */
+:root[data-titlebar="mac"] [data-slot="sidebar-wrapper"] {
+  --sidebar-width-icon: 5.5rem !important;
+  --rail-item: 2.5rem;
+  --rail-icon: 1.25rem;
+}
+:root[data-titlebar="mac"] :is([data-slot="sidebar-header"], [data-slot="sidebar-content"]) {
+  transition: padding-inline var(--dur-sidebar) var(--ease);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] :is([data-slot="sidebar-header"], [data-slot="sidebar-content"]) {
+  /* 两侧对称：菜单按钮占满剩余宽度，正好 --rail-item，文字被裁掉只剩图标 */
+  padding-inline: calc((var(--sidebar-width-icon) - var(--rail-item)) / 2);
+}
+:root[data-titlebar="mac"] [data-slot="sidebar-header"] [data-slot="brand-mark"],
+:root[data-titlebar="mac"] [data-slot="sidebar-menu-button"] > svg {
+  transition:
+    width var(--dur-sidebar) var(--ease),
+    height var(--dur-sidebar) var(--ease),
+    border-radius var(--dur-sidebar) var(--ease);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-header"] [data-slot="brand-mark"] {
+  width: var(--rail-item);
+  height: var(--rail-item);
+  border-radius: 0.625rem;
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-menu-button"] {
+  height: var(--rail-item);
+  padding: calc((var(--rail-item) - var(--rail-icon)) / 2);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-menu-button"] > svg {
+  width: var(--rail-icon);
+  height: var(--rail-icon);
 }
 
 .dark {
@@ -188,6 +230,7 @@
     --dur-fast: 0ms;
     --dur: 0ms;
     --dur-slow: 0ms;
+    --dur-sidebar: 0ms;
   }
 
   *,

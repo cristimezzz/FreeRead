@@ -78,6 +78,12 @@ function useWidth(ref: React.RefObject<HTMLElement | null>): number {
   return w;
 }
 
+/** 并排时左栏宽度：按比例交给 CSS 算，和 splitW 的夹取规则一致。开关侧边面板时容器宽度当帧就变，
+ *  若用 useWidth 量出来的像素（防抖 120ms），分隔条会先停在原处挤压右栏、再跳到新位置。 */
+function splitBasis(split: number): string {
+  return `min(max(${PANE_MIN}px, 100% - ${PANE_MIN}px), max(${PANE_MIN}px, ${(split * 100).toFixed(3)}%))`;
+}
+
 /** 引用悬停提示：正文取 text，表格取单元格文本，图取说明。 */
 function blockPreview(b: Block | undefined): string | undefined {
   if (!b) return undefined;
@@ -562,7 +568,7 @@ export function ReaderView({ docId, title, byline }: { docId: string; itemId: st
               scrollKey={pdfScroll}
               onPoint={onPoint}
               onError={onPdfError}
-              style={layout === "split" && splitW ? { flex: `0 0 ${splitW}px` } : undefined}
+              style={layout === "split" ? { flex: `0 0 ${splitBasis(prefs.split)}` } : undefined}
             />
           )}
           {layout === "split" && doc && panesW > 0 && (

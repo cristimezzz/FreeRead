@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
@@ -35,8 +35,13 @@ windows-sys = { version = "0.60", features = [
     "Win32_Foundation",
     "Win32_Security",
     "Win32_System_JobObjects",
+    "Win32_System_Registry",
     "Win32_System_Threading",
 ] }
+
+# 原生界面风格：读系统强调色（src/native_look.rs）。版本与 tauri 依赖的保持一致
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSColor", "NSColorSpace"] }
 
 # 开发构建：只给本 crate 留行号（panic 回溯够用），依赖不生成调试信息。
 # 调试信息是 Windows 上编译和链接的大头（PDB 很大）；要在调试器里单步依赖时临时改回 debug = true。

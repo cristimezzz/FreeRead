@@ -15,7 +15,7 @@ import { ReaderView } from "../features/reader/ReaderView";
 import { SettingsView } from "../features/settings/SettingsView";
 import { WelcomeView } from "../features/welcome/WelcomeView";
 import { startEventStream, useApp } from "./store";
-import { applyTheme, DEFAULT_ACCENT } from "./theme";
+import { applyTheme, DEFAULT_APPEARANCE, watchNativeLook } from "./theme";
 
 type Boot = { state: "starting" } | { state: "ready" } | { state: "error"; message: string; stderrTail?: string[] };
 
@@ -27,7 +27,7 @@ export default function App() {
   const settings = useApp((s) => s.settings);
 
   useEffect(() => {
-    applyTheme(DEFAULT_ACCENT, "system", "standard");
+    applyTheme(DEFAULT_APPEARANCE);
     let stop: (() => void) | undefined;
     let unwatch: Promise<() => void> | undefined;
     let cancelled = false;
@@ -61,6 +61,9 @@ export default function App() {
     };
   }, []);
 
+  // 原生风格：读系统强调色与窗口材质，窗口回到前台时再读
+  useEffect(() => watchNativeLook(), []);
+
   // 屏蔽 WebView 默认右键菜单（启动页也一样）
   useEffect(() => installDefaultMenu((m) => useApp.getState().toast(m)), []);
 
@@ -68,8 +71,7 @@ export default function App() {
   useEffect(() => {
     if (!settings || settings.appearance.theme_mode !== "system") return;
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const a = settings.appearance;
-    const onChange = () => applyTheme(a.seed_color, a.theme_mode, a.contrast);
+    const onChange = () => applyTheme(settings.appearance);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [settings]);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { type Settings, useApp } from "../../app/store";
-import { ACCENT_PRESETS } from "../../app/theme";
+import { ACCENT_PRESETS, PLATFORM, refreshNativeLook, systemAccent } from "../../app/theme";
 import { IconButton, LabeledSwitch, OptionSelect, OptionToggle, ProgressBar, TextInput } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
@@ -45,7 +45,13 @@ export function SettingsView() {
   const toast = useApp((s) => s.toast);
   const { engines, installJobs, refresh: refreshEngines } = useEngines();
   const [keys, setKeys] = useState<Record<string, boolean>>({});
+  const [sysAccent, setSysAccent] = useState(systemAccent);
   const page = useRef<HTMLDivElement>(null);
+
+  // "跟随系统"色块显示当前系统强调色：进设置页时重读一次（启动后用户可能改过）
+  useEffect(() => {
+    void refreshNativeLook().then(() => setSysAccent(systemAccent()));
+  }, []);
 
   const refreshKeys = async () => {
     const list = unwrap(await api().GET("/llm/providers"));
@@ -56,34 +62,34 @@ export function SettingsView() {
     void refreshKeys();
   }, []);
 
-  // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。滚到底时最后几节到不了顶部，
-  // 这时保留侧栏点过的那一节（只要它在可见范围内）；用户自己滚动后取消
+  // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。
+  // 点过侧栏锚点后一直高亮那一节，直到用户自己滚动（滚轮、键盘、拖滚动条、触摸）：
+  // 否则平滑滚动途中会按经过的各节依次改高亮，侧栏闪烁；滚到底时最后几节到不了顶部，也靠它保留
   const hasSettings = Boolean(settings);
   useEffect(() => {
     const root = page.current;
     if (!root) return;
     const onScroll = () => {
-      const box = root.getBoundingClientRect();
-      const tops = SETTINGS_SECTIONS.map((s) => ({
-        id: s.id,
-        y: (document.getElementById(s.id)?.getBoundingClientRect().top ?? Infinity) - box.top,
-      }));
       const { settingsSection, settingsPinned } = useApp.getState();
-      const atBottom = root.scrollTop + root.clientHeight >= root.scrollHeight - 2;
-      const pin = tops.find((t) => t.id === settingsPinned);
-      let current: string = SETTINGS_SECTIONS[0].id;
-      for (const t of tops) if (t.y <= 120) current = t.id;
-      if (atBottom && pin && pin.y >= 0 && pin.y < box.height) current = pin.id;
+      let current: string = settingsPinned ?? SETTINGS_SECTIONS[0].id;
+      if (!settingsPinned) {
+        const top = root.getBoundingClientRect().top;
+        for (const s of SETTINGS_SECTIONS) {
+          const y = (document.getElementById(s.id)?.getBoundingClientRect().top ?? Infinity) - top;
+          if (y <= 120) current = s.id;
+        }
+      }
       if (current !== settingsSection) useApp.setState({ settingsSection: current });
     };
-    const unpin = () => useApp.setState({ settingsPinned: null });
+    const unpin = () => {
+      if (useApp.getState().settingsPinned) useApp.setState({ settingsPinned: null });
+    };
+    const userScroll = ["wheel", "keydown", "pointerdown", "touchstart"] as const;
     root.addEventListener("scroll", onScroll, { passive: true });
-    root.addEventListener("wheel", unpin, { passive: true });
-    root.addEventListener("keydown", unpin);
+    for (const e of userScroll) root.addEventListener(e, unpin, { passive: true });
     return () => {
       root.removeEventListener("scroll", onScroll);
-      root.removeEventListener("wheel", unpin);
-      root.removeEventListener("keydown", unpin);
+      for (const e of userScroll) root.removeEventListener(e, unpin);
       useApp.setState({ settingsSection: null, settingsPinned: null });
     };
   }, [hasSettings]);
@@ -153,6 +159,8 @@ export function SettingsView() {
   const kgRoute = settings.routes.kg_extract;
   const accent = settings.appearance.seed_color.toUpperCase();
   const isPreset = ACCENT_PRESETS.some((s) => s.color.toUpperCase() === accent);
+  // 跟随系统强调色：只在读得到系统色时（macOS / Windows 安装版）生效，否则仍按选中的色板显示
+  const following = settings.appearance.follow_system_accent && sysAccent !== null;
   const providerOptions = settings.providers.map((p) => ({ value: p.id, label: p.name }));
 
   return (
@@ -408,6 +416,17 @@ export function SettingsView() {
         <GlossarySection settings={settings} update={update} />
 
         <Group id="appearance" title={sectionTitle("appearance")}>
+          <Row title="界面风格" desc={STYLE_DESC[PLATFORM]}>
+            <OptionToggle
+              label="界面风格"
+              value={settings.appearance.style}
+              options={[
+                { value: "native", label: "原生" },
+                { value: "freeread", label: "FreeRead" },
+              ]}
+              onValue={(style) => appearance({ style })}
+            />
+          </Row>
           <Row title="深浅色">
             <OptionToggle
               label="深浅色"
@@ -422,19 +441,31 @@ export function SettingsView() {
           </Row>
           <Row title="强调色" desc="只用在选中项、引用标记和定位高亮上">
             <div className="flex flex-wrap gap-4.5" role="group" aria-label="强调色">
+              {sysAccent && (
+                <button
+                  type="button"
+                  className={SWATCH}
+                  aria-pressed={following}
+                  title={`系统强调色 ${sysAccent}`}
+                  onClick={() => appearance({ follow_system_accent: true })}
+                >
+                  <i style={{ background: sysAccent }} />
+                  跟随系统
+                </button>
+              )}
               {ACCENT_PRESETS.map((s) => (
                 <button
                   key={s.color}
                   type="button"
                   className={SWATCH}
-                  aria-pressed={accent === s.color.toUpperCase()}
-                  onClick={() => appearance({ seed_color: s.color })}
+                  aria-pressed={!following && accent === s.color.toUpperCase()}
+                  onClick={() => appearance({ seed_color: s.color, follow_system_accent: false })}
                 >
                   <i style={{ background: s.color }} />
                   {s.name}
                 </button>
               ))}
-              <label className={SWATCH} data-on={!isPreset || undefined} title="自定义强调色">
+              <label className={SWATCH} data-on={(!following && !isPreset) || undefined} title="自定义强调色">
                 <i
                   className={
                     isPreset ? "bg-[conic-gradient(#d97757,#c9a24a,#6f8546,#4f74b8,#8e6bb0,#d97757)]" : undefined
@@ -447,7 +478,7 @@ export function SettingsView() {
                   className="sr-only"
                   aria-label="自定义强调色"
                   value={accent.toLowerCase()}
-                  onChange={(e) => appearance({ seed_color: e.target.value.toUpperCase() })}
+                  onChange={(e) => appearance({ seed_color: e.target.value.toUpperCase(), follow_system_accent: false })}
                 />
               </label>
             </div>
@@ -504,6 +535,12 @@ export function SettingsView() {
     </div>
   );
 }
+
+const STYLE_DESC: Record<typeof PLATFORM, string> = {
+  mac: "原生：macOS 的半透明侧栏、系统字体与控件",
+  win: "原生：Windows 11 的 Mica 材质、Segoe UI 与 WinUI 控件",
+  linux: "Linux 上暂无对应的系统样式，两种风格外观相同",
+};
 
 // 强调色色板：圆形色块 + 名称；选中时外面套一圈前景色
 const SWATCH = cn(

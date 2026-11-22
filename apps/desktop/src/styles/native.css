@@ -1,0 +1,662 @@
+/* 原生界面风格（ADR-0011）：<html data-style="native" data-platform="mac|win">。
+   macOS 参考 macOS（AppKit 语义色、侧栏 vibrancy、SF 字体）；Windows 参考 WinUI 3（Fluent 令牌、Mica、Segoe UI Variable）。
+   只覆盖令牌和控件的颜色 / 圆角 / 阴影，不动尺寸：调用处传的 className（高度、内边距）照样生效。
+   用 box-shadow inset 画描边而不是加 border，避免改变控件尺寸。
+   data-material="on"：窗口材质可用（theme.ts 经 Tauri setEffects 打开），页面底透明以露出材质；
+   否则用不透明的 --native-window 兜底（Windows 10、浏览器）。
+   本文件不进 layer：选择器带属性，优先级高于 shadcn 的单类工具类。 */
+
+/* ───────────────────────── 共用 ───────────────────────── */
+
+:root[data-style="native"] {
+  /* 中性：原生风格不用暖色偏移 */
+  --ring: var(--brand);
+  --sidebar-ring: var(--brand);
+  --primary: var(--brand);
+  --primary-foreground: #fff;
+  --sidebar-primary: var(--brand);
+  --sidebar-primary-foreground: #fff;
+  --border: var(--native-separator);
+  --input: var(--native-stroke);
+  --sidebar-border: var(--native-separator);
+  /* 侧栏透明：露出窗口材质或 --native-window */
+  --sidebar: transparent;
+  --text-2: color-mix(in oklab, var(--foreground) 78%, var(--background));
+}
+
+:root[data-style="native"] body {
+  background: var(--native-window);
+}
+
+:root[data-style="native"][data-material="on"],
+:root[data-style="native"][data-material="on"] body {
+  background: transparent;
+}
+
+/* ───────────────────────── macOS ───────────────────────── */
+
+:root[data-style="native"][data-platform="mac"] {
+  --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+  --text-sm: 0.8125rem; /* 13px：AppKit 正文字号 */
+  --radius: 8px; /* 控件 6px（radius-md）、卡片 8px、弹出层 / 对话框 12px（radius-xl） */
+
+  /* AppKit 语义色（浅色） */
+  --native-window: #ececec; /* windowBackgroundColor；vibrancy 不可用时的侧栏底 */
+  --native-separator: rgb(0 0 0 / 10%); /* separatorColor */
+  --native-stroke: rgb(0 0 0 / 14%);
+  --native-fill: rgb(0 0 0 / 5%); /* quaternarySystemFill */
+  --native-fill-strong: rgb(0 0 0 / 10%);
+  --native-control: #ffffff; /* controlColor */
+  --native-control-shadow: 0 0 0 0.5px rgb(0 0 0 / 12%), 0 0.5px 1.5px rgb(0 0 0 / 14%);
+  --native-menu: rgb(246 246 246 / 82%);
+
+  --background: #ffffff; /* textBackgroundColor：内容区 */
+  --foreground: rgb(0 0 0 / 85%); /* labelColor */
+  --card: #ffffff;
+  --card-foreground: var(--foreground);
+  --popover: #f6f6f6;
+  --popover-foreground: var(--foreground);
+  --secondary: var(--native-fill);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--native-fill);
+  --muted-foreground: rgb(0 0 0 / 50%); /* secondaryLabelColor */
+  --accent: var(--native-fill);
+  --accent-foreground: var(--foreground);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--native-fill-strong);
+  --sidebar-accent-foreground: var(--foreground);
+  --destructive: #ff3b30;
+  --success: #28a745;
+}
+
+:root.dark[data-style="native"][data-platform="mac"] {
+  --native-window: #2a2a2a;
+  --native-separator: rgb(255 255 255 / 10%);
+  --native-stroke: rgb(255 255 255 / 14%);
+  --native-fill: rgb(255 255 255 / 7%);
+  --native-fill-strong: rgb(255 255 255 / 11%);
+  --native-control: rgb(255 255 255 / 14%);
+  --native-control-shadow: 0 0 0 0.5px rgb(255 255 255 / 8%), 0 0.5px 1.5px rgb(0 0 0 / 40%);
+  --native-menu: rgb(40 40 40 / 82%);
+
+  --background: #1e1e1e;
+  --foreground: rgb(255 255 255 / 86%);
+  --card: #262626;
+  --popover: #2a2a2a;
+  --muted-foreground: rgb(255 255 255 / 55%);
+  --destructive: #ff453a;
+  --success: #32d74b;
+}
+
+/* 内容区：不透明，与透明侧栏之间一条分隔线 */
+:root[data-style="native"][data-platform="mac"] [data-slot="sidebar-inset"] {
+  background: var(--background);
+}
+
+:root[data-style="native"][data-platform="mac"] [data-slot="sidebar-menu-button"] {
+  border-radius: 6px;
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="sidebar-menu-button"]:hover:not([data-active="true"]) {
+  background: transparent;
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="sidebar-menu-button"][data-active="true"] {
+  background: var(--native-fill-strong);
+  font-weight: 500;
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="sidebar-menu-button"] > svg {
+  color: var(--brand);
+}
+
+/* 按钮：默认按钮 = 强调色填充；普通按钮 = 白底 + 半像素描边 + 细阴影 */
+:root[data-style="native"][data-platform="mac"] [data-slot="button"][data-variant="default"] {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: inset 0 0.5px 0 rgb(255 255 255 / 25%), 0 0.5px 1.5px rgb(0 0 0 / 25%);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="button"][data-variant="default"]:hover {
+  background: color-mix(in oklab, var(--brand) 92%, #fff);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="button"][data-variant="default"]:active {
+  background: color-mix(in oklab, var(--brand) 86%, #000);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]) {
+  background: var(--native-control);
+  border-color: transparent;
+  box-shadow: var(--native-control-shadow);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]):active {
+  background: var(--native-fill-strong);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="button"][data-variant="ghost"]:hover {
+  background: var(--native-fill);
+}
+
+/* 输入框：白底、半像素描边、内阴影；聚焦为强调色 3px 外圈 */
+:root[data-style="native"][data-platform="mac"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="sidebar-input"]) {
+  background: var(--native-control);
+  border-color: var(--native-stroke);
+  border-radius: 6px;
+  box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 6%);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="select-trigger"] {
+  box-shadow: var(--native-control-shadow);
+  border-color: transparent;
+}
+:root[data-style="native"][data-platform="mac"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"], [data-slot="sidebar-input"]):focus-visible {
+  border-color: color-mix(in srgb, var(--brand) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+
+/* 分段控件（controls.tsx OptionToggle）：NSSegmentedControl */
+:root[data-style="native"][data-platform="mac"] [data-slot="toggle-group"] {
+  background: var(--native-fill);
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 0.5px var(--native-separator);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="toggle-group-item"] {
+  border-radius: 5px !important; /* OptionToggle 写了 rounded-md! */
+  border-color: transparent !important;
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="toggle-group-item"][data-state="on"] {
+  background: var(--native-control);
+  box-shadow: var(--native-control-shadow);
+}
+:root.dark[data-style="native"][data-platform="mac"] [data-slot="toggle-group-item"][data-state="on"] {
+  background: rgb(255 255 255 / 20%);
+}
+
+/* 开关：未开为浅灰槽，开为强调色；滑块带阴影 */
+:root[data-style="native"][data-platform="mac"] [data-slot="switch"][data-state="unchecked"] {
+  background: var(--native-fill-strong);
+  box-shadow: inset 0 0 0 0.5px var(--native-stroke);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="switch-thumb"] {
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 6%), 0 1px 2px rgb(0 0 0 / 25%);
+}
+
+:root[data-style="native"][data-platform="mac"] [data-slot="slider-thumb"] {
+  border: 0;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 15%), 0 1px 2px rgb(0 0 0 / 25%);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="slider-track"] {
+  background: var(--native-fill-strong);
+}
+
+/* 弹出层：毛玻璃菜单，选中条为强调色底白字 */
+:root[data-style="native"][data-platform="mac"] :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"]) {
+  background: var(--native-menu);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0;
+  border-radius: 10px;
+  padding: 5px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 10px 30px rgb(0 0 0 / 20%);
+}
+:root.dark[data-style="native"][data-platform="mac"] :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"]) {
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 14%), 0 0 0 1px rgb(0 0 0 / 60%), 0 10px 30px rgb(0 0 0 / 40%);
+}
+:root[data-style="native"][data-platform="mac"] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"]) {
+  border-radius: 5px;
+}
+:root[data-style="native"][data-platform="mac"] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"])[data-highlighted] {
+  background: var(--brand);
+  color: #fff;
+}
+:root[data-style="native"][data-platform="mac"] :is([data-slot="dropdown-menu-item"], [data-slot="select-item"])[data-highlighted] :is(svg, [data-slot="dropdown-menu-shortcut"]) {
+  color: inherit;
+}
+
+:root[data-style="native"][data-platform="mac"] :is([data-slot="popover-content"], [data-slot="hover-card-content"]) {
+  background: var(--native-menu);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  border: 0;
+  border-radius: 10px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 10px 30px rgb(0 0 0 / 20%);
+}
+
+:root[data-style="native"][data-platform="mac"] [data-slot="dialog-content"] {
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 20%), 0 20px 60px rgb(0 0 0 / 28%);
+}
+:root.dark[data-style="native"][data-platform="mac"] [data-slot="dialog-content"] {
+  box-shadow: 0 0 0 0.5px rgb(255 255 255 / 14%), 0 0 0 1px rgb(0 0 0 / 60%), 0 20px 60px rgb(0 0 0 / 50%);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="dialog-overlay"] {
+  background: rgb(0 0 0 / 12%);
+}
+
+/* 提示：AppKit 工具提示，浅底小字 */
+:root[data-style="native"][data-platform="mac"] [data-slot="tooltip-content"] {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-radius: 5px;
+  font-size: 11px;
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 2px 8px rgb(0 0 0 / 14%);
+}
+:root[data-style="native"][data-platform="mac"] [data-slot="tooltip-content"] svg.rotate-45 {
+  visibility: hidden; /* shadcn 的箭头；Radix 给它写了行内 display: block，display: none 盖不住 */
+}
+
+:root[data-style="native"][data-platform="mac"] [data-slot="card"] {
+  box-shadow: none;
+  border-color: var(--native-separator);
+}
+
+/* ───────────────────────── macOS 26+（Liquid Glass） ─────────────────────────
+   data-glass="on"：窗口铺一层 NSGlassEffectView（theme.ts 传 Effect.LiquidGlassRegular）。
+   侧栏透明，整列（顶到窗口上下左边缘，不留空隙）露出玻璃；内容区不透明（见上面 macOS 的 sidebar-inset），
+   两者之间是侧栏容器的分隔线。 */
+
+:root[data-style="native"][data-platform="mac"][data-glass="on"] {
+  --radius: 10px; /* 控件 8px、卡片 10px、弹出层 14px：macOS 26 更圆 */
+}
+
+/* 没有侧栏的页面（启动页、欢迎向导）：整窗玻璃上文字不好读，用不透明底 */
+:root[data-style="native"][data-platform="mac"][data-glass="on"] body:not(:has([data-slot="sidebar-gap"])) {
+  background: var(--background);
+}
+
+:root[data-style="native"][data-platform="mac"][data-glass="on"] [data-slot="sidebar-menu-button"] {
+  border-radius: 10px;
+}
+
+/* 胶囊形按钮、分段控件 */
+:root[data-style="native"][data-platform="mac"][data-glass="on"] :is([data-slot="button"], [data-slot="select-trigger"]) {
+  border-radius: 999px;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] [data-slot="toggle-group"] {
+  border-radius: 999px;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] [data-slot="toggle-group-item"] {
+  border-radius: 999px !important;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] :is([data-slot="input"], [data-slot="sidebar-input"]) {
+  border-radius: 8px;
+}
+
+:root[data-style="native"][data-platform="mac"][data-glass="on"] :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="hover-card-content"]) {
+  border-radius: 14px;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"]) {
+  border-radius: 8px;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] [data-slot="dialog-content"] {
+  border-radius: 22px;
+}
+:root[data-style="native"][data-platform="mac"][data-glass="on"] [data-slot="tooltip-content"] {
+  border-radius: 8px;
+}
+
+/* ───────────────────────── Windows（WinUI 3） ───────────────────────── */
+
+:root[data-style="native"][data-platform="win"] {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei",
+    system-ui, sans-serif;
+  --radius: 6px; /* ControlCornerRadius 4px（radius-md）、OverlayCornerRadius 8px（单独写） */
+
+  /* Fluent 令牌（浅色） */
+  --native-window: #f3f3f3; /* SolidBackgroundFillColorBase：Mica 不可用时 */
+  --native-layer: rgb(255 255 255 / 50%); /* LayerFillColorDefault */
+  --native-layer-solid: #f9f9f9;
+  --native-separator: rgb(0 0 0 / 8%); /* DividerStrokeColorDefault */
+  --native-stroke: rgb(0 0 0 / 6%); /* ControlStrokeColorDefault */
+  --native-stroke-2: rgb(0 0 0 / 16%); /* ControlStrokeColorSecondary：底边 */
+  --native-stroke-strong: rgb(0 0 0 / 45%); /* ControlStrongStrokeColorDefault / TextControlStroke */
+  --native-control: rgb(255 255 255 / 70%); /* ControlFillColorDefault */
+  --native-control-hover: rgb(249 249 249 / 50%); /* ControlFillColorSecondary */
+  --native-control-press: rgb(249 249 249 / 30%); /* ControlFillColorTertiary */
+  --native-input-focus: #ffffff; /* ControlFillColorInputActive */
+  --native-subtle-hover: rgb(0 0 0 / 4%); /* SubtleFillColorSecondary */
+  --native-subtle-press: rgb(0 0 0 / 2.4%); /* SubtleFillColorTertiary */
+  --native-flyout: rgb(252 252 252 / 85%); /* AcrylicBackgroundFillColorDefault */
+  --native-flyout-stroke: rgb(0 0 0 / 6%);
+  --native-shadow-flyout: 0 8px 16px rgb(0 0 0 / 14%);
+  --native-shadow-dialog: 0 32px 64px rgb(0 0 0 / 19%), 0 2px 21px rgb(0 0 0 / 15%);
+
+  --background: var(--native-layer-solid);
+  --foreground: rgb(0 0 0 / 90%); /* TextFillColorPrimary */
+  --card: rgb(255 255 255 / 70%); /* CardBackgroundFillColorDefault */
+  --card-foreground: var(--foreground);
+  --popover: #f9f9f9;
+  --popover-foreground: var(--foreground);
+  --secondary: var(--native-control);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--native-subtle-hover);
+  --muted-foreground: rgb(0 0 0 / 61%); /* TextFillColorSecondary */
+  --accent: var(--native-subtle-hover);
+  --accent-foreground: var(--foreground);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-accent: var(--native-subtle-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: transparent; /* 内容层自带描边 */
+  --destructive: #c42b1c; /* SystemFillColorCritical */
+  --success: #0f7b0f; /* SystemFillColorSuccess */
+}
+
+:root.dark[data-style="native"][data-platform="win"] {
+  --native-window: #202020;
+  --native-layer: rgb(58 58 58 / 30%);
+  --native-layer-solid: #272727;
+  --native-separator: rgb(255 255 255 / 8%);
+  --native-stroke: rgb(255 255 255 / 7%);
+  --native-stroke-2: rgb(255 255 255 / 9%);
+  --native-stroke-strong: rgb(255 255 255 / 54%);
+  --native-control: rgb(255 255 255 / 6%);
+  --native-control-hover: rgb(255 255 255 / 8%);
+  --native-control-press: rgb(255 255 255 / 3%);
+  --native-input-focus: rgb(30 30 30 / 70%);
+  --native-subtle-hover: rgb(255 255 255 / 6%);
+  --native-subtle-press: rgb(255 255 255 / 4%);
+  --native-flyout: rgb(44 44 44 / 96%);
+  --native-flyout-stroke: rgb(0 0 0 / 20%);
+  --native-shadow-flyout: 0 8px 16px rgb(0 0 0 / 26%);
+  --native-shadow-dialog: 0 32px 64px rgb(0 0 0 / 37%), 0 2px 21px rgb(0 0 0 / 37%);
+
+  --foreground: #ffffff;
+  --card: rgb(255 255 255 / 5%);
+  --popover: #2c2c2c;
+  --muted-foreground: rgb(255 255 255 / 79%);
+  --destructive: #ff99a4;
+  --success: #6ccb5f;
+}
+
+/* 有 Mica 时内容层半透明（LayerFillColorDefault），否则用不透明的近似色 */
+:root[data-style="native"][data-platform="win"][data-material="on"] {
+  --background: var(--native-layer);
+}
+/* Mica 上的内容层：标题栏下方、侧栏右侧，左上角 8px 圆角 + 描边（NavigationView 的内容区） */
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-inset"] {
+  background: transparent;
+  isolation: isolate;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-inset"]::before {
+  content: "";
+  position: absolute;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: -1;
+  background: var(--background);
+  border-top: 1px solid var(--native-stroke);
+  border-left: 1px solid var(--native-stroke);
+  border-top-left-radius: 8px;
+  pointer-events: none;
+}
+/* 有 Mica 时卡片、面板外壳是 Mica 上的半透明层，没有就会显得空：给不透明底 */
+:root[data-style="native"][data-platform="win"]:not([data-material="on"]) {
+  --card: #fbfbfb;
+}
+:root.dark[data-style="native"][data-platform="win"]:not([data-material="on"]) {
+  --card: #2b2b2b;
+}
+
+/* 侧栏：NavigationView，选中项左侧 3×16 强调色指示条 */
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-menu-button"] {
+  position: relative;
+  border-radius: 4px;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-menu-button"]:active {
+  background: var(--native-subtle-press);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-menu-button"][data-active="true"] {
+  background: var(--native-subtle-hover);
+  font-weight: 400;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="sidebar-menu-button"][data-active="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+/* 按钮：标准按钮 = ControlFill + 描边（底边更深）；主按钮 = 强调色 */
+:root[data-style="native"][data-platform="win"] [data-slot="button"] {
+  border-radius: 4px;
+  font-weight: 400;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"][data-variant="default"] {
+  background: var(--brand);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%), inset 0 -1px 0 rgb(0 0 0 / 40%);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"][data-variant="default"]:hover {
+  background: color-mix(in srgb, var(--brand) 90%, transparent);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"][data-variant="default"]:active {
+  background: color-mix(in srgb, var(--brand) 80%, transparent);
+  color: rgb(255 255 255 / 78%);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 8%);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]) {
+  background: var(--native-control);
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--native-stroke), inset 0 -1px 0 var(--native-stroke-2);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]):hover {
+  background: var(--native-control-hover);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"]:is([data-variant="outline"], [data-variant="secondary"]):active {
+  background: var(--native-control-press);
+  color: var(--muted-foreground);
+  box-shadow: inset 0 0 0 1px var(--native-stroke);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"][data-variant="ghost"]:hover {
+  background: var(--native-subtle-hover);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="button"][data-variant="ghost"]:active {
+  background: var(--native-subtle-press);
+}
+/* 焦点：WinUI 双层焦点框（外黑内白），这里用强调色外框近似 */
+:root[data-style="native"][data-platform="win"] :is([data-slot="button"], [data-slot="switch"], [data-slot="toggle-group-item"], [data-slot="sidebar-menu-button"]):focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 1px;
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+/* 文本框：底边 1px，聚焦时 2px 强调色、底色变实 */
+:root[data-style="native"][data-platform="win"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="sidebar-input"]) {
+  background: var(--native-control);
+  border-color: var(--native-stroke);
+  border-bottom-color: var(--native-stroke-strong);
+  border-radius: 4px;
+  box-shadow: none;
+}
+:root[data-style="native"][data-platform="win"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="sidebar-input"]):hover {
+  background: var(--native-control-hover);
+}
+:root[data-style="native"][data-platform="win"] :is([data-slot="input"], [data-slot="textarea"], [data-slot="sidebar-input"]):focus-visible {
+  background: var(--native-input-focus);
+  border-color: var(--native-stroke);
+  border-bottom-color: var(--brand);
+  box-shadow: inset 0 -1px 0 var(--brand);
+}
+/* 下拉框：ComboBox 外观同标准按钮 */
+:root[data-style="native"][data-platform="win"] [data-slot="select-trigger"] {
+  background: var(--native-control);
+  border-color: transparent;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px var(--native-stroke), inset 0 -1px 0 var(--native-stroke-2);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="select-trigger"]:hover {
+  background: var(--native-control-hover);
+}
+
+/* 分段控件：Segmented —— 选中项浮起，底部居中一条强调色短线 */
+:root[data-style="native"][data-platform="win"] [data-slot="toggle-group"] {
+  background: var(--native-subtle-press);
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px var(--native-stroke);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="toggle-group-item"] {
+  position: relative;
+  border-radius: 4px !important; /* OptionToggle 写了 rounded-md! */
+  border-color: transparent !important;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="toggle-group-item"]:hover:not([data-state="on"]) {
+  background: var(--native-subtle-hover);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="toggle-group-item"][data-state="on"] {
+  background: var(--native-control);
+  box-shadow: inset 0 0 0 1px var(--native-stroke), inset 0 -1px 0 var(--native-stroke-2);
+}
+:root.dark[data-style="native"][data-platform="win"] [data-slot="toggle-group-item"][data-state="on"] {
+  background: rgb(255 255 255 / 9%);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="toggle-group-item"][data-state="on"]::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 2px;
+  width: 16px;
+  height: 3px;
+  margin-left: -8px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+/* 开关：ToggleSwitch —— 未开为描边空槽 + 深色小滑块，开为强调色 + 白滑块 */
+:root[data-style="native"][data-platform="win"] [data-slot="switch"] {
+  box-shadow: none;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch"][data-state="unchecked"] {
+  background: var(--native-subtle-press);
+  border-color: var(--native-stroke-strong);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch"][data-state="checked"] {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch-thumb"] {
+  scale: 0.72;
+  transition: translate var(--dur-fast) var(--ease), scale var(--dur-fast) var(--ease), transform var(--dur) var(--ease);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch"]:hover [data-slot="switch-thumb"] {
+  scale: 0.82;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch-thumb"][data-state="unchecked"] {
+  background: var(--muted-foreground);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="switch-thumb"][data-state="checked"] {
+  background: #fff;
+}
+:root.dark[data-style="native"][data-platform="win"] [data-slot="switch-thumb"][data-state="checked"] {
+  background: #000;
+}
+
+/* 滑块：Slider —— 白色外圈 + 强调色圆心 */
+:root[data-style="native"][data-platform="win"] [data-slot="slider-track"] {
+  background: var(--native-stroke-strong);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="slider-thumb"] {
+  border: 1px solid var(--native-stroke-2);
+  background: radial-gradient(circle, var(--brand) 0 42%, var(--native-input-focus) 46%);
+  box-shadow: none;
+}
+:root.dark[data-style="native"][data-platform="win"] [data-slot="slider-thumb"] {
+  background: radial-gradient(circle, var(--brand) 0 42%, #454545 46%);
+}
+
+:root[data-style="native"][data-platform="win"] [data-slot="checkbox"] {
+  border-radius: 4px;
+  border-color: var(--native-stroke-strong);
+  box-shadow: none;
+}
+
+/* 弹出层：Flyout / MenuFlyout —— 亚克力底、8px 圆角，悬停为浅灰（不是强调色） */
+:root[data-style="native"][data-platform="win"] :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"], [data-slot="popover-content"], [data-slot="hover-card-content"]) {
+  background: var(--native-flyout);
+  -webkit-backdrop-filter: blur(30px) saturate(1.25);
+  backdrop-filter: blur(30px) saturate(1.25);
+  border: 1px solid var(--native-flyout-stroke);
+  border-radius: 8px;
+  box-shadow: var(--native-shadow-flyout);
+}
+:root[data-style="native"][data-platform="win"] :is([data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="select-content"]) {
+  padding: 4px;
+}
+:root[data-style="native"][data-platform="win"] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"]) {
+  border-radius: 4px;
+}
+:root[data-style="native"][data-platform="win"] :is([data-slot="dropdown-menu-item"], [data-slot="dropdown-menu-checkbox-item"], [data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-sub-trigger"], [data-slot="select-item"])[data-highlighted] {
+  background: var(--native-subtle-hover);
+  color: var(--foreground);
+}
+/* ComboBox 当前项：左侧强调色指示条 */
+:root[data-style="native"][data-platform="win"] [data-slot="select-item"][data-state="checked"] {
+  position: relative;
+  background: var(--native-subtle-hover);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="select-item"][data-state="checked"]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+/* 对话框：ContentDialog */
+:root[data-style="native"][data-platform="win"] [data-slot="dialog-content"] {
+  background: var(--native-layer-solid);
+  border: 1px solid var(--native-flyout-stroke);
+  border-radius: 8px;
+  box-shadow: var(--native-shadow-dialog);
+}
+:root.dark[data-style="native"][data-platform="win"] [data-slot="dialog-content"] {
+  background: #2b2b2b;
+}
+:root[data-style="native"][data-platform="win"] [data-slot="dialog-overlay"] {
+  background: rgb(0 0 0 / 30%);
+}
+
+/* 提示：ToolTip */
+:root[data-style="native"][data-platform="win"] [data-slot="tooltip-content"] {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--native-flyout-stroke);
+  border-radius: 4px;
+  font-size: 12px;
+  box-shadow: 0 4px 8px rgb(0 0 0 / 14%);
+}
+:root[data-style="native"][data-platform="win"] [data-slot="tooltip-content"] svg.rotate-45 {
+  visibility: hidden;
+}
+
+/* 卡片：CardBackgroundFillColorDefault + CardStrokeColorDefault，不带阴影 */
+:root[data-style="native"][data-platform="win"] [data-slot="card"] {
+  border-color: var(--native-stroke);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+:root[data-style="native"][data-platform="win"] [data-slot="progress"] {
+  background: var(--native-stroke-strong);
+}
+
+/* ───────────────────────── 阅读区（两个平台） ─────────────────────────
+   reader.css 里 PDF 底、问答气泡、图谱画布借用 --sidebar 作浅灰底，原生风格下 --sidebar 是透明，
+   要换成不透明的窗口底色。 */
+:root[data-style="native"] :is(.pdf-view, .kg-cloud) {
+  background: var(--native-window);
+}
+:root[data-style="native"] .qa-question {
+  background: var(--muted);
+}
+
+/* Windows + Mica：内容层（--background）是半透明的。
+   - 问答 / 图谱的覆盖层（.kg-stage）盖在 PDF 和重排正文上，半透明时整页都透出底下的内容；
+   - 阅读区整块不透明：滚动 PDF 时大面积半透明区域要逐帧和 Mica 混合，并排、开着侧边面板时尤其卡。
+   这两处用不透明的 LayerFillColorDefault 近似色，阅读区以外（标题栏、工具栏）仍透出 Mica。 */
+:root[data-style="native"][data-platform="win"] :is(.reader, .kg-stage) {
+  background: var(--native-layer-solid);
+}
