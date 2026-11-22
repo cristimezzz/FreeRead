@@ -642,3 +642,21 @@
 :root[data-style="native"][data-platform="win"] [data-slot="progress"] {
   background: var(--native-stroke-strong);
 }
+
+/* ───────────────────────── 阅读区（两个平台） ─────────────────────────
+   reader.css 里 PDF 底、问答气泡、图谱画布借用 --sidebar 作浅灰底，原生风格下 --sidebar 是透明，
+   要换成不透明的窗口底色。 */
+:root[data-style="native"] :is(.pdf-view, .kg-cloud) {
+  background: var(--native-window);
+}
+:root[data-style="native"] .qa-question {
+  background: var(--muted);
+}
+
+/* Windows + Mica：内容层（--background）是半透明的。
+   - 问答 / 图谱的覆盖层（.kg-stage）盖在 PDF 和重排正文上，半透明时整页都透出底下的内容；
+   - 阅读区整块不透明：滚动 PDF 时大面积半透明区域要逐帧和 Mica 混合，并排、开着侧边面板时尤其卡。
+   这两处用不透明的 LayerFillColorDefault 近似色，阅读区以外（标题栏、工具栏）仍透出 Mica。 */
+:root[data-style="native"][data-platform="win"] :is(.reader, .kg-stage) {
+  background: var(--native-layer-solid);
+}

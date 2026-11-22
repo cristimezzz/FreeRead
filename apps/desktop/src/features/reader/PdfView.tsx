@@ -1,9 +1,12 @@
 // 原版 PDF 视图（pdf.js）。页面按需渲染；点击换算成 PDF 点坐标交给定位逻辑；
-// 定位高亮用强调色（ADR-0007）。宽度变化（拖动分隔条、开关侧边面板）后防抖重排。
+// 定位高亮用强调色（ADR-0007）。
+// 宽度变化（拖动分隔条、开关侧边面板）分两层：页面框的尺寸走 CSS 变量 --pdf-scale，每一帧直接跟上，
+// 期间由 GPU 缩放已有位图；pdf.js 在主线程画一页要几十毫秒，所以重新渲染等宽度停下来再做，
+// 而且先画到离屏 canvas，画完再换上，不出现白页。
 
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { coreInfo } from "../../api/client";
 import { pulse } from "../../components/motion";
 import type { Anchor } from "../../api/ir";
@@ -12,7 +15,11 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 const PAGE_GAP = 20;
 const PADDING = 28; // 与 styles/reader.css 里 .pdf-view 的 padding 一致
-const RESIZE_DEBOUNCE = 120;
+const RESIZE_DEBOUNCE = 150;
+
+function fitScale(width: number, maxPageWidth: number) {
+  return Math.min(2.5, (width - PADDING * 2) / maxPageWidth);
+}
 
 /** 有批注的块：原版没有文字层，按块的位置在左边距画一条色条 */
 export interface PdfMark {
@@ -75,13 +82,19 @@ export function PdfView({ docId, highlight, marks, scrollKey, onPoint, onError, 
     };
   }, [docId, onError]);
 
+  const maxPageWidth = Math.max(1, ...sizes.map((s) => s.width));
+  const maxRef = useRef(maxPageWidth);
+  maxRef.current = maxPageWidth;
+  const scale = width ? fitScale(width, maxPageWidth) : 1;
+
   useEffect(() => {
     const el = container.current;
     if (!el) return;
-    // 第一次立即取宽度；之后防抖：拖动分隔条时不必每一帧都重新渲染所有页
+    // 页面框尺寸每帧跟上（不经过 React）；重新渲染（width 状态）第一次立即、之后防抖
     let t: ReturnType<typeof setTimeout> | undefined;
     let first = true;
     const ro = new ResizeObserver(() => {
+      el.style.setProperty("--pdf-scale", String(fitScale(el.clientWidth, maxRef.current)));
       clearTimeout(t);
       if (first) {
         first = false;
@@ -95,14 +108,18 @@ export function PdfView({ docId, highlight, marks, scrollKey, onPoint, onError, 
     };
   }, []);
 
-  const maxPageWidth = Math.max(1, ...sizes.map((s) => s.width));
-  const scale = width ? Math.min(2.5, (width - PADDING * 2) / maxPageWidth) : 1;
+  // 页数 / 页宽载入后补一次（ResizeObserver 首次回调时页面尺寸可能还没到）
+  useLayoutEffect(() => {
+    const el = container.current;
+    if (el) el.style.setProperty("--pdf-scale", String(fitScale(el.clientWidth, maxPageWidth)));
+  }, [maxPageWidth]);
 
   useEffect(() => {
     if (!highlight || !container.current) return;
     const page = container.current.querySelector<HTMLElement>(`[data-page="${highlight.page}"]`);
     if (!page) return;
-    const top = page.offsetTop + highlight.bbox[1] * scale - container.current.clientHeight / 3;
+    const k = parseFloat(container.current.style.getPropertyValue("--pdf-scale")) || scale;
+    const top = page.offsetTop + highlight.bbox[1] * k - container.current.clientHeight / 3;
     container.current.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     pulse(page.querySelector(".pdf-highlight"));
     // 只在 scrollKey 变化时滚动；PDF 内点击产生的高亮不滚动
@@ -165,10 +182,22 @@ function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PagePro
       if (cancelled || !canvas.current) return;
       const dpr = window.devicePixelRatio || 1;
       const viewport = page.getViewport({ scale: scale * dpr });
-      canvas.current.width = Math.floor(viewport.width);
-      canvas.current.height = Math.floor(viewport.height);
-      task = page.render({ canvas: canvas.current, viewport });
-      task.promise.catch(() => undefined); // 取消渲染会 reject
+      // 画到离屏 canvas，完成后一次性拷过去：直接改可见 canvas 的宽高会先清空它，渲染期间是白页
+      const off = document.createElement("canvas");
+      off.width = Math.floor(viewport.width);
+      off.height = Math.floor(viewport.height);
+      task = page.render({ canvas: off, viewport });
+      task.promise.then(
+        () => {
+          const c = canvas.current;
+          if (cancelled || !c) return;
+          c.width = off.width;
+          c.height = off.height;
+          c.getContext("2d")?.drawImage(off, 0, 0);
+          off.width = off.height = 0;
+        },
+        () => undefined, // 取消渲染会 reject
+      );
     });
     return () => {
       cancelled = true;
@@ -185,8 +214,10 @@ function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PagePro
   }, [visible, pdf, index]);
 
   const click = (e: React.MouseEvent<HTMLDivElement>) => {
+    // 用页面框的实际宽度换算：拖动途中 --pdf-scale 已经变了，scale（渲染用）还没跟上
     const rect = e.currentTarget.getBoundingClientRect();
-    onPoint(index, (e.clientX - rect.left) / scale, (e.clientY - rect.top) / scale);
+    const k = rect.width / size.width;
+    onPoint(index, (e.clientX - rect.left) / k, (e.clientY - rect.top) / k);
   };
 
   return (
@@ -194,7 +225,7 @@ function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PagePro
       ref={wrapper}
       className="pdf-page"
       data-page={index}
-      style={{ width: size.width * scale, height: size.height * scale, marginBottom: PAGE_GAP }}
+      style={{ width: px(size.width), height: px(size.height), marginBottom: PAGE_GAP }}
       onClick={click}
     >
       <canvas ref={canvas} aria-label={`第 ${index + 1} 页`} />
@@ -203,20 +234,25 @@ function PdfPage({ pdf, index, size, scale, highlight, marks, onPoint }: PagePro
           key={i}
           className="pdf-mark"
           data-color={m.color}
-          style={{ left: m.bbox[0] * scale - 7, top: m.bbox[1] * scale, height: (m.bbox[3] - m.bbox[1]) * scale }}
+          style={{ left: px(m.bbox[0], -7), top: px(m.bbox[1]), height: px(m.bbox[3] - m.bbox[1]) }}
         />
       ))}
       {highlight && (
         <div
           className="pdf-highlight"
           style={{
-            left: highlight[0] * scale - 2,
-            top: highlight[1] * scale - 2,
-            width: (highlight[2] - highlight[0]) * scale + 4,
-            height: (highlight[3] - highlight[1]) * scale + 4,
+            left: px(highlight[0], -2),
+            top: px(highlight[1], -2),
+            width: px(highlight[2] - highlight[0], 4),
+            height: px(highlight[3] - highlight[1], 4),
           }}
         />
       )}
     </div>
   );
+}
+
+/** PDF 点 → CSS 长度，跟随容器上的 --pdf-scale */
+function px(points: number, offset = 0) {
+  return `calc(${points}px * var(--pdf-scale, 1) + ${offset}px)`;
 }
