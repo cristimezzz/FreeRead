@@ -88,6 +88,7 @@ export function Icon({
 export function BrandMark({ size }: { size?: number }) {
   return (
     <span
+      data-slot="brand-mark"
       className="inline-flex size-8 flex-none items-center justify-center rounded-lg bg-brand text-white"
       style={size ? { width: size, height: size, borderRadius: Math.round(size * 0.27) } : undefined}
       aria-hidden="true"

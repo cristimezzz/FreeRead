@@ -80,6 +80,43 @@
   --traffic-lights-h: 28px;
 }
 
+/* macOS 侧栏收成图标栏（阅读器）时，红绿灯（x 14–75px）比 3rem 的图标栏宽，会伸到内容区上。
+   图标栏加宽到 5.5rem，红绿灯两侧留白相同；收起时 Logo 和菜单按钮放大到 --rail-item（2.5rem，图标 20px），
+   居中在红绿灯下方。尺寸、内边距随收展过渡（--dur-sidebar），和侧栏宽度同步。
+   SidebarProvider 把 --sidebar-width-icon 写在行内样式，要 !important 才盖得住。 */
+:root[data-titlebar="mac"] [data-slot="sidebar-wrapper"] {
+  --sidebar-width-icon: 5.5rem !important;
+  --rail-item: 2.5rem;
+  --rail-icon: 1.25rem;
+}
+:root[data-titlebar="mac"] :is([data-slot="sidebar-header"], [data-slot="sidebar-content"]) {
+  transition: padding-inline var(--dur-sidebar) var(--ease);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] :is([data-slot="sidebar-header"], [data-slot="sidebar-content"]) {
+  /* 两侧对称：菜单按钮占满剩余宽度，正好 --rail-item，文字被裁掉只剩图标 */
+  padding-inline: calc((var(--sidebar-width-icon) - var(--rail-item)) / 2);
+}
+:root[data-titlebar="mac"] [data-slot="sidebar-header"] [data-slot="brand-mark"],
+:root[data-titlebar="mac"] [data-slot="sidebar-menu-button"] > svg {
+  transition:
+    width var(--dur-sidebar) var(--ease),
+    height var(--dur-sidebar) var(--ease),
+    border-radius var(--dur-sidebar) var(--ease);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-header"] [data-slot="brand-mark"] {
+  width: var(--rail-item);
+  height: var(--rail-item);
+  border-radius: 0.625rem;
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-menu-button"] {
+  height: var(--rail-item);
+  padding: calc((var(--rail-item) - var(--rail-icon)) / 2);
+}
+:root[data-titlebar="mac"] [data-collapsible="icon"] [data-slot="sidebar-menu-button"] > svg {
+  width: var(--rail-icon);
+  height: var(--rail-icon);
+}
+
 .dark {
   --background: oklch(0.18 0.01 60);
   --foreground: oklch(0.96 0.008 80);

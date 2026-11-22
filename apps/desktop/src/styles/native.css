@@ -238,7 +238,7 @@
   box-shadow: 0 0 0 0.5px rgb(0 0 0 / 18%), 0 2px 8px rgb(0 0 0 / 14%);
 }
 :root[data-style="native"][data-platform="mac"] [data-slot="tooltip-content"] svg.rotate-45 {
-  display: none; /* shadcn 的箭头 */
+  visibility: hidden; /* shadcn 的箭头；Radix 给它写了行内 display: block，display: none 盖不住 */
 }
 
 :root[data-style="native"][data-platform="mac"] [data-slot="card"] {
@@ -629,7 +629,7 @@
   box-shadow: 0 4px 8px rgb(0 0 0 / 14%);
 }
 :root[data-style="native"][data-platform="win"] [data-slot="tooltip-content"] svg.rotate-45 {
-  display: none;
+  visibility: hidden;
 }
 
 /* 卡片：CardBackgroundFillColorDefault + CardStrokeColorDefault，不带阴影 */
