@@ -128,8 +128,10 @@ mod imp {
             return false;
         };
         let units: Vec<u16> = buf[..len]
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| u16::from_le_bytes(*c))
             .collect();
         String::from_utf16_lossy(&units)
             .trim_end_matches('\0')
