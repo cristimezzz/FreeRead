@@ -50,6 +50,7 @@
 
   /* 自绘标题栏（Titlebar.tsx）的高度：只在 Tauri 里有，主区让出这条高度 */
   --titlebar-h: 0px;
+  --traffic-lights-h: 0px;
 
   /* 动效：短、安静、不回弹，阅读区手写 CSS 用；prefers-reduced-motion 时归零（见文件末尾） */
   --dur-fast: 120ms;
@@ -67,6 +68,11 @@
 
 :root[data-titlebar] {
   --titlebar-h: 36px;
+}
+
+/* macOS 原生红绿灯占左上角，侧栏顶部内容往下让开 */
+:root[data-titlebar="mac"] {
+  --traffic-lights-h: 28px;
 }
 
 .dark {
