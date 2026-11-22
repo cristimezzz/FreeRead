@@ -43,7 +43,11 @@ mod imp {
         let color = NSColor::controlAccentColor();
         let rgb = color.colorUsingColorSpace(&NSColorSpace::sRGBColorSpace())?;
         let c = |v: f64| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
-        Some(super::hex(c(rgb.redComponent()), c(rgb.greenComponent()), c(rgb.blueComponent())))
+        Some(super::hex(
+            c(rgb.redComponent()),
+            c(rgb.greenComponent()),
+            c(rgb.blueComponent()),
+        ))
     }
 
     pub fn material() -> bool {
@@ -59,8 +63,8 @@ mod imp {
 #[cfg(windows)]
 mod imp {
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD, RRF_RT_REG_SZ,
-        RegGetValueW,
+        HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_BINARY, RRF_RT_REG_DWORD,
+        RRF_RT_REG_SZ, RegGetValueW,
     };
 
     fn wide(s: &str) -> Vec<u16> {
@@ -101,7 +105,13 @@ mod imp {
         }
         // DWM AccentColor：DWORD，0xAABBGGRR
         let mut dword = [0u8; 4];
-        read(HKEY_CURRENT_USER, r"Software\Microsoft\Windows\DWM", "AccentColor", RRF_RT_REG_DWORD, &mut dword)?;
+        read(
+            HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\DWM",
+            "AccentColor",
+            RRF_RT_REG_DWORD,
+            &mut dword,
+        )?;
         let v = u32::from_le_bytes(dword);
         Some(super::hex(v as u8, (v >> 8) as u8, (v >> 16) as u8))
     }
@@ -117,7 +127,10 @@ mod imp {
         ) else {
             return false;
         };
-        let units: Vec<u16> = buf[..len].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let units: Vec<u16> = buf[..len]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
         String::from_utf16_lossy(&units)
             .trim_end_matches('\0')
             .parse::<u32>()
