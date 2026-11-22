@@ -63,15 +63,13 @@ export const useApp = create<AppState>((set, get) => ({
   loadSettings: async () => {
     const settings = unwrap(await api().GET("/settings"));
     set({ settings });
-    const a = settings.appearance;
-    applyTheme(a.seed_color, a.theme_mode, a.contrast);
+    applyTheme(settings.appearance);
   },
 
   saveSettings: async (settings) => {
     const saved = unwrap(await api().PUT("/settings", { body: settings }));
     set({ settings: saved });
-    const a = saved.appearance;
-    applyTheme(a.seed_color, a.theme_mode, a.contrast);
+    applyTheme(saved.appearance);
     return saved;
   },
 

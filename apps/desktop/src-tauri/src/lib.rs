@@ -15,6 +15,7 @@
 #[cfg(windows)]
 mod job;
 mod keys;
+mod native_look;
 mod update;
 
 use std::collections::VecDeque;
@@ -230,6 +231,7 @@ pub fn run() {
             core_status,
             keys::set_api_key,
             keys::delete_api_key,
+            native_look::native_look,
             update::check_update,
             update::list_contributors,
             update::download_update,

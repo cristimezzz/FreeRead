@@ -10,10 +10,10 @@ import "@fontsource/ibm-plex-mono/500.css";
 import "katex/dist/katex.min.css";
 import "./styles/index.css";
 import App from "./app/App";
-import { applyTheme, DEFAULT_ACCENT } from "./app/theme";
+import { applyTheme, DEFAULT_APPEARANCE } from "./app/theme";
 
 // 先按默认值写入令牌，启动页不会闪白
-applyTheme(DEFAULT_ACCENT, "system", "standard");
+applyTheme(DEFAULT_APPEARANCE);
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
