@@ -74,10 +74,11 @@ export function Sidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent
-        className="transition-opacity duration-(--dur-slow) ease-(--ease) group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0"
+        className="overflow-x-hidden transition-opacity duration-(--dur-slow) ease-(--ease) group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0"
         inert={state === "collapsed" || undefined}
       >
-        {/* 固定宽度：侧栏收窄的过程中内容不跟着重新折行 */}
+        {/* 固定宽度：侧栏收窄的过程中内容不跟着重新折行。它比内容区宽（侧栏有 1px 右边线、竖向滚动条也占宽度），
+            所以内容区只竖向滚动（overflow-x-hidden），否则底部会出现横向滚动条 */}
         <div className="animate-in fade-in-0 min-w-(--sidebar-width)" key={section.current}>
           {section.current === "library" && <LibrarySection />}
           {section.current === "settings" && <SettingsAnchors />}

@@ -62,34 +62,34 @@ export function SettingsView() {
     void refreshKeys();
   }, []);
 
-  // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。滚到底时最后几节到不了顶部，
-  // 这时保留侧栏点过的那一节（只要它在可见范围内）；用户自己滚动后取消
+  // 侧栏锚点高亮：取标题已滚到页面顶部附近的最后一节。
+  // 点过侧栏锚点后一直高亮那一节，直到用户自己滚动（滚轮、键盘、拖滚动条、触摸）：
+  // 否则平滑滚动途中会按经过的各节依次改高亮，侧栏闪烁；滚到底时最后几节到不了顶部，也靠它保留
   const hasSettings = Boolean(settings);
   useEffect(() => {
     const root = page.current;
     if (!root) return;
     const onScroll = () => {
-      const box = root.getBoundingClientRect();
-      const tops = SETTINGS_SECTIONS.map((s) => ({
-        id: s.id,
-        y: (document.getElementById(s.id)?.getBoundingClientRect().top ?? Infinity) - box.top,
-      }));
       const { settingsSection, settingsPinned } = useApp.getState();
-      const atBottom = root.scrollTop + root.clientHeight >= root.scrollHeight - 2;
-      const pin = tops.find((t) => t.id === settingsPinned);
-      let current: string = SETTINGS_SECTIONS[0].id;
-      for (const t of tops) if (t.y <= 120) current = t.id;
-      if (atBottom && pin && pin.y >= 0 && pin.y < box.height) current = pin.id;
+      let current: string = settingsPinned ?? SETTINGS_SECTIONS[0].id;
+      if (!settingsPinned) {
+        const top = root.getBoundingClientRect().top;
+        for (const s of SETTINGS_SECTIONS) {
+          const y = (document.getElementById(s.id)?.getBoundingClientRect().top ?? Infinity) - top;
+          if (y <= 120) current = s.id;
+        }
+      }
       if (current !== settingsSection) useApp.setState({ settingsSection: current });
     };
-    const unpin = () => useApp.setState({ settingsPinned: null });
+    const unpin = () => {
+      if (useApp.getState().settingsPinned) useApp.setState({ settingsPinned: null });
+    };
+    const userScroll = ["wheel", "keydown", "pointerdown", "touchstart"] as const;
     root.addEventListener("scroll", onScroll, { passive: true });
-    root.addEventListener("wheel", unpin, { passive: true });
-    root.addEventListener("keydown", unpin);
+    for (const e of userScroll) root.addEventListener(e, unpin, { passive: true });
     return () => {
       root.removeEventListener("scroll", onScroll);
-      root.removeEventListener("wheel", unpin);
-      root.removeEventListener("keydown", unpin);
+      for (const e of userScroll) root.removeEventListener(e, unpin);
       useApp.setState({ settingsSection: null, settingsPinned: null });
     };
   }, [hasSettings]);
