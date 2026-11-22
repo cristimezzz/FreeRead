@@ -54,7 +54,7 @@ export function Sidebar() {
         {/* 展开时标题居中；收成图标栏时容器比内容窄，w-fit + max-w-full 让它贴左，Logo 与下方图标对齐，中间过渡连续 */}
         <div className="mx-auto flex w-fit max-w-full items-center gap-2.5 overflow-hidden pb-2 font-serif text-xl font-semibold tracking-tight whitespace-nowrap">
           <BrandMark />
-          <span className="transition-opacity group-data-[collapsible=icon]:opacity-0">FreeRead</span>
+          <span className="transition-opacity duration-(--dur-slow) ease-(--ease) group-data-[collapsible=icon]:opacity-0">FreeRead</span>
         </div>
         <SidebarMenu>
           {items.map((it) => (
@@ -74,7 +74,7 @@ export function Sidebar() {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent
-        className="transition-opacity duration-(--dur) ease-(--ease) group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0"
+        className="transition-opacity duration-(--dur-slow) ease-(--ease) group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0"
         inert={state === "collapsed" || undefined}
       >
         {/* 固定宽度：侧栏收窄的过程中内容不跟着重新折行 */}

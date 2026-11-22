@@ -5,12 +5,13 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import { isTauri } from "../api/core";
+import { PLATFORM } from "../app/theme";
 import { Icon } from "./icons";
 
 const WINBTN =
   "text-foreground/80 hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14 inline-flex h-(--titlebar-h) w-11.5 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+const IS_MAC = PLATFORM === "mac";
 
 export function Titlebar() {
   const tauri = isTauri();

@@ -1,11 +1,14 @@
 /* 全局样式：shadcn/ui（neutral）+ Tailwind v4（ADR-0009）。
    中性色阶在这里按 :root / .dark 定义；强调色 --brand 与对比度覆盖由 app/theme.ts 写入 :root 行内样式。
    --brand 只用于指认：选中项、引用编号、定位高亮、焦点环、进度。主按钮用 --primary。
+   原生界面风格（macOS / WinUI 3）的令牌与控件覆盖在 native.css（ADR-0011）。
    阅读区排版（重排正文、KaTeX、PDF、批注、问答回答、图谱）在 reader.css，放进 components 层，工具类能覆盖它。 */
 
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "./reader.css" layer(components);
+/* 原生界面风格（ADR-0011）：不进 layer，按 data-style / data-platform 覆盖令牌与控件 */
+@import "./native.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -56,6 +59,8 @@
   --dur-fast: 120ms;
   --dur: 200ms;
   --dur-slow: 280ms;
+  /* 侧栏收展（进出阅读器）：宽度变化大，比其他过渡慢一些 */
+  --dur-sidebar: 400ms;
   --ease: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
@@ -188,6 +193,7 @@
     --dur-fast: 0ms;
     --dur: 0ms;
     --dur-slow: 0ms;
+    --dur-sidebar: 0ms;
   }
 
   *,

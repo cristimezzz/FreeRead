@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { type Settings, useApp } from "../../app/store";
-import { ACCENT_PRESETS } from "../../app/theme";
+import { ACCENT_PRESETS, PLATFORM, refreshNativeLook, systemAccent } from "../../app/theme";
 import { IconButton, LabeledSwitch, OptionSelect, OptionToggle, ProgressBar, TextInput } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
@@ -45,7 +45,13 @@ export function SettingsView() {
   const toast = useApp((s) => s.toast);
   const { engines, installJobs, refresh: refreshEngines } = useEngines();
   const [keys, setKeys] = useState<Record<string, boolean>>({});
+  const [sysAccent, setSysAccent] = useState(systemAccent);
   const page = useRef<HTMLDivElement>(null);
+
+  // "跟随系统"色块显示当前系统强调色：进设置页时重读一次（启动后用户可能改过）
+  useEffect(() => {
+    void refreshNativeLook().then(() => setSysAccent(systemAccent()));
+  }, []);
 
   const refreshKeys = async () => {
     const list = unwrap(await api().GET("/llm/providers"));
@@ -153,6 +159,8 @@ export function SettingsView() {
   const kgRoute = settings.routes.kg_extract;
   const accent = settings.appearance.seed_color.toUpperCase();
   const isPreset = ACCENT_PRESETS.some((s) => s.color.toUpperCase() === accent);
+  // 跟随系统强调色：只在读得到系统色时（macOS / Windows 安装版）生效，否则仍按选中的色板显示
+  const following = settings.appearance.follow_system_accent && sysAccent !== null;
   const providerOptions = settings.providers.map((p) => ({ value: p.id, label: p.name }));
 
   return (
@@ -408,6 +416,17 @@ export function SettingsView() {
         <GlossarySection settings={settings} update={update} />
 
         <Group id="appearance" title={sectionTitle("appearance")}>
+          <Row title="界面风格" desc={STYLE_DESC[PLATFORM]}>
+            <OptionToggle
+              label="界面风格"
+              value={settings.appearance.style}
+              options={[
+                { value: "native", label: "原生" },
+                { value: "freeread", label: "FreeRead" },
+              ]}
+              onValue={(style) => appearance({ style })}
+            />
+          </Row>
           <Row title="深浅色">
             <OptionToggle
               label="深浅色"
@@ -422,19 +441,31 @@ export function SettingsView() {
           </Row>
           <Row title="强调色" desc="只用在选中项、引用标记和定位高亮上">
             <div className="flex flex-wrap gap-4.5" role="group" aria-label="强调色">
+              {sysAccent && (
+                <button
+                  type="button"
+                  className={SWATCH}
+                  aria-pressed={following}
+                  title={`系统强调色 ${sysAccent}`}
+                  onClick={() => appearance({ follow_system_accent: true })}
+                >
+                  <i style={{ background: sysAccent }} />
+                  跟随系统
+                </button>
+              )}
               {ACCENT_PRESETS.map((s) => (
                 <button
                   key={s.color}
                   type="button"
                   className={SWATCH}
-                  aria-pressed={accent === s.color.toUpperCase()}
-                  onClick={() => appearance({ seed_color: s.color })}
+                  aria-pressed={!following && accent === s.color.toUpperCase()}
+                  onClick={() => appearance({ seed_color: s.color, follow_system_accent: false })}
                 >
                   <i style={{ background: s.color }} />
                   {s.name}
                 </button>
               ))}
-              <label className={SWATCH} data-on={!isPreset || undefined} title="自定义强调色">
+              <label className={SWATCH} data-on={(!following && !isPreset) || undefined} title="自定义强调色">
                 <i
                   className={
                     isPreset ? "bg-[conic-gradient(#d97757,#c9a24a,#6f8546,#4f74b8,#8e6bb0,#d97757)]" : undefined
@@ -447,7 +478,7 @@ export function SettingsView() {
                   className="sr-only"
                   aria-label="自定义强调色"
                   value={accent.toLowerCase()}
-                  onChange={(e) => appearance({ seed_color: e.target.value.toUpperCase() })}
+                  onChange={(e) => appearance({ seed_color: e.target.value.toUpperCase(), follow_system_accent: false })}
                 />
               </label>
             </div>
@@ -504,6 +535,12 @@ export function SettingsView() {
     </div>
   );
 }
+
+const STYLE_DESC: Record<typeof PLATFORM, string> = {
+  mac: "原生：macOS 的半透明侧栏、系统字体与控件",
+  win: "原生：Windows 11 的 Mica 材质、Segoe UI 与 WinUI 控件",
+  linux: "Linux 上暂无对应的系统样式，两种风格外观相同",
+};
 
 // 强调色色板：圆形色块 + 名称；选中时外面套一圈前景色
 const SWATCH = cn(
