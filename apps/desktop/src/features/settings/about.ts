@@ -20,7 +20,7 @@ export interface UpdateInfo {
 }
 
 /** 当前程序的安装方式（src-tauri/src/update.rs 的 InstallKind）。 */
-export type InstallKind = "nsis" | "portable" | "appImage" | "deb" | "rpm" | "aur" | "unknown";
+export type InstallKind = "nsis" | "portable" | "appImage" | "deb" | "rpm" | "aur" | "macApp" | "unknown";
 
 /** 下载包在界面上的叫法。 */
 export const ASSET_LABEL: Record<InstallKind, string> = {
@@ -30,6 +30,7 @@ export const ASSET_LABEL: Record<InstallKind, string> = {
   deb: "deb 包",
   rpm: "rpm 包",
   aur: "",
+  macApp: "dmg",
   unknown: "",
 };
 
@@ -38,6 +39,8 @@ export function downloadedHint(kind: InstallKind, path: string): string {
   switch (kind) {
     case "nsis":
       return "下载完成，已通过校验。安装时 FreeRead 会关闭，装好后自动重新打开";
+    case "macApp":
+      return "下载完成，已通过校验。安装时 FreeRead 会关闭，替换好后自动重新打开";
     case "portable":
       return `已保存到 ${path}，退出 FreeRead 后解压覆盖原目录即可`;
     case "appImage":

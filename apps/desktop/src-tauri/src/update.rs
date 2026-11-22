@@ -1,14 +1,16 @@
 //! 检查与下载更新、列出贡献者：数据来自 GitHub 上的 Release 与仓库贡献者，只在设置页「关于」里用到。
 //!
-//! 不用 tauri-plugin-updater：它要签名密钥和 latest.json，而 Release 只附 NSIS 安装包、便携版 zip
-//! 和 AppImage / deb / rpm（.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
+//! 不用 tauri-plugin-updater：它要签名密钥和 latest.json，而 Release 只附 NSIS 安装包、便携版 zip、
+//! AppImage / deb / rpm 和 macOS 的 dmg（.github/workflows/desktop-build.yml）。下载完按 Release 资源自带的 sha256 校验。
 //!
 //! - 安装版（exe 旁边有 NSIS 的 uninstall.exe）：下载 `*-setup.exe` 到临时目录，以 `/P /UPDATE /R`
 //!   运行（与 tauri-plugin-updater 相同：只显示进度、跳过重装询问、不删数据、装完重新打开），随即退出；
 //! - 便携版：下载 `*-portable.zip` 到「下载」文件夹，在资源管理器里选中，由用户自己解压替换；
 //! - Linux AppImage：下载新的 AppImage 到「下载」文件夹（加上可执行权限）并打开该文件夹，由用户替换旧文件；
 //! - Linux deb / rpm：下载同类包到「下载」文件夹并打开该文件夹，由用户用包管理器安装（要 root）；
-//! - AUR（Arch 上装的 freeread-bin，是 deb 解包的）：不下载，由 AUR 助手更新。
+//! - AUR（Arch 上装的 freeread-bin，是 deb 解包的）：不下载，由 AUR 助手更新；
+//! - macOS（.app 包里运行）：下载 `*_aarch64.dmg` 到临时目录，挂载后把新版复制到旧版旁边、换名，
+//!   退出后重新打开（见 [`macos`]）；替换不了（例如没有写入权限）时在 Finder 里显示 dmg，由用户手动安装。
 
 use std::fs::File;
 use std::io::Write;
@@ -89,12 +91,14 @@ pub enum InstallKind {
     AppImage,
     /// Arch 上从 AUR 装的 freeread-bin
     Aur,
+    /// macOS 上从 dmg 拖进去的 FreeRead.app
+    MacApp,
     /// 认不出来（开发构建、自己解包的等），只给 Release 链接
     Unknown,
 }
 
 impl InstallKind {
-    /// Release 里对应的包名后缀（x86_64）；没有可直接用的包时为 `None`。
+    /// Release 里对应的包名后缀（Windows / Linux 是 x86_64，macOS 是 arm64）；没有可直接用的包时为 `None`。
     fn asset_suffix(self) -> Option<&'static str> {
         match self {
             Self::Nsis => Some("-setup.exe"),
@@ -102,6 +106,7 @@ impl InstallKind {
             Self::Deb => Some("_amd64.deb"),
             Self::Rpm => Some(".x86_64.rpm"),
             Self::AppImage => Some("_amd64.AppImage"),
+            Self::MacApp => Some("_aarch64.dmg"),
             Self::Aur | Self::Unknown => None,
         }
     }
@@ -167,7 +172,7 @@ fn install_kind() -> InstallKind {
 
 /// Linux：打包时 tauri-bundler 把包类型写进了可执行文件。AUR 的 freeread-bin 是 deb 解包的，
 /// 所以在 Arch 上看到 deb 当作 AUR 安装。
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn install_kind() -> InstallKind {
     use tauri::utils::{config::BundleType, platform::bundle_type};
     match bundle_type() {
@@ -179,6 +184,22 @@ fn install_kind() -> InstallKind {
         Some(BundleType::AppImage) => InstallKind::AppImage,
         _ => InstallKind::Unknown,
     }
+}
+
+/// macOS：tauri 的 `bundle_type()` 在 macOS 上总是 `App`（开发构建也是），所以看可执行文件
+/// 是否在某个 `.app` 包里。
+#[cfg(target_os = "macos")]
+fn install_kind() -> InstallKind {
+    if macos::current_bundle().is_some() {
+        InstallKind::MacApp
+    } else {
+        InstallKind::Unknown
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+fn install_kind() -> InstallKind {
+    InstallKind::Unknown
 }
 
 /// `v0.2.0` 是否比 `current` 新；解析不了的标签当作不新。
@@ -247,8 +268,8 @@ pub async fn download_update(
     state: State<'_, UpdateState>,
 ) -> Result<String, String> {
     let asset = state.asset.lock().unwrap().clone().ok_or("请先检查更新")?;
-    // 只有 NSIS 安装包由我们运行，放临时目录；其他的要用户自己处理，放「下载」文件夹
-    let dir = if install_kind() == InstallKind::Nsis {
+    // NSIS 安装包和 macOS 的 dmg 由我们安装，放临时目录；其他的要用户自己处理，放「下载」文件夹
+    let dir = if matches!(install_kind(), InstallKind::Nsis | InstallKind::MacApp) {
         std::env::temp_dir().join("FreeRead-update")
     } else {
         app.path().download_dir().map_err(|e| e.to_string())?
@@ -306,7 +327,8 @@ pub async fn download_update(
     Ok(dest.display().to_string())
 }
 
-/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；便携版、AppImage、deb / rpm：在文件管理器里显示下载的包。
+/// 安装版：运行安装包并退出（退出时照常关掉 sidecar）；macOS：用 dmg 里的新版替换当前的 .app，
+/// 退出后重新打开；便携版、AppImage、deb / rpm：在文件管理器里显示下载的包。
 #[tauri::command]
 pub fn apply_update(app: AppHandle, state: State<'_, UpdateState>) -> Result<(), String> {
     let path = state
@@ -323,7 +345,190 @@ pub fn apply_update(app: AppHandle, state: State<'_, UpdateState>) -> Result<(),
         app.exit(0);
         return Ok(());
     }
+    #[cfg(target_os = "macos")]
+    if path.extension().is_some_and(|e| e == "dmg") {
+        let bundle = macos::current_bundle().ok_or("找不到当前的 FreeRead.app")?;
+        return match macos::install_from_dmg(&path, &bundle) {
+            Ok(old) => {
+                macos::relaunch_after_exit(&bundle, &old)?;
+                app.exit(0);
+                Ok(())
+            }
+            // 装不上（例如没有写入「应用程序」文件夹的权限）时退回手动安装：在 Finder 里显示 dmg
+            Err(e) => {
+                let _ = reveal(&path);
+                Err(format!(
+                    "{e}。已在 Finder 中显示安装包，可以退出 FreeRead 后手动拖进“应用程序”替换"
+                ))
+            }
+        };
+    }
     reveal(&path)
+}
+
+/// macOS 的自动更新：挂载 dmg，把里面的 .app 复制到当前 .app 旁边，两者换名，退出后重新打开。
+/// dmg 由我们自己下载，没有隔离属性（quarantine），换上去的新版打开时不会再弹 Gatekeeper 提示。
+#[cfg(target_os = "macos")]
+mod macos {
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
+
+    /// 当前运行的 `.app`：可执行文件在 `<X>.app/Contents/MacOS/` 里时返回 `<X>.app`。
+    pub fn current_bundle() -> Option<PathBuf> {
+        let exe = std::env::current_exe().ok()?;
+        bundle_of(&exe)
+    }
+
+    pub(super) fn bundle_of(exe: &Path) -> Option<PathBuf> {
+        let macos_dir = exe.parent()?;
+        let contents = macos_dir.parent()?;
+        let bundle = contents.parent()?;
+        (macos_dir.file_name()? == "MacOS"
+            && contents.file_name()? == "Contents"
+            && bundle.extension()? == "app")
+            .then(|| bundle.to_path_buf())
+    }
+
+    fn run(cmd: &mut Command, what: &str) -> Result<(), String> {
+        let out = cmd
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|e| format!("{what}失败：{e}"))?;
+        if out.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "{what}失败：{}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            ))
+        }
+    }
+
+    /// 退出时卸载 dmg。
+    struct Mounted(PathBuf);
+
+    impl Drop for Mounted {
+        fn drop(&mut self) {
+            let _ = Command::new("hdiutil")
+                .args(["detach", "-quiet", "-force"])
+                .arg(&self.0)
+                .output();
+            let _ = std::fs::remove_dir(&self.0);
+        }
+    }
+
+    /// 用 `dmg` 里的新版替换 `bundle`，返回换下来的旧版路径（退出后删掉）。
+    /// 失败时 `bundle` 保持原样。
+    pub fn install_from_dmg(dmg: &Path, bundle: &Path) -> Result<PathBuf, String> {
+        let path_str = bundle.to_string_lossy();
+        // 从 dmg 里直接打开、或者没拖出「下载」文件夹就打开时，系统在只读的随机目录里运行
+        // （App Translocation / 挂载的 dmg），替换不了
+        if path_str.contains("/AppTranslocation/") || path_str.starts_with("/Volumes/") {
+            return Err("FreeRead 不是从“应用程序”等文件夹里运行的，无法自动替换".into());
+        }
+        let parent = bundle.parent().ok_or("找不到 FreeRead.app 所在的文件夹")?;
+        let name = bundle
+            .file_name()
+            .ok_or("找不到 FreeRead.app")?
+            .to_string_lossy();
+        let staged = parent.join(format!(".{name}.update"));
+        let old = parent.join(format!(".{name}.old"));
+
+        for leftover in [&staged, &old] {
+            if leftover.exists() {
+                std::fs::remove_dir_all(leftover)
+                    .map_err(|e| format!("清理上次更新的残留失败：{e}"))?;
+            }
+        }
+        // 先试着在旁边建目录：标准用户没有写入「应用程序」的权限，这时不必挂载 dmg
+        match std::fs::create_dir(&staged) {
+            Ok(()) => {
+                let _ = std::fs::remove_dir(&staged);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                return Err(format!(
+                    "没有写入“{}”的权限，无法自动替换",
+                    parent.display()
+                ));
+            }
+            Err(e) => return Err(format!("无法写入“{}”：{e}", parent.display())),
+        }
+
+        let mount =
+            std::env::temp_dir().join(format!("FreeRead-update-mnt-{}", std::process::id()));
+        std::fs::create_dir_all(&mount).map_err(|e| e.to_string())?;
+        if let Err(e) = run(
+            Command::new("hdiutil")
+                .args([
+                    "attach",
+                    "-nobrowse",
+                    "-readonly",
+                    "-noautoopen",
+                    "-mountpoint",
+                ])
+                .arg(&mount)
+                .arg(dmg),
+            "挂载安装包",
+        ) {
+            let _ = std::fs::remove_dir(&mount);
+            return Err(e);
+        }
+        let mounted = Mounted(mount);
+        let new_app = std::fs::read_dir(&mounted.0)
+            .map_err(|e| e.to_string())?
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .find(|p| p.extension().is_some_and(|e| e == "app"))
+            .ok_or("安装包里没有 .app")?;
+
+        // ditto 保留签名、扩展属性和符号链接
+        if let Err(e) = run(
+            Command::new("ditto").arg(&new_app).arg(&staged),
+            "复制新版本",
+        ) {
+            let _ = std::fs::remove_dir_all(&staged);
+            return Err(e);
+        }
+        drop(mounted);
+        if let Err(e) = run(
+            Command::new("codesign")
+                .args(["--verify", "--deep", "--strict"])
+                .arg(&staged),
+            "校验新版本的签名",
+        ) {
+            let _ = std::fs::remove_dir_all(&staged);
+            return Err(e);
+        }
+
+        // 同一文件夹里换名是原子的；运行中的程序和 sidecar 按 inode 打开文件，不受影响
+        std::fs::rename(bundle, &old).map_err(|e| {
+            let _ = std::fs::remove_dir_all(&staged);
+            format!("替换旧版本失败：{e}")
+        })?;
+        if let Err(e) = std::fs::rename(&staged, bundle) {
+            let _ = std::fs::rename(&old, bundle);
+            let _ = std::fs::remove_dir_all(&staged);
+            return Err(format!("替换旧版本失败：{e}"));
+        }
+        Ok(old)
+    }
+
+    /// 起一个独立的 shell 等本进程退出，删掉旧版并打开新版。路径作为参数传入，不拼进脚本。
+    pub fn relaunch_after_exit(bundle: &Path, old: &Path) -> Result<(), String> {
+        Command::new("/bin/sh")
+            .arg("-c")
+            .arg(r#"while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; rm -rf -- "$2"; open -- "$3""#)
+            .arg("freeread-update")
+            .arg(std::process::id().to_string())
+            .arg(old)
+            .arg(bundle)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map(drop)
+            .map_err(|e| format!("无法重新打开 FreeRead：{e}"))
+    }
 }
 
 #[cfg(windows)]
@@ -348,7 +553,17 @@ fn reveal(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| format!("已保存到 {}（无法打开文件夹：{e}）", path.display()))
 }
 
-#[cfg(not(any(windows, target_os = "linux")))]
+#[cfg(target_os = "macos")]
+fn reveal(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg("-R")
+        .arg(path)
+        .spawn()
+        .map(drop)
+        .map_err(|e| format!("已保存到 {}（无法在 Finder 中显示：{e}）", path.display()))
+}
+
+#[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
 fn reveal(path: &std::path::Path) -> Result<(), String> {
     Err(format!("已保存到 {}", path.display()))
 }
@@ -385,6 +600,7 @@ mod tests {
             asset("FreeRead_0.2.0_amd64.deb"),
             asset("FreeRead-0.2.0-1.x86_64.rpm"),
             asset("FreeRead_0.2.0_amd64.AppImage"),
+            asset("FreeRead_0.2.0_aarch64.dmg"),
         ];
         let name = |kind| pick_asset(&assets, kind).map(|a| a.name.as_str());
         assert_eq!(
@@ -401,8 +617,57 @@ mod tests {
             name(InstallKind::AppImage),
             Some("FreeRead_0.2.0_amd64.AppImage")
         );
+        assert_eq!(
+            name(InstallKind::MacApp),
+            Some("FreeRead_0.2.0_aarch64.dmg")
+        );
         assert_eq!(name(InstallKind::Aur), None);
         assert_eq!(name(InstallKind::Unknown), None);
         assert!(pick_asset(&assets[..1], InstallKind::Nsis).is_none());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn finds_app_bundle_of_executable() {
+        use std::path::Path;
+        assert_eq!(
+            macos::bundle_of(Path::new(
+                "/Applications/FreeRead.app/Contents/MacOS/freeread-desktop"
+            )),
+            Some("/Applications/FreeRead.app".into())
+        );
+        // 开发构建：target/release/freeread-desktop
+        assert_eq!(
+            macos::bundle_of(Path::new("/src/target/release/freeread-desktop")),
+            None
+        );
+        assert_eq!(
+            macos::bundle_of(Path::new("/x/Contents/MacOS/freeread-desktop")),
+            None
+        );
+    }
+
+    /// 真实替换一次：`FREEREAD_TEST_DMG` 指向打好的 dmg，`FREEREAD_TEST_APP` 指向一份可以被覆盖的 .app。
+    /// `cargo test -- --ignored replaces_app_from_dmg`
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore]
+    fn replaces_app_from_dmg() {
+        let dmg = std::env::var("FREEREAD_TEST_DMG").expect("FREEREAD_TEST_DMG");
+        let app = PathBuf::from(std::env::var("FREEREAD_TEST_APP").expect("FREEREAD_TEST_APP"));
+        let marker = app.join("Contents/old-marker");
+        std::fs::write(&marker, "old").unwrap();
+        let old = macos::install_from_dmg(std::path::Path::new(&dmg), &app).unwrap();
+        assert!(!marker.exists(), "新版本里不应有旧版的标记文件");
+        assert!(
+            old.join("Contents/old-marker").exists(),
+            "旧版本应该换名留着"
+        );
+        assert!(app.join("Contents/MacOS/freeread-desktop").is_file());
+        assert!(
+            app.join("Contents/Resources/freeread-core/freeread-core")
+                .is_file()
+        );
+        std::fs::remove_dir_all(old).unwrap();
     }
 }

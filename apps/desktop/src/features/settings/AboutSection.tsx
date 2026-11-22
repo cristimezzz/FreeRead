@@ -207,7 +207,7 @@ function UpdateActions({
   if (step.s === "downloaded") {
     return (
       <Button size="sm" onClick={onApply}>
-        {step.info.kind === "nsis" ? "安装并重启" : "在文件夹中显示"}
+        {step.info.kind === "nsis" || step.info.kind === "macApp" ? "安装并重启" : "在文件夹中显示"}
       </Button>
     );
   }
