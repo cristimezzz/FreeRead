@@ -50,7 +50,7 @@ export function Sidebar() {
 
   return (
     <SidebarRoot collapsible="icon" aria-label="主导航">
-      <SidebarHeader className="pt-4">
+      <SidebarHeader className="pt-[calc(1rem+var(--traffic-lights-h))]">
         {/* 展开时标题居中；收成图标栏时容器比内容窄，w-fit + max-w-full 让它贴左，Logo 与下方图标对齐，中间过渡连续 */}
         <div className="mx-auto flex w-fit max-w-full items-center gap-2.5 overflow-hidden pb-2 font-serif text-xl font-semibold tracking-tight whitespace-nowrap">
           <BrandMark />

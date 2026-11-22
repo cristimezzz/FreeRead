@@ -1,5 +1,6 @@
-// 自绘标题栏：窗口去掉了系统边框（tauri.conf.json decorations: false），
+// 自绘标题栏：Windows / Linux 去掉了系统边框（tauri.conf.json decorations: false），
 // 这里提供顶部的拖动区（双击最大化）与 最小化 / 最大化 / 关闭 按钮。只在 Tauri 里渲染。
+// macOS 用原生红绿灯（tauri.macos.conf.json titleBarStyle: Overlay），这里只留拖动区。
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
@@ -9,12 +10,20 @@ import { Icon } from "./icons";
 const WINBTN =
   "text-foreground/80 hover:bg-foreground/8 hover:text-foreground active:bg-foreground/14 inline-flex h-(--titlebar-h) w-11.5 items-center justify-center transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring";
 
+const IS_MAC = typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
+
 export function Titlebar() {
   const tauri = isTauri();
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
     if (!tauri) return;
+    if (IS_MAC) {
+      document.documentElement.dataset.titlebar = "mac";
+      return () => {
+        delete document.documentElement.dataset.titlebar;
+      };
+    }
     const win = getCurrentWindow();
     document.documentElement.dataset.titlebar = "";
     const sync = () => win.isMaximized().then(setMaximized).catch(() => {});
@@ -27,6 +36,7 @@ export function Titlebar() {
   }, [tauri]);
 
   if (!tauri) return null;
+  if (IS_MAC) return <div className="fixed inset-x-0 top-0 z-50 h-(--titlebar-h) select-none" data-tauri-drag-region />;
   const win = getCurrentWindow();
   return (
     <div className="fixed inset-x-0 top-0 z-50 flex h-(--titlebar-h) justify-end select-none" data-tauri-drag-region>
