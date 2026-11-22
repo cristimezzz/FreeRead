@@ -55,6 +55,7 @@ export default defineConfig({
         { text: '大模型服务', link: '/llm-services' },
         { text: '解析引擎', link: '/parsers' },
         { text: '检索与语义索引', link: '/search' },
+        { text: '外观', link: '/appearance' },
         { text: '隐私与数据', link: '/privacy' },
       ] },
       { text: '其他', items: [

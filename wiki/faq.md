@@ -37,5 +37,9 @@
 ### 想彻底删除数据
 卸载时勾选 **删除应用数据**，会删除 `%APPDATA%\FreeRead` 和凭据管理器里的 API Key。已经卸载过的，手动删除 `%APPDATA%\FreeRead`，并在"凭据管理器 › Windows 凭据"里删除 FreeRead 相关条目。见 [隐私与数据](/privacy)。
 
-### 支持 macOS / Linux 吗？
-目前只有 Windows 版，其他平台在计划中。
+### 支持哪些系统？
+- Windows 10 / 11，x64
+- Linux x86_64（0.2.1 起）：AppImage、deb、rpm，Arch 从 AUR 安装
+- macOS 14 以上，Apple 芯片（0.2.3 起）；暂不提供 Intel 版
+
+Linux 暂无 ARM 版。见 [安装](/install)。
