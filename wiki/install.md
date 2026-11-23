@@ -13,7 +13,7 @@
 - WebKitGTK 4.1（包管理器会自动安装）
 - 一个 Secret Service 服务用来保存 API Key：GNOME 自带 GNOME Keyring，KDE 的 KWallet 也支持；没有时 API Key 无法保存
 
-**macOS**（0.2.3 起）
+**macOS**（0.2.4 起）
 
 - Apple 芯片（M1 及更新），macOS 14 以上；暂不提供 Intel 版
 - API Key 保存在系统钥匙串（“钥匙串访问”里名为 FreeRead 的条目）

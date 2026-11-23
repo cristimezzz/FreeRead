@@ -40,6 +40,6 @@
 ### 支持哪些系统？
 - Windows 10 / 11，x64
 - Linux x86_64（0.2.1 起）：AppImage、deb、rpm；Arch 等其他发行版用 AppImage
-- macOS 14 以上，Apple 芯片（0.2.3 起）；暂不提供 Intel 版
+- macOS 14 以上，Apple 芯片（0.2.4 起）；暂不提供 Intel 版
 
 Linux 暂无 ARM 版。见 [安装](/install)。
