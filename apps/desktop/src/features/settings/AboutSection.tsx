@@ -167,8 +167,7 @@ function updateDesc(step: UpdateStep, desktop: boolean): string {
       if (!info.available) return `已是最新版本（${info.current}）`;
       const date = formatDate(info.publishedAt);
       const size = info.asset ? `，${ASSET_LABEL[info.kind]} ${formatSize(info.asset.size)}` : "";
-      const aur = info.kind === "aur" ? "，用 AUR 助手（如 yay -Syu）更新" : "";
-      return `发现新版本 ${info.latest}${date && `（${date} 发布）`}${size}${aur}`;
+      return `发现新版本 ${info.latest}${date && `（${date} 发布）`}${size}`;
     }
   }
 }

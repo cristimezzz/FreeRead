@@ -4,9 +4,7 @@ name: Desktop build
 # - Windows：NSIS 安装包和便携版 zip，在干净的 runner 上静默安装 / 解压，复测体积、启动时间和退出残留
 #   （scripts/verify_installed.ps1）；
 # - Linux x86_64：AppImage、deb 和 rpm（ubuntu-22.04 构建，glibc 2.35 起可用），装 deb 后冒烟 sidecar、
-#   在 Xvfb 里启动壳并检查退出残留，AppImage 同样在 Xvfb 里启动一遍，rpm 在 Fedora 容器里装一遍，
-#   AUR 的 PKGBUILD 在 Arch 容器里打一遍。
-#   AUR 包在 Release 发布后由 aur.yml 推送。
+#   在 Xvfb 里启动壳并检查退出残留，AppImage 同样在 Xvfb 里启动一遍，rpm 在 Fedora 容器里装一遍。
 # - macOS arm64：dmg 和 .app 的 zip（ad-hoc 签名，未公证），挂载 dmg 后冒烟 sidecar、启动壳并检查退出残留；
 #   Release 只附 dmg，.app 的 zip 只作为 artifact。
 # Linux / macOS 用 bash 脚本（scripts/*.sh），PowerShell 脚本只在 Windows 上用。
@@ -24,7 +22,6 @@ on:
       - scripts/measure_sidecar.sh
       - scripts/verify_installed.ps1
       - apps/desktop/src-tauri/**
-      - packaging/**
       - scripts/ci/**
       - .github/workflows/desktop-build.yml
   push:
@@ -37,7 +34,6 @@ on:
       - scripts/measure_sidecar.sh
       - scripts/verify_installed.ps1
       - apps/desktop/src-tauri/**
-      - packaging/**
       - scripts/ci/**
       - .github/workflows/desktop-build.yml
 
@@ -204,22 +200,6 @@ jobs:
             dnf install -y /dist/*.rpm
             "$CORE_DIR/freeread-core" --help > /dev/null'
           echo "- rpm 在 Fedora 42 上安装、sidecar 可运行：通过" >> "$GITHUB_STEP_SUMMARY"
-      - name: Build AUR package on Arch
-        run: |
-          version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
-          mkdir aur
-          packaging/aur/render.sh "$version" dist/*.deb LICENSE > aur/PKGBUILD
-          # 放好与 source 同名的文件，makepkg 就不去 Release 下载
-          cp dist/*.deb aur/
-          cp LICENSE "aur/LICENSE-$version"
-          docker run --rm -v "$PWD/aur:/aur" -e CORE_DIR archlinux:base-devel bash -euc '
-            useradd -m builder
-            chown -R builder /aur
-            su builder -c "cd /aur && makepkg --nodeps --noconfirm"
-            pacman -Syu --noconfirm
-            pacman -U --noconfirm /aur/freeread-bin-*.pkg.tar.zst
-            "$CORE_DIR/freeread-core" --help > /dev/null'
-          echo "- AUR PKGBUILD 在 Arch 上打包、安装、sidecar 可运行：通过" >> "$GITHUB_STEP_SUMMARY"
 
   build-macos:
     # Apple Silicon；PyInstaller 打的 sidecar 不能交叉编译，Intel 版要另开 x86_64 runner

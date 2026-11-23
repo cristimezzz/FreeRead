@@ -20,7 +20,7 @@ export interface UpdateInfo {
 }
 
 /** 当前程序的安装方式（src-tauri/src/update.rs 的 InstallKind）。 */
-export type InstallKind = "nsis" | "portable" | "appImage" | "deb" | "rpm" | "aur" | "macApp" | "unknown";
+export type InstallKind = "nsis" | "portable" | "appImage" | "deb" | "rpm" | "macApp" | "unknown";
 
 /** 下载包在界面上的叫法。 */
 export const ASSET_LABEL: Record<InstallKind, string> = {
@@ -29,7 +29,6 @@ export const ASSET_LABEL: Record<InstallKind, string> = {
   appImage: "AppImage",
   deb: "deb 包",
   rpm: "rpm 包",
-  aur: "",
   macApp: "dmg",
   unknown: "",
 };

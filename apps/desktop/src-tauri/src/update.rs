@@ -8,7 +8,6 @@
 //! - 便携版：下载 `*-portable.zip` 到「下载」文件夹，在资源管理器里选中，由用户自己解压替换；
 //! - Linux AppImage：下载新的 AppImage 到「下载」文件夹（加上可执行权限）并打开该文件夹，由用户替换旧文件；
 //! - Linux deb / rpm：下载同类包到「下载」文件夹并打开该文件夹，由用户用包管理器安装（要 root）；
-//! - AUR（Arch 上装的 freeread-bin，是 deb 解包的）：不下载，由 AUR 助手更新；
 //! - macOS（.app 包里运行）：下载 `*_aarch64.dmg` 到临时目录，挂载后把新版复制到旧版旁边、换名，
 //!   退出后重新打开（见 [`macos`]）；替换不了（例如没有写入权限）时在 Finder 里显示 dmg，由用户手动安装。
 
@@ -89,8 +88,6 @@ pub enum InstallKind {
     Rpm,
     /// Linux AppImage
     AppImage,
-    /// Arch 上从 AUR 装的 freeread-bin
-    Aur,
     /// macOS 上从 dmg 拖进去的 FreeRead.app
     MacApp,
     /// 认不出来（开发构建、自己解包的等），只给 Release 链接
@@ -107,7 +104,7 @@ impl InstallKind {
             Self::Rpm => Some(".x86_64.rpm"),
             Self::AppImage => Some("_amd64.AppImage"),
             Self::MacApp => Some("_aarch64.dmg"),
-            Self::Aur | Self::Unknown => None,
+            Self::Unknown => None,
         }
     }
 }
@@ -170,15 +167,11 @@ fn install_kind() -> InstallKind {
     }
 }
 
-/// Linux：打包时 tauri-bundler 把包类型写进了可执行文件。AUR 的 freeread-bin 是 deb 解包的，
-/// 所以在 Arch 上看到 deb 当作 AUR 安装。
+/// Linux：打包时 tauri-bundler 把包类型写进了可执行文件。
 #[cfg(target_os = "linux")]
 fn install_kind() -> InstallKind {
     use tauri::utils::{config::BundleType, platform::bundle_type};
     match bundle_type() {
-        Some(BundleType::Deb) if std::path::Path::new("/etc/arch-release").exists() => {
-            InstallKind::Aur
-        }
         Some(BundleType::Deb) => InstallKind::Deb,
         Some(BundleType::Rpm) => InstallKind::Rpm,
         Some(BundleType::AppImage) => InstallKind::AppImage,
@@ -621,7 +614,6 @@ mod tests {
             name(InstallKind::MacApp),
             Some("FreeRead_0.2.0_aarch64.dmg")
         );
-        assert_eq!(name(InstallKind::Aur), None);
         assert_eq!(name(InstallKind::Unknown), None);
         assert!(pick_asset(&assets[..1], InstallKind::Nsis).is_none());
     }
