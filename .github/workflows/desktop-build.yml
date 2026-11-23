@@ -123,6 +123,10 @@ jobs:
   build-linux:
     # 22.04 的 glibc（2.35）是安装包的最低要求：PyInstaller 打的 sidecar 和壳都链接构建机的 glibc
     runs-on: ubuntu-22.04
+    # 显式写 bash：GitHub 才会加 -o pipefail，`measure_sidecar.sh | tee` 失败时步骤跟着失败
+    defaults:
+      run:
+        shell: bash
     env:
       CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/') && 'fat' || 'thin' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '16' }}
@@ -204,6 +208,10 @@ jobs:
   build-macos:
     # Apple Silicon；PyInstaller 打的 sidecar 不能交叉编译，Intel 版要另开 x86_64 runner
     runs-on: macos-latest
+    # 显式写 bash：GitHub 才会加 -o pipefail，`measure_sidecar.sh | tee` 失败时步骤跟着失败
+    defaults:
+      run:
+        shell: bash
     env:
       CARGO_PROFILE_RELEASE_LTO: ${{ startsWith(github.ref, 'refs/tags/') && 'fat' || 'thin' }}
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '16' }}
