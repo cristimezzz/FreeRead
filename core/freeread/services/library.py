@@ -1,7 +1,8 @@
 """文献库：Zotero 同步与手动导入 PDF。见 docs/01-architecture.md §5.1。
 
 - Zotero 条目以 zotero_key 为外部主键 upsert；Zotero 端消失的条目标记 archived，不物理删除。
-- 数据源由设置决定：本地 API，或 zotero.sqlite 快照（Zotero 没运行时），见 docs/m2/zotero-sync.md。
+- 数据源由设置决定：本地 API，或 zotero.sqlite 快照；auto 优先本地 API，不可用（含读到一半断开）
+  时改读快照，见 docs/m2/zotero-sync.md。
 - 增量同步：数据源支持时只拉上次版本之后变化的条目，另取一次现存 key 列表，不在其中的归档；
   没有上次版本、版本为 0（没用 Zotero 云同步时版本不增长）、距上次全量超过 FULL_SYNC_EVERY、
   用户要求完全同步、或数据源取不到 key 列表时做全量。
@@ -39,7 +40,12 @@ from freeread.infra.db.models import (
 )
 from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
-from freeread.infra.zotero.base import Collection, Item, ZoteroConnector
+from freeread.infra.zotero.base import (
+    Collection,
+    Item,
+    ZoteroConnector,
+    ZoteroUnavailableError,
+)
 
 log = logging.getLogger(__name__)
 
@@ -122,20 +128,36 @@ class SyncResult:
     missing_files: int = 0
     removed_files: int = 0
     parse_jobs: list[str] = field(default_factory=list)
+    # auto 模式下没用上本地 API 的原因（改读了数据库快照）
+    fallback_reason: str | None = None
 
     def summary(self) -> str:
         how = f"{'全量' if self.full else '增量'}（{SOURCE_LABELS.get(self.source, self.source)}）"
-        return (
+        text = (
             f"{how}：新增 {self.added}，更新 {self.updated}，归档 {self.archived}，"
             f"缺失文件 {self.missing_files}，移除附件 {self.removed_files}，"
             f"待解析 {len(self.parse_jobs)}"
         )
+        if self.fallback_reason:
+            text += f"。本地 API 不可用（{self.fallback_reason}），已改读数据库快照"
+        return text
 
 
 @dataclass
 class _ResolvedItem:
     item: Item
     pdfs: list[tuple[str, Path]]  # (attachment key, 本地路径)
+
+
+@dataclass
+class _SyncRead:
+    collections: list[Collection]
+    source: str
+    since: int | None
+    live: set[str] | None
+    resolved: list[_ResolvedItem]
+    missing: int
+    version: int | None
 
 
 def sha256_file(path: Path) -> str:
@@ -220,33 +242,15 @@ class LibraryService:
 
         connector = self.connector_factory()
         try:
-            await report(0.05, "读取 Zotero 分类")
-            # 第一次读取时才确定数据源（auto 模式下本地 API 连不上会换成快照）
-            collections = await connector.list_collections()
-            source = getattr(connector, "source_id", ZOTERO_LOCAL_SOURCE)
-            since = None if full else self._since(source, connector)
-            live: set[str] | None = None
-            if since is not None:
-                live = await connector.list_keys()
-                if live is None:  # 数据源查不到删除：这次做全量
-                    since = None
-            await report(0.2, "读取 Zotero 条目" if since is None else "读取变化的条目")
-            items = await connector.list_items(since)
-            await report(0.5, "解析附件路径")
-            resolved = []
-            missing = 0
-            for item in items:
-                pdfs = []
-                for att in item.attachments:
-                    if att.content_type != "application/pdf":
-                        continue
-                    path = await connector.resolve_attachment(item, att)
-                    if path is None:
-                        missing += 1
-                    else:
-                        pdfs.append((att.key, path))
-                resolved.append(_ResolvedItem(item, pdfs))
-            version = getattr(connector, "library_version", None)
+            try:
+                read = await self._read(connector, full, report)
+            except ZoteroUnavailableError as e:
+                # auto 模式下本地 API 读到一半不可用（比如 Zotero 被退出了）：改读数据库，从头重读
+                fall_back = getattr(connector, "fall_back", None)
+                if not fall_back or not fall_back(str(e)):
+                    raise
+                log.warning("Zotero 本地 API 读取中断，改读数据库快照：%s", e)
+                read = await self._read(connector, full, report)
         finally:
             aclose = getattr(connector, "aclose", None)
             if aclose:
@@ -255,16 +259,55 @@ class LibraryService:
         await report(0.6, "写入文献库")
         result = await asyncio.to_thread(
             self._apply_sync,
-            collections,
-            resolved,
+            read.collections,
+            read.resolved,
             collection_key,
-            version,
-            source=source,
-            full=since is None,
-            live_keys=live,
+            read.version,
+            source=read.source,
+            full=read.since is None,
+            live_keys=read.live,
         )
-        result.missing_files = missing
+        result.missing_files = read.missing
+        result.fallback_reason = getattr(connector, "fallback_reason", None)
         return result
+
+    async def _read(self, connector: ZoteroConnector, full: bool, report: Progress) -> "_SyncRead":
+        """从数据源读出分类、条目和附件路径（不写库）。"""
+        await report(0.05, "读取 Zotero 分类")
+        # 第一次读取时才确定数据源（auto 模式下本地 API 不可用会换成快照）
+        collections = await connector.list_collections()
+        source = getattr(connector, "source_id", ZOTERO_LOCAL_SOURCE)
+        since = None if full else self._since(source, connector)
+        live: set[str] | None = None
+        if since is not None:
+            live = await connector.list_keys()
+            if live is None:  # 数据源查不到删除：这次做全量
+                since = None
+        await report(0.2, "读取 Zotero 条目" if since is None else "读取变化的条目")
+        items = await connector.list_items(since)
+        await report(0.5, "解析附件路径")
+        resolved = []
+        missing = 0
+        for item in items:
+            pdfs = []
+            for att in item.attachments:
+                if att.content_type != "application/pdf":
+                    continue
+                path = await connector.resolve_attachment(item, att)
+                if path is None:
+                    missing += 1
+                else:
+                    pdfs.append((att.key, path))
+            resolved.append(_ResolvedItem(item, pdfs))
+        return _SyncRead(
+            collections=collections,
+            source=source,
+            since=since,
+            live=live,
+            resolved=resolved,
+            missing=missing,
+            version=getattr(connector, "library_version", None),
+        )
 
     def _since(self, source: str, connector: ZoteroConnector) -> int | None:
         """可以增量时返回上次同步的库版本，否则 None（全量）。"""

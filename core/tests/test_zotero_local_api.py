@@ -225,3 +225,48 @@ async def test_list_keys_unsupported_or_truncated(tmp_path):
         transport=httpx.MockTransport(handler),
     ) as c:
         assert await c.list_keys() is None  # 被截断
+
+
+def local_with(handler) -> LocalApiConnector:
+    return LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/", transport=httpx.MockTransport(handler)
+    )
+
+
+def _raise(exc):
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise exc("boom", request=request)
+
+    return handler
+
+
+@pytest.mark.parametrize(
+    "handler, match",
+    [
+        (_raise(httpx.ConnectError), "无法连接"),
+        (_raise(httpx.ConnectTimeout), "超时"),
+        (_raise(httpx.ReadTimeout), "超时"),
+        (_raise(httpx.RemoteProtocolError), "连接出错"),
+        (lambda r: httpx.Response(500, text="err"), "500"),
+        (lambda r: httpx.Response(200, text="<html>starting</html>"), "不是 JSON"),
+        (lambda r: httpx.Response(200, json={"not": "a list"}), "意外"),
+    ],
+)
+async def test_unavailable_errors(handler, match):
+    async with local_with(handler) as c:
+        with pytest.raises(ZoteroUnavailableError, match=match):
+            await c.probe()
+        with pytest.raises(ZoteroUnavailableError, match=match):
+            await c.list_collections()
+
+
+async def test_probe_uses_short_timeout():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append((request.url.params["limit"], request.extensions["timeout"]["read"]))
+        return httpx.Response(200, json=[])
+
+    async with local_with(handler) as c:
+        await c.probe()
+    assert seen == [("1", 2.0)]

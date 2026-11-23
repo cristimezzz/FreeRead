@@ -26,6 +26,7 @@ from freeread.infra.zotero.base import (
 
 DEFAULT_BASE_URL = "http://localhost:23119/api/users/0/"
 PAGE_SIZE = 100
+PROBE_TIMEOUT = 2.0  # auto 模式探测本地 API 的超时（秒），连不上时尽快改读数据库
 KEY_BATCH = 50  # Web API 的 itemKey 参数最多 50 个
 SKIP_TYPES = frozenset({"attachment", "note", "annotation"})
 YEAR_RE = re.compile(r"\b(\d{4})\b")
@@ -78,26 +79,51 @@ class LocalApiConnector:
     async def __aexit__(self, *exc) -> None:
         await self.aclose()
 
+    async def _get(
+        self, path: str, params: dict, timeout: float | None = None
+    ) -> tuple[httpx.Response, object]:
+        """GET 并解析 JSON。连不上、超时、5xx、返回的不是 JSON 都算本地 API 不可用。"""
+        kwargs = {"timeout": timeout} if timeout is not None else {}
+        try:
+            resp = await self._client.get(path, params=params, **kwargs)
+        except httpx.ConnectError as e:
+            raise ZoteroUnavailableError(
+                "无法连接 Zotero 本地 API（http://localhost:23119）。"
+                "请确认 Zotero 7 正在运行且已启用本地 API。"
+            ) from e
+        except httpx.TimeoutException as e:
+            raise ZoteroUnavailableError("Zotero 本地 API 响应超时。") from e
+        except httpx.TransportError as e:
+            raise ZoteroUnavailableError(f"Zotero 本地 API 连接出错：{e}") from e
+        if resp.status_code in (403, 404) and "users/0" in str(resp.url):
+            raise ZoteroUnavailableError(
+                f"Zotero 本地 API 返回 {resp.status_code}，可能未在设置中启用本地 API。"
+            )
+        if resp.status_code >= 500:
+            raise ZoteroUnavailableError(f"Zotero 本地 API 返回 {resp.status_code}。")
+        resp.raise_for_status()
+        try:
+            data = resp.json()
+        except ValueError as e:
+            raise ZoteroUnavailableError("Zotero 本地 API 返回的不是 JSON。") from e
+        return resp, data
+
+    async def probe(self, timeout: float = PROBE_TIMEOUT) -> None:
+        """用短超时试连一次，本地 API 不可用时抛 ZoteroUnavailableError。"""
+        _, data = await self._get("collections", {"format": "json", "limit": 1}, timeout)
+        if not isinstance(data, list):
+            raise ZoteroUnavailableError("Zotero 本地 API 返回了意外的数据。")
+
     async def _get_all(self, path: str, params: dict | None = None) -> list[dict]:
         out: list[dict] = []
         start = 0
         while True:
             q = {"format": "json", "limit": PAGE_SIZE, "start": start, **(params or {})}
-            try:
-                resp = await self._client.get(path, params=q)
-            except httpx.ConnectError as e:
-                raise ZoteroUnavailableError(
-                    "无法连接 Zotero 本地 API（http://localhost:23119）。"
-                    "请确认 Zotero 7 正在运行且已启用本地 API。"
-                ) from e
-            if resp.status_code in (403, 404) and start == 0 and "users/0" in str(resp.url):
-                raise ZoteroUnavailableError(
-                    f"Zotero 本地 API 返回 {resp.status_code}，可能未在设置中启用本地 API。"
-                )
-            resp.raise_for_status()
+            resp, page = await self._get(path, q)
+            if not isinstance(page, list):
+                raise ZoteroUnavailableError("Zotero 本地 API 返回了意外的数据。")
             if version := resp.headers.get("Last-Modified-Version"):
                 self.library_version = int(version)
-            page = resp.json()
             out.extend(page)
             total = resp.headers.get("Total-Results")
             start += len(page)
