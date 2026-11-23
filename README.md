@@ -4,7 +4,7 @@
 
 项目主页：<https://freeread.work>
 
-> 当前版本 **0.2.3**（新增 macOS 版、原生界面风格）：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
+> 当前版本 **0.2.4**（修复 macOS 版无法启动）：M1（导入、重排、翻译）、M2（总结、问答、批注）已完成，M3 完成了单篇知识图谱与问答树，下一步是跨文献问答与文献引用图。见 [路线图](docs/04-roadmap.md)。
 
 ## 功能
 
@@ -26,7 +26,7 @@
 
 - **Windows 10/11 x64**：安装包（`*-setup.exe`）或便携版（`*-portable.zip`）。程序暂未签名，SmartScreen 提示时选"更多信息 → 仍要运行"。
 - **Linux x86_64**（0.2.1 起）：任意发行版可用免安装的 `*_amd64.AppImage`；Debian / Ubuntu 用 `*_amd64.deb`，Fedora / openSUSE 用 `*.x86_64.rpm`，Arch 等其他发行版用 AppImage。需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12、Fedora 36 及更新）。详见[安装说明](https://docs.freeread.work/install)。
-- **macOS**（Apple 芯片，0.2.3 起）：`*_aarch64.dmg`，需要 macOS 14 以上。暂未公证，首次打开时在 Finder 里右键 › 打开。
+- **macOS**（Apple 芯片，0.2.4 起；0.2.3 的 dmg 无法启动）：`*_aarch64.dmg`，需要 macOS 14 以上。暂未公证，首次打开时在 Finder 里右键 › 打开。
 
 ## 快速上手
 
