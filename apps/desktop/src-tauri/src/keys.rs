@@ -73,6 +73,12 @@ fn update(provider_id: &str, f: impl FnOnce(&mut KeyMap)) -> Result<(), String> 
     save(&map)
 }
 
+/// 删除整个钥匙串条目（设置页「删除应用数据」）。条目不存在也算成功。
+pub fn clear() -> Result<(), String> {
+    let _guard = WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    save(&KeyMap::new())
+}
+
 /// 环境变量值；钥匙串为空或读取失败时返回 None（失败原因写到 stderr，不含密钥）。
 pub fn env_value() -> Option<String> {
     match load() {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { engineOptionLabel, urlHost } from "../features/settings/SettingsView";
+import { DEFAULT_SCOPE, deleteSummary, formatBytes, nothingSelected } from "../features/settings/data";
+import { SETTINGS_SECTIONS } from "../features/settings/sections";
 import { avatarSrc, downloadedHint, formatDate, formatSize, plainNotes } from "../features/settings/about";
 
 const engine = { name: "mineru", label: "MinerU", available: true, heavy: true, location: "local" as const, has_key: false };
@@ -60,5 +62,28 @@ describe("关于：下载完成提示", () => {
     expect(downloadedHint("deb", "/home/a/Downloads/x.deb")).toContain("apt install");
     expect(downloadedHint("rpm", "/home/a/Downloads/x.rpm")).toContain("dnf install");
     expect(downloadedHint("macApp", "/tmp/x.dmg")).toContain("自动重新打开");
+  });
+});
+
+describe("删除应用数据", () => {
+  it("确认文案列出勾选项，一项都没勾时提示", () => {
+    expect(deleteSummary(DEFAULT_SCOPE)).toBe("将删除：文献、笔记与设置、API Key。删除后无法恢复，FreeRead 会自动重启。");
+    expect(deleteSummary({ library: false, keys: false, engines: true })).toContain("将删除：本机解析引擎与模型。");
+    const none = { library: false, keys: false, engines: false };
+    expect(nothingSelected(none)).toBe(true);
+    expect(deleteSummary(none)).toBe("请至少勾选一项。");
+  });
+  it("默认不删引擎与模型", () => {
+    expect(DEFAULT_SCOPE).toEqual({ library: true, keys: true, engines: false });
+  });
+  it("占用大小换算到 GB", () => {
+    expect(formatBytes(0)).toBe("0 KB");
+    expect(formatBytes(2048)).toBe("2 KB");
+    expect(formatBytes(5 * (1 << 20))).toBe("5.0 MB");
+    expect(formatBytes(3.25 * (1 << 30))).toBe("3.3 GB");
+  });
+  it("设置分节里有「数据」，排在「关于」之前", () => {
+    const ids = SETTINGS_SECTIONS.map((s) => s.id);
+    expect(ids.indexOf("data")).toBe(ids.indexOf("about") - 1);
   });
 });

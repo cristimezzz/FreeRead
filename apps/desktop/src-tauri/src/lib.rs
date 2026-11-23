@@ -12,6 +12,7 @@
 //! sidecar 启动后崩溃或中途退出时，壳发 `core-terminated` 事件并记到 [`CoreExitState`]，
 //! 前端不必等满 /health 超时（apps/desktop/src/api/core.ts）。
 
+mod app_data;
 #[cfg(windows)]
 mod job;
 mod keys;
@@ -46,7 +47,7 @@ struct Sidecar {
 }
 
 impl Sidecar {
-    fn shutdown(&self) {
+    pub(crate) fn shutdown(&self) {
         if let Some(child) = self.child.lock().unwrap().take() {
             let _ = child.kill();
         }
@@ -229,6 +230,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             core_info,
             core_status,
+            app_data::app_data_usage,
+            app_data::delete_app_data,
+            app_data::restart_app,
             keys::set_api_key,
             keys::delete_api_key,
             native_look::native_look,

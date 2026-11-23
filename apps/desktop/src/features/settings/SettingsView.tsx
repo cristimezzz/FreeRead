@@ -9,6 +9,7 @@ import { cn } from "../../lib/utils";
 import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
 import { AboutSection } from "./AboutSection";
+import { DataSection } from "./DataSection";
 import {
   installEngine,
   REMOTE_ENGINES,
@@ -529,6 +530,8 @@ export function SettingsView() {
             <Row title="还没有向任何服务发送过文档内容" desc="第一次翻译、总结或问答前会先询问你" />
           )}
         </Group>
+
+        <DataSection title={sectionTitle("data")} />
 
         <AboutSection title={sectionTitle("about")} />
       </div>
