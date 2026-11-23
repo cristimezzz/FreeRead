@@ -192,3 +192,53 @@ async def test_auto_falls_back_to_snapshot(zotero_dir, tmp_path):
     ) as c:
         with pytest.raises(ZoteroUnavailableError, match="也没有在"):
             await c.list_collections()
+
+
+async def test_auto_falls_back_on_timeout(zotero_dir, tmp_path):
+    import httpx
+
+    def handler(request):
+        raise httpx.ReadTimeout("slow", request=request)
+
+    local = LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/",
+        data_dir=zotero_dir,
+        transport=httpx.MockTransport(handler),
+    )
+    async with AutoConnector(local, SqliteSnapshotConnector(zotero_dir, tmp_path / "snap")) as c:
+        assert len(await c.list_collections()) == 2
+        assert c.source_id == "zotero_sqlite"
+        assert "超时" in (c.fallback_reason or "")
+
+
+async def test_auto_fall_back_mid_read(zotero_dir, tmp_path):
+    """探测通过、读条目时本地 API 断开：fall_back 后从快照读。"""
+    import httpx
+
+    def handler(request):
+        if request.url.params.get("limit") == "1":
+            return httpx.Response(200, json=[])
+        raise httpx.ConnectError("gone", request=request)
+
+    local = LocalApiConnector(
+        base_url="http://zotero.test/api/users/0/",
+        data_dir=zotero_dir,
+        transport=httpx.MockTransport(handler),
+    )
+    async with AutoConnector(local, SqliteSnapshotConnector(zotero_dir, tmp_path / "snap")) as c:
+        with pytest.raises(ZoteroUnavailableError):
+            await c.list_collections()
+        assert c.source_id == "zotero_local"
+        assert c.fall_back("gone")
+        assert not c.fall_back("again")  # 已经在用快照
+        assert len(await c.list_collections()) == 2
+        assert {i.key for i in await c.list_items()} == {"PAPER001", "STANDALO"}
+
+
+async def test_auto_fall_back_without_database(tmp_path):
+    async with AutoConnector(
+        unreachable_local(tmp_path / "none"),
+        SqliteSnapshotConnector(tmp_path / "none", tmp_path / "snap"),
+    ) as c:
+        assert not c.fall_back("x")
+        assert c.source_id == "zotero_local"

@@ -473,3 +473,40 @@ def test_sync_request_full_and_state_api(client, inc):
     r = client.post("/library/sync", json={"full": True})
     assert r.status_code == 202 and r.json()["payload"] == {"collection_key": None, "full": True}
     assert client.get("/library/sync/state").json() == []
+
+
+class FlakyAuto(FakeConnector):
+    """模拟 auto 模式：本地 API 读条目时断开，fall_back 后改用快照。"""
+
+    def __init__(self, inner: FakeConnector, can_fall_back=True):
+        super().__init__(inner.collections, inner.items, inner.files)
+        self.source_id, self.incremental = "zotero_local", True
+        self.fallback_reason = None
+        self.can_fall_back = can_fall_back
+
+    async def list_items(self, since_version=None):
+        if self.source_id == "zotero_local":
+            raise ZoteroUnavailableError("无法连接 Zotero 本地 API")
+        return self.items
+
+    def fall_back(self, reason):
+        if not self.can_fall_back or self.source_id != "zotero_local":
+            return False
+        self.source_id, self.incremental, self.fallback_reason = "zotero_sqlite", False, reason
+        return True
+
+
+async def test_sync_falls_back_to_snapshot_mid_read(ctx, zotero):
+    conn = use(ctx, FlakyAuto(zotero))
+    result = await ctx.library.sync_zotero()
+    assert result.source == "zotero_sqlite" and result.full
+    assert result.added == 4 and result.collections == 3
+    assert result.fallback_reason and "本地 API" in result.fallback_reason
+    assert "已改读数据库快照" in result.summary()
+    assert conn.closed
+
+
+async def test_sync_without_fallback_raises(ctx, zotero):
+    use(ctx, FlakyAuto(zotero, can_fall_back=False))
+    with pytest.raises(ZoteroUnavailableError):
+        await ctx.library.sync_zotero()
