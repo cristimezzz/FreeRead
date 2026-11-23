@@ -616,7 +616,69 @@
     }
   }
 
-  latestRelease().then(applyRelease);
+  /* ---------------------------------------------------------------- 按系统推荐 */
+
+  // 识别访客系统，把对应的下载卡片排到前面并标“推荐”。识别不出时保持静态内容（推荐 Windows 安装包）。
+  // ?os=windows|macos|linux|mobile 可以覆盖识别结果，方便检查各系统的样子。
+  const OS_NAME = { windows: "Windows", macos: "macOS", linux: "Linux" };
+
+  function detectOS() {
+    const q = new URLSearchParams(location.search).get("os");
+    if (q && (q in OS_NAME || q === "mobile")) return q;
+    const ua = navigator.userAgent;
+    const p = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
+    if (navigator.userAgentData?.mobile || /android|iphone|ipad|ipod/i.test(ua)) return "mobile";
+    // iPadOS 的 Safari 默认伪装成 Mac，靠触点数区分
+    if (/mac/.test(p) || /mac os x/i.test(ua)) return navigator.maxTouchPoints > 1 ? "mobile" : "macos";
+    if (/win/.test(p) || /windows/i.test(ua)) return "windows";
+    if (/cros|chrome os/i.test(ua + p)) return null;
+    if (/linux/.test(p) || /linux|x11/i.test(ua)) return "linux";
+    return null;
+  }
+
+  const visitorOS = detectOS();
+
+  function recommend() {
+    const cards = $$(".dl .card[data-os]");
+    if (!cards.length) return;
+    const pickFor = (os) => cards.find((c) => c.dataset.os === os && "pick" in c.dataset && !c.hidden);
+    const target = (visitorOS && pickFor(visitorOS)) || pickFor("windows");
+    const matched = target && target.dataset.os === visitorOS;
+    for (const c of cards) {
+      c.classList.toggle("os-match", matched && c.dataset.os === visitorOS);
+      const rec = $(".rec", c);
+      if (rec) rec.hidden = c !== target;
+      $(":scope > a.btn", c)?.classList.toggle("primary", c === target);
+    }
+
+    const name = $("[data-os-name]");
+    if (name) {
+      name.textContent = matched ? `${OS_NAME[visitorOS]} 版 ` : "";
+      name.hidden = !matched;
+    }
+
+    const hint = $("[data-os-hint]");
+    if (!hint) return;
+    hint.replaceChildren();
+    if (matched) {
+      hint.textContent = `检测到你在用 ${OS_NAME[visitorOS]}，对应的安装包已排在最前。`;
+    } else if (visitorOS === "mobile") {
+      hint.textContent = "FreeRead 是桌面应用，请在 Windows、Linux 或 macOS 电脑上下载。";
+    } else if (visitorOS) {
+      const a = document.createElement("a");
+      a.href = `https://github.com/${REPO}/releases`;
+      a.textContent = "Releases";
+      hint.append(`检测到你在用 ${OS_NAME[visitorOS]}，最新版暂未提供这个系统的安装包，可以到 `, a, " 查看。");
+    }
+    hint.hidden = !hint.childNodes.length;
+  }
+
+  recommend();
+  latestRelease().then((rel) => {
+    applyRelease(rel);
+    // dmg 卡片可能这时才显示出来
+    recommend();
+  });
 
   allSegs().forEach(placeThumb);
 })();

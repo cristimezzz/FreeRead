@@ -2092,6 +2092,23 @@ img {
   grid-column: 1 / -1;
 }
 
+/* 访客系统对应的卡片排到前面（app.js 的 recommend） */
+.dl .card.os-match {
+  order: -1;
+}
+
+.dl-os {
+  max-width: 880px;
+  margin: 0 auto 16px;
+  color: var(--ink3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.rec[hidden] {
+  display: none;
+}
+
 .dl .card h3 {
   display: flex;
   align-items: center;

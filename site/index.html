@@ -110,7 +110,7 @@
             FreeRead 是本地优先的学术文献阅读器：从 Zotero 导入文献库，把 PDF 重排为易读版式，再用你自己的大模型翻译、总结、问答和抽取知识图谱——每句结论都能跳回原文。
           </p>
           <div class="hero-cta rv" style="--i: 4">
-            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 <span data-rel="version">最新版</span></a>
+            <a class="btn primary lg" href="#download"><svg class="ico"><use href="#i-download" /></svg>下载 <span data-os-name hidden></span><span data-rel="version">最新版</span></a>
             <a class="btn lg" href="https://github.com/cristimezzz/FreeRead"><svg class="ico"><use href="#i-github" /></svg>查看源码</a>
           </div>
           <div class="hero-meta rv" style="--i: 5">
@@ -610,26 +610,28 @@
             <h2>现在就开始读</h2>
             <p>支持 Windows 10 / 11 x64、Linux x86_64<span data-needs-asset="dmg" hidden> 和 macOS 14 以上（Apple 芯片）</span>。免费、开源，以 AGPL-3.0-or-later 发布。</p>
           </div>
+          <!-- 按访客系统推荐（app.js 的 recommend）：对应系统的卡片排到前面，目标卡显示“推荐”并换成主按钮；无 JS 时推荐 Windows 安装包 -->
+          <p class="dl-os" data-os-hint hidden></p>
           <div class="dl">
-            <div class="card rv">
+            <div class="card rv" data-os="windows" data-pick>
               <h3>Windows 安装包 <span class="rec">推荐</span></h3>
               <div class="file" data-asset="setup">FreeRead_*_x64-setup.exe</div>
               <p>安装到当前用户目录，不需要管理员权限；缺少 WebView2 时自动安装。</p>
               <a class="btn primary" data-asset="setup" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>下载安装包</a>
             </div>
-            <div class="card rv" style="--i: 1">
+            <div class="card rv" style="--i: 1" data-os="windows">
               <h3>Windows 便携版</h3>
               <div class="file" data-asset="portable">FreeRead_*_x64-portable.zip</div>
               <p>解压后运行 freeread-desktop.exe；文献库和设置仍保存在 %APPDATA%\FreeRead，和安装版共用。</p>
               <a class="btn" data-asset="portable" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>下载便携版</a>
             </div>
-            <div class="card rv" style="--i: 2">
-              <h3>Linux AppImage</h3>
+            <div class="card rv" style="--i: 2" data-os="linux" data-pick>
+              <h3>Linux AppImage <span class="rec" hidden>推荐</span></h3>
               <div class="file" data-asset="appimage">FreeRead_*_amd64.AppImage</div>
               <p>任意发行版免安装：加上可执行权限后直接运行，需要 FUSE 2。</p>
               <a class="btn" data-asset="appimage" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>下载 AppImage</a>
             </div>
-            <div class="card rv" style="--i: 3">
+            <div class="card rv" style="--i: 3" data-os="linux">
               <h3>Linux 软件包</h3>
               <div class="file"><span data-asset="deb">FreeRead_*_amd64.deb</span> · <span data-asset="rpm">FreeRead-*.x86_64.rpm</span></div>
               <p>Debian / Ubuntu 用 deb，Fedora / openSUSE 用 rpm；Arch 等其他发行版用 AppImage。</p>
@@ -639,8 +641,8 @@
               </div>
             </div>
             <!-- 最新 Release 里有 dmg 时才显示（app.js 的 applyRelease） -->
-            <div class="card rv wide" style="--i: 4" data-needs-asset="dmg" hidden>
-              <h3>macOS</h3>
+            <div class="card rv wide" style="--i: 4" data-needs-asset="dmg" data-os="macos" data-pick hidden>
+              <h3>macOS <span class="rec" hidden>推荐</span></h3>
               <div class="file" data-asset="dmg">FreeRead_*_aarch64.dmg</div>
               <p>Apple 芯片（M1 及更新），macOS 14 以上。打开 dmg 把 FreeRead 拖进“应用程序”；暂未公证，首次打开时在 Finder 里右键 › 打开。</p>
               <a class="btn" data-asset="dmg" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>下载 dmg</a>
