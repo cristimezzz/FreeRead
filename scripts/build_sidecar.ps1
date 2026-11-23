@@ -40,8 +40,11 @@ New-Item -ItemType Directory -Force $Build | Out-Null
 
 Write-Host "==> Python $PythonVersion 构建环境：$Venv"
 if (-not (Test-Path $Python)) {
-    uv venv $Venv --python $PythonVersion
+    # 只用 uv 自管的 Python，原因见 scripts/build_sidecar.sh（sqlite3 要支持加载扩展）
+    uv venv $Venv --python $PythonVersion --managed-python
 }
+& $Python -c "import sqlite3; sqlite3.connect(':memory:').enable_load_extension(True)"
+if ($LASTEXITCODE -ne 0) { throw "$Python 的 sqlite3 不支持加载扩展（sqlite-vec 需要）；删掉 $Venv 后重跑" }
 uv pip install --python $Python $Core "pyinstaller>=6.10"
 
 # PyInstaller 入口：直接用包内模块作脚本会丢失包上下文，这里生成一个最小入口。

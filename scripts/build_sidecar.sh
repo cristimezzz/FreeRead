@@ -34,7 +34,13 @@ esac
 mkdir -p "$build"
 
 echo "==> Python $python_version 构建环境：$venv"
-[ -x "$python" ] || uv venv "$venv" --python "$python_version"
+# 只用 uv 自管的 Python（python-build-standalone）：macOS 上 python.org 安装包和部分系统 Python 的
+# sqlite3 编译时没开扩展加载，打出来的 sidecar 一连数据库就因 enable_load_extension 不存在而崩溃。
+[ -x "$python" ] || uv venv "$venv" --python "$python_version" --managed-python
+"$python" -c "import sqlite3; sqlite3.connect(':memory:').enable_load_extension(True)" || {
+  echo "$python 的 sqlite3 不支持加载扩展（sqlite-vec 需要）；删掉 $venv 后重跑" >&2
+  exit 1
+}
 uv pip install --python "$python" "$core" "pyinstaller>=6.10"
 
 # PyInstaller 入口：直接用包内模块作脚本会丢失包上下文，这里生成一个最小入口。
