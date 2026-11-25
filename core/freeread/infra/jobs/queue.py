@@ -34,6 +34,7 @@ class JobOut(BaseModel):
     id: str
     kind: str
     payload: dict[str, Any]
+    document_title: str | None
     status: JobStatus
     progress: float
     message: str | None

@@ -4979,6 +4979,17 @@
             "type": "object",
             "title": "Payload"
           },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
@@ -5055,6 +5066,7 @@
           "id",
           "kind",
           "payload",
+          "document_title",
           "status",
           "progress",
           "message",

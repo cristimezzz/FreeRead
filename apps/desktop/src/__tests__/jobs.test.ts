@@ -5,6 +5,7 @@ import { jobRows } from "../features/jobs/jobList";
 const job = (p: Partial<Job> & Pick<Job, "id">): Job => ({
   kind: "parse",
   payload: {},
+  document_title: null,
   status: "queued",
   progress: 0,
   message: null,
@@ -21,11 +22,11 @@ describe("jobRows", () => {
   it("puts running jobs first, then queued jobs in claim order with positions", () => {
     const rows = jobRows([
       job({ id: "q2", created_at: "2026-10-22T00:00:02" }),
-      job({ id: "r1", kind: "translate_doc", status: "running", progress: 0.42 }),
+      job({ id: "r1", kind: "translate_doc", document_title: "论文 A", status: "running", progress: 0.42 }),
       job({ id: "q1", kind: "sync", created_at: "2026-10-22T00:00:01" }),
     ]);
     expect(rows.map((r) => [r.job.id, r.label, r.status, r.progress])).toEqual([
-      ["r1", "翻译全文", "42%", 0.42],
+      ["r1", "翻译全文 · 论文 A", "42%", 0.42],
       ["q1", "同步 Zotero", "排队第 1 位", null],
       ["q2", "快速解析", "排队第 2 位", null],
     ]);

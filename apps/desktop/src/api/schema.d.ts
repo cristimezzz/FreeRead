@@ -1458,6 +1458,8 @@ export interface components {
             payload: {
                 [key: string]: unknown;
             };
+            /** Document Title */
+            document_title: string | null;
             status: components["schemas"]["JobStatus"];
             /** Progress */
             progress: number;
