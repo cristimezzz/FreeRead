@@ -13,8 +13,9 @@ import asyncio
 import hashlib
 import json
 import math
-import time
+from collections import deque
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 import httpx
@@ -29,6 +30,8 @@ from freeread.infra.parsers.remote_common import RemoteClient, RemoteParseError,
 
 TERMINAL = {"completed", "partial", "failed", "canceled"}
 POLL_TIMEOUT = 3600.0
+# 解析任务会创建新的 parser 实例，提交额度由进程内的所有实例共享。
+_SUBMISSIONS: deque[float] = deque(maxlen=10)
 
 
 def _strip_images(o: Any) -> None:
@@ -108,6 +111,13 @@ class MinerUApiParser:
                 "output_formats": ["middle_json"],
                 "tier": self._tier,
             }
+            while len(_SUBMISSIONS) == _SUBMISSIONS.maxlen:
+                delay = _SUBMISSIONS[0] + 60 - monotonic()
+                if delay <= 0:
+                    break
+                progress(0.05, "MinerU：等待提交额度")
+                await asyncio.sleep(delay)
+            _SUBMISSIONS.append(monotonic())
             job = await cli.json("POST", "/v1/parse/jobs", json=body)
             try:
                 job = await self._wait(cli, job, progress)
@@ -193,9 +203,9 @@ class MinerUApiParser:
     async def _wait(
         self, cli: RemoteClient, job: dict[str, Any], progress: ProgressCb
     ) -> dict[str, Any]:
-        started = time.monotonic()
+        started = monotonic()
         while job.get("status") not in TERMINAL:
-            elapsed = time.monotonic() - started
+            elapsed = monotonic() - started
             if elapsed > POLL_TIMEOUT:
                 raise RemoteParseError("timeout", "MinerU：任务一小时内未完成")
             if job.get("status") == "running":
