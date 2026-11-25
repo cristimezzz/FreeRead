@@ -263,15 +263,15 @@ async def test_provider_max_concurrency_limits_parallel_calls(ctx, gateway):
 
 def test_provider_max_concurrency_default_and_bounds():
     p = ProviderConfig(id="p1", name="P1", base_url="http://x/v1")
-    assert p.max_concurrency == 4
+    assert p.max_concurrency == 8
     for bad in (0, 33):
         with pytest.raises(ValueError):
             ProviderConfig(id="p1", name="P1", base_url="http://x/v1", max_concurrency=bad)
 
 
 def test_unrouted_task_uses_default_concurrency(gateway):
-    assert gateway.concurrency(TaskKind.QA) == 4  # QA → 总结 → 翻译，回退到 p1 的默认值
-    assert gateway.concurrency(TaskKind.KG_EXTRACT) == 4
+    assert gateway.concurrency(TaskKind.QA) == 8  # QA → 总结 → 翻译，回退到 p1 的默认值
+    assert gateway.concurrency(TaskKind.KG_EXTRACT) == 8
 
 
 async def test_token_bucket_waits_when_empty(monkeypatch):

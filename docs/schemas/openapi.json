@@ -5277,7 +5277,7 @@
             "maximum": 32.0,
             "minimum": 1.0,
             "title": "Max Concurrency",
-            "default": 4
+            "default": 8
           }
         },
         "additionalProperties": false,

@@ -23,14 +23,14 @@ describe("向导写入大模型服务", () => {
     const { settings, id } = applyWelcomeProvider(base, { ...providerPreset("openai_compatible"), name: "  " }, null);
     expect(id).toBe("provider1");
     expect(settings.providers).toEqual([
-      { id: "provider1", kind: "openai_compatible", name: "OpenAI 兼容服务", base_url: "https://api.openai.com/v1", max_concurrency: 4 },
+      { id: "provider1", kind: "openai_compatible", name: "OpenAI 兼容服务", base_url: "https://api.openai.com/v1", max_concurrency: 8 },
     ]);
     expect(settings.routes).toEqual({ translate: { provider_id: "provider1", model: "gpt-4o-mini" } });
   });
 
   it("再次保存时更新同一个服务，不新增", () => {
-    const first = applyWelcomeProvider(base, providerPreset("openai_compatible"), null);
-    const again = applyWelcomeProvider(first.settings, { ...providerPreset("ollama"), model: "llama3" }, first.id);
+    const first = { ...base, providers: [deepseek], routes: { translate: { provider_id: deepseek.id, model: "deepseek-chat" } } } as Settings;
+    const again = applyWelcomeProvider(first, { ...providerPreset("ollama"), model: "llama3" }, deepseek.id);
     expect(again.id).toBe("provider1");
     expect(again.settings.providers).toHaveLength(1);
     expect(again.settings.providers[0]).toMatchObject({ kind: "ollama", base_url: "http://127.0.0.1:11434/v1", max_concurrency: 4 });

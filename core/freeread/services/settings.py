@@ -47,7 +47,7 @@ class Appearance(_Strict):
 
 
 PARSER_KEY_PREFIX = "parser-"
-DEFAULT_PROVIDER_CONCURRENCY = 4
+DEFAULT_PROVIDER_CONCURRENCY = 8
 
 
 class ProviderConfig(_Strict):
