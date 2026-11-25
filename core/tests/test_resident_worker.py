@@ -8,7 +8,7 @@ import pytest
 
 from freeread.infra.parsers.base import ParserCaps
 from freeread.infra.parsers.registry import ParserRegistry
-from freeread.infra.parsers.resident import ResidentEngineParser, WorkerError
+from freeread.infra.parsers.resident import ResidentEngineParser, ResidentParserPool, WorkerError
 from freeread.infra.parsers.subprocess_engine import engine_env
 
 FAKE_WORKER = Path(__file__).parent / "fixtures" / "workers" / "fake_worker.py"
@@ -54,6 +54,22 @@ async def test_reuses_one_process_and_passes_options(tmp_path):
     assert not parser.running
     # 引擎打到 stdout 的内容进了日志，没有破坏协议
     assert "noise on stdout" in (tmp_path / "logs" / "fake-worker.log").read_text()
+
+
+async def test_resident_pool_adds_a_worker_for_parallel_parses_and_reuses_it(tmp_path):
+    pool = ResidentParserPool(lambda: make_parser(tmp_path))
+
+    async def parse(name):
+        return await pool.parse(pdf(tmp_path, f"{name}.pdf"), tmp_path / name, lambda p, m: None)
+
+    try:
+        first = await asyncio.gather(parse("a"), parse("b"))
+        second = await asyncio.gather(parse("c"), parse("d"))
+        assert pid_of(first[0].raw_dir) != pid_of(first[1].raw_dir)
+        assert [pid_of(raw.raw_dir) for raw in first] == [pid_of(raw.raw_dir) for raw in second]
+    finally:
+        await pool.close()
+    assert not any(worker.running for worker in pool._workers)
 
 
 async def test_error_is_reported_and_worker_restarts(tmp_path):
@@ -135,7 +151,8 @@ def test_registry_passes_device_to_local_engines():
     registry = ParserRegistry(device=lambda: device["value"])
     docling = registry.get("docling").make_parser()
     mineru = registry.get("mineru").make_parser()
+    worker = mineru._workers[0]
     assert docling._device() == "gpu"
-    assert mineru._current_env()["MINERU_DEVICE_MODE"] == "cuda"
+    assert worker._current_env()["MINERU_DEVICE_MODE"] == "cuda"
     device["value"] = "cpu"
-    assert mineru._current_env()["MINERU_DEVICE_MODE"] == "cpu"
+    assert worker._current_env()["MINERU_DEVICE_MODE"] == "cpu"

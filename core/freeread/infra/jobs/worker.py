@@ -1,6 +1,6 @@
 """asyncio 任务执行器。见 docs/01-architecture.md §5.8。
 
-- 每种任务注册一个 handler，可设并发上限（解析为 1，避免显存争用）和最大尝试次数；
+- 每种任务注册一个 handler，可设并发上限和最大尝试次数；
 - 没有注册 handler 的任务保持 queued，不会被取走；
 - 用户取消 → cancelled；应用退出时被中断的任务放回 queued，下次启动继续。
 """
@@ -12,8 +12,10 @@ from collections import Counter
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from sqlalchemy import ColumnElement
+
 from freeread.infra.jobs.events import EventBus
-from freeread.infra.jobs.queue import FINISHED, JobOut, JobQueue, JobStatus
+from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 
 log = logging.getLogger(__name__)
 
@@ -22,12 +24,14 @@ log = logging.getLogger(__name__)
 class JobContext:
     job: JobOut
     queue: JobQueue
+    partition: str | None = None
 
     async def report(self, progress: float, message: str | None = None) -> None:
         await asyncio.to_thread(self.queue.report, self.job.id, progress, message)
 
 
 Handler = Callable[[JobContext], Awaitable[None]]
+Partitions = Callable[[], dict[str, tuple[int, ColumnElement[bool]]]]
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,7 @@ class JobSpec:
     handler: Handler
     concurrency: int = 1
     max_attempts: int = 1
+    partitions: Partitions | None = None
 
 
 class JobWorker:
@@ -50,15 +55,21 @@ class JobWorker:
         self._specs: dict[str, JobSpec] = {}
         self._max = max_concurrency
         self._poll = poll_interval
-        self._running: dict[str, tuple[str, asyncio.Task[None]]] = {}  # job_id → (kind, task)
+        self._running: dict[str, tuple[str, str | None, asyncio.Task[None]]] = {}
         self._user_cancelled: set[str] = set()
         self._wake = asyncio.Event()
         self._tasks: list[asyncio.Task[None]] = []
 
     def register(
-        self, kind: str, handler: Handler, *, concurrency: int = 1, max_attempts: int = 1
+        self,
+        kind: str,
+        handler: Handler,
+        *,
+        concurrency: int = 1,
+        max_attempts: int = 1,
+        partitions: Partitions | None = None,
     ) -> None:
-        self._specs[kind] = JobSpec(handler, concurrency, max_attempts)
+        self._specs[kind] = JobSpec(handler, concurrency, max_attempts, partitions)
 
     @property
     def running_ids(self) -> set[str]:
@@ -76,7 +87,7 @@ class JobWorker:
     async def stop(self) -> None:
         for task in self._tasks:
             task.cancel()
-        running = [task for _, task in self._running.values()]
+        running = [task for _, _, task in self._running.values()]
         for task in running:
             task.cancel()
         await asyncio.gather(*self._tasks, *running, return_exceptions=True)
@@ -85,9 +96,10 @@ class JobWorker:
     async def cancel(self, job_id: str) -> JobOut | None:
         if job_id in self._running:
             self._user_cancelled.add(job_id)
-            self._running[job_id][1].cancel()
+            task = self._running[job_id][2]
+            task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._running[job_id][1]
+                await task
             return await asyncio.to_thread(self.queue.get, job_id)
         return await asyncio.to_thread(self.queue.cancel, job_id)
 
@@ -116,19 +128,51 @@ class JobWorker:
                     await self._wake.wait()
 
     async def _fill(self) -> None:
-        while len(self._running) < self._max:
-            counts = Counter(kind for kind, _ in self._running.values())
-            full = {k for k, spec in self._specs.items() if counts[k] >= spec.concurrency}
-            job = await asyncio.to_thread(self.queue.claim_next, set(self._specs), full)
-            if job is None:
-                return
-            task = asyncio.create_task(self._execute(job), name=f"job-{job.kind}-{job.id}")
-            self._running[job.id] = (job.kind, task)
+        regular = {
+            kind: spec.concurrency for kind, spec in self._specs.items() if spec.partitions is None
+        }
+        for _ in range(self._max):
+            counts = Counter(
+                kind for kind, partition, _ in self._running.values() if partition is None
+            )
+            if sum(counts.values()) >= self._max:
+                break
+            eligible = {kind for kind, limit in regular.items() if counts[kind] < limit}
+            if not await self._claim(eligible):
+                break
 
-    async def _execute(self, job: JobOut) -> None:
+        # 独立的并发额度允许 API 满载时继续调度其余后台任务。
+        for kind, spec in self._specs.items():
+            if spec.partitions is None:
+                continue
+            for partition, (limit, where) in (await asyncio.to_thread(spec.partitions)).items():
+                active = sum((k, p) == (kind, partition) for k, p, _ in self._running.values())
+                for _ in range(limit - active):
+                    if not await self._claim({kind}, partition, where):
+                        break
+
+    async def _claim(
+        self,
+        kinds: set[str],
+        partition: str | None = None,
+        where: ColumnElement[bool] | None = None,
+    ) -> bool:
+        if not kinds:
+            return False
+        # 处理器可能已把任务放回队列，但还没从运行列表退出。
+        job = await asyncio.to_thread(
+            self.queue.claim_next, kinds, where=where, exclude_ids=tuple(self._running)
+        )
+        if job is None:
+            return False
+        task = asyncio.create_task(self._execute(job, partition), name=f"job-{job.kind}-{job.id}")
+        self._running[job.id] = (job.kind, partition, task)
+        return True
+
+    async def _execute(self, job: JobOut, partition: str | None) -> None:
         spec = self._specs[job.kind]
         try:
-            await spec.handler(JobContext(job, self.queue))
+            await spec.handler(JobContext(job, self.queue, partition))
         except asyncio.CancelledError:
             if job.id in self._user_cancelled:
                 await asyncio.to_thread(self.queue.finish, job.id, JobStatus.CANCELLED)
@@ -142,7 +186,7 @@ class JobWorker:
             await asyncio.to_thread(self.queue.finish, job.id, status, error)
         else:
             current = await asyncio.to_thread(self.queue.get, job.id)
-            if current is not None and current.status not in FINISHED:
+            if current is not None and current.status == JobStatus.RUNNING:
                 await asyncio.to_thread(self.queue.finish, job.id, JobStatus.DONE)
         finally:
             self._running.pop(job.id, None)

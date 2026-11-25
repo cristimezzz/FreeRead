@@ -1,3 +1,4 @@
+import asyncio
 import time
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from freeread.infra.zotero.base import Attachment, Collection, Item
 from freeread.infra.zotero.local_api import ZoteroUnavailableError
 from freeread.services import library as library_mod
 from freeread.services.library import InvalidImportError, doc_id_for, sha256_file
+from tests.test_jobs import wait_status
 
 
 def write_pdf(path: Path, body: str, title: str | None = None) -> Path:
@@ -158,6 +160,35 @@ async def test_collection_scope_includes_subcollections(ctx, zotero):
     assert parse_jobs(ctx) == expected
     # 元数据仍是全量
     assert ctx.library.list_items().total == 4
+
+
+async def test_zotero_metadata_only_item_waits_for_a_pdf(ctx, tmp_path):
+    item = Item(key="NO_PDF", version=1, item_type="journalArticle", title="Metadata only")
+    zotero = use(ctx, FakeConnector([], [item], {}))
+    result = await ctx.library.sync_zotero()
+    entry = ctx.library.list_items().items[0]
+    assert entry.title == item.title and entry.documents == []
+    assert result.parse_jobs == []
+
+    item.attachments.append(pdf_att("ATT"))
+    zotero.files["ATT"] = pdf = write_pdf(tmp_path / "attached.pdf", "The newly attached PDF")
+    result = await ctx.library.sync_zotero()
+    doc = ctx.library.get_item(entry.id).documents[0]
+    assert doc.file_exists and len(result.parse_jobs) == 1
+    hq = ctx.jobs.enqueue("parse_hq", {"doc_id": doc.doc_id, "engine": "mineru"})
+    pdf.unlink()
+
+    ctx.bus.bind_loop(asyncio.get_running_loop())
+    await ctx.worker.start()
+    try:
+        for job_id in [*result.parse_jobs, hq.id]:
+            job = await wait_status(ctx, job_id, JobStatus.DONE, JobStatus.FAILED)
+            assert job.status == JobStatus.DONE and job.message == "无 PDF，已跳过解析"
+    finally:
+        await ctx.worker.stop()
+    assert not ctx.library.get_item(entry.id).documents[0].file_exists
+    assert ctx.parse.get(doc.doc_id).parse_status == "pending"
+    assert len(ctx.jobs.list(kind="parse_hq")) == 1
 
 
 async def test_unknown_collection_is_rejected(ctx, zotero):
@@ -466,6 +497,19 @@ async def test_incremental_collection_sync_still_parses_unchanged_items(ctx, inc
     assert not result.full
     expected = {doc_id_for(sha256_file(inc.files[k])) for k in ("ATT_A", "ATT_B")}
     assert parse_jobs(ctx) == expected | {c_doc}
+
+
+async def test_incremental_sync_skips_an_unchanged_item_with_a_missing_file(ctx, inc):
+    use(ctx, inc)
+    await ctx.library.sync_zotero("OTHER")
+    inc.files["ATT_A"].unlink()
+
+    result = await ctx.library.sync_zotero("ROOT")
+
+    assert not result.full
+    doc = ctx.library.list_items(q="Attention").items[0].documents[0]
+    assert not doc.file_exists and doc.doc_id not in parse_jobs(ctx)
+    assert len(result.parse_jobs) == 1  # ROOT 下另一篇有 PDF 的文献照常排队
 
 
 def test_sync_request_full_and_state_api(client, inc):

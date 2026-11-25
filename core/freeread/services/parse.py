@@ -2,7 +2,7 @@
 
 任务：
 - parse（快速模式，并发 2）：PyMuPDF 秒级出可读 IR；完成后按设置追加 parse_hq；
-- parse_hq（高质量引擎，全局并发 1，避免显存争用）：MinerU / Docling 升级 IR。
+- parse_hq（高质量引擎，本机并发可设、API 并发 8）：MinerU / Docling 升级 IR。
 重新解析时按 IR §8 迁移块 ID，译文跟着新块走，无法映射的标记 stale。
 原生输出保存在 documents/<doc_id>/raw/<engine>/，已有完整输出（engine.json）时只重新规范化。
 """
@@ -50,6 +50,14 @@ log = logging.getLogger(__name__)
 
 ASSET_DPI = 150
 Progress = Callable[[float, str | None], Awaitable[None]]
+
+
+class _ParseLocationChanged(Exception):
+    pass
+
+
+class _MissingPdfError(FileNotFoundError):
+    pass
 
 
 class DocumentOut(BaseModel):
@@ -268,26 +276,41 @@ class ParseService:
             if spec is None or version == spec.normalizer.version or doc_id in active:
                 continue
             marker = self._paths.document_dir(doc_id) / "raw" / engine / "engine.json"
-            if not marker.is_file() or not spec.available():
+            if not marker.is_file() or not spec.available() or self.pdf_path(doc_id) is None:
                 continue
             kind = "parse_hq" if spec.heavy else "parse"
             out.append(self._jobs.enqueue(kind, {"doc_id": doc_id, "engine": engine}).id)
         return out
 
     async def run_parse_job(self, ctx: JobContext) -> None:
-        p = ctx.job.payload
-        engine = p.get("engine") or "pymupdf"
-        outcome = await self.run(p["doc_id"], engine, ctx.report, force=p.get("force", False))
-        await ctx.report(1.0, outcome.summary())
-        await self._after_parse(p["doc_id"], outcome)
-        if "engine" not in p:
-            await asyncio.to_thread(self._chain_hq, p["doc_id"])
+        await self._run_job(ctx, ctx.job.payload.get("engine") or "pymupdf")
 
     async def run_parse_hq_job(self, ctx: JobContext) -> None:
+        await self._run_job(ctx, ctx.job.payload["engine"])
+
+    async def _run_job(self, ctx: JobContext, engine: str) -> None:
         p = ctx.job.payload
-        outcome = await self.run(p["doc_id"], p["engine"], ctx.report, force=p.get("force", False))
+        doc_id = p["doc_id"]
+        try:
+            outcome = await self.run(
+                doc_id,
+                engine,
+                ctx.report,
+                force=p.get("force", False),
+                partition=ctx.partition,
+            )
+        except _ParseLocationChanged:
+            # 排队期间可能切换了本机/API；按新位置重新调度同一个任务。
+            await asyncio.to_thread(ctx.queue.finish, ctx.job.id, JobStatus.QUEUED)
+            return
+        except _MissingPdfError:
+            await asyncio.to_thread(self._publish_document, doc_id)
+            await ctx.report(1.0, "无 PDF，已跳过解析")
+            return
         await ctx.report(1.0, outcome.summary())
-        await self._after_parse(p["doc_id"], outcome)
+        await self._after_parse(doc_id, outcome)
+        if ctx.job.kind == "parse" and "engine" not in p:
+            await asyncio.to_thread(self._chain_hq, doc_id)
 
     async def _after_parse(self, doc_id: str, outcome: "ParseOutcome") -> None:
         if outcome.status in ("parsed", "renormalized") and self.on_blocks_replaced:
@@ -315,17 +338,27 @@ class ParseService:
     # ------------------------------------------------------------ 解析
 
     async def run(
-        self, doc_id: str, engine: str, progress: Progress, force: bool = False
+        self,
+        doc_id: str,
+        engine: str,
+        progress: Progress,
+        force: bool = False,
+        *,
+        partition: str | None = None,
     ) -> ParseOutcome:
         async with self._doc_locks[doc_id]:
-            return await self._run_locked(doc_id, engine, progress, force)
+            return await self._run_locked(doc_id, engine, progress, force, partition)
 
     async def _run_locked(
-        self, doc_id: str, engine: str, progress: Progress, force: bool
+        self, doc_id: str, engine: str, progress: Progress, force: bool, partition: str | None
     ) -> ParseOutcome:
         spec = self.registry.get(engine)
-        _ensure_available(spec)
+        if spec.snapshot is not None:
+            spec = spec.snapshot()
+        if partition is not None and partition != spec.location():
+            raise _ParseLocationChanged
         info = await asyncio.to_thread(self._load, doc_id)
+        _ensure_available(spec)
 
         if not force and info.parse_status == "ready" and info.parser_engine:
             current = self.registry.engines.get(info.parser_engine)
@@ -372,8 +405,7 @@ class ParseService:
         await asyncio.to_thread(_render_assets, doc, info.pdf, doc_dir / "assets")
         await progress(0.95, "写入文献库")
         migrated, stale = await asyncio.to_thread(self._store, info, spec, raw, doc)
-        out = self.get(info.doc_id)
-        self._bus.publish("document", out.model_dump(mode="json"))
+        self._publish_document(info.doc_id)
         if problems:
             log.info("%s: %d IR problems from %s", info.doc_id, len(problems), spec.name)
         return ParseOutcome(status, len(doc.blocks), migrated, stale, len(problems))
@@ -386,7 +418,7 @@ class ParseService:
             info = (row.pdf_sha256, row.parse_status, row.parser_engine, row.normalizer_version)
         pdf = self.pdf_path(doc_id)
         if pdf is None:
-            raise FileNotFoundError(f"找不到文档 {doc_id} 的 PDF 文件")
+            raise _MissingPdfError(f"找不到文档 {doc_id} 的 PDF 文件")
         return _DocInfo(doc_id, *info, pdf=pdf)
 
     def _set_status(self, doc_id: str, status: str) -> None:
@@ -394,6 +426,9 @@ class ParseService:
             s.execute(
                 update(DocumentRow).where(DocumentRow.doc_id == doc_id).values(parse_status=status)
             )
+        self._publish_document(doc_id)
+
+    def _publish_document(self, doc_id: str) -> None:
         out = self.get(doc_id)
         if out:
             self._bus.publish("document", out.model_dump(mode="json"))

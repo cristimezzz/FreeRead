@@ -1,7 +1,7 @@
 """已知解析引擎及其可用性。见 ADR-0003、ADR-0008。
 
 - pymupdf：快速模式，随 sidecar 分发，总是可用；
-- mineru：默认高质量引擎，本机为常驻 worker（进程在本注册表内共享）；
+- mineru：默认高质量引擎，本机按需复用多个常驻 worker；
 - docling：备选高质量引擎，本机每篇起一个子进程。
 重型引擎的本机模式需要 <engines_root>/<engine>/ 下的独立 Python 环境（或环境变量
 FREEREAD_<ENGINE>_PYTHON）：开发时为仓库下的 .engines/，打包版由设置里的"安装"创建（installer.py）。
@@ -10,7 +10,7 @@ mineru / docling 也可以设为 API 模式（settings.parsers），改为调用
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -34,9 +34,10 @@ class EngineSpec:
     make_parser: Callable[[], Parser]
     normalizer: Normalizer
     available: Callable[[], bool]
-    heavy: bool  # 重型引擎走 parse_hq 任务（全局并发 1）
+    heavy: bool  # 重型引擎走 parse_hq 任务
     location: Callable[[], Literal["local", "api"]] = field(default=lambda: "local")
     unavailable_reason: Callable[[], UnavailableReason | None] = field(default=lambda: None)
+    snapshot: "Callable[[], EngineSpec] | None" = None
 
 
 class ParserRegistry:
@@ -54,15 +55,15 @@ class ParserRegistry:
         from freeread.infra.parsers.mineru import MinerUNormalizer
         from freeread.infra.parsers.mineru_api import MinerUApiParser
         from freeread.infra.parsers.pymupdf_fast import PyMuPDFFastNormalizer, PyMuPDFFastParser
-        from freeread.infra.parsers.resident import mineru_resident
+        from freeread.infra.parsers.resident import ResidentParserPool, mineru_resident
 
-        self._mineru = None
+        self._mineru: ResidentParserPool | None = None
         remote_of = remote or (lambda engine: None)
         secret_of = secret or (lambda engine: None)
 
         def mineru_local() -> Parser:
             if self._mineru is None:
-                self._mineru = mineru_resident(log_dir, device)
+                self._mineru = ResidentParserPool(lambda: mineru_resident(log_dir, device))
             return self._mineru
 
         def api_parser(engine: str, cfg: "RemoteParser") -> Parser:
@@ -72,8 +73,7 @@ class ParserRegistry:
             return DoclingServeParser(cfg.base_url, key)
 
         def heavy(engine: str, label: str, rank: int, local: Callable[[], Parser], normalizer):
-            def reason() -> UnavailableReason | None:
-                cfg = remote_of(engine)
+            def reason(cfg: "RemoteParser | None") -> UnavailableReason | None:
                 if cfg is None:
                     return None if engine_python(engine).is_file() else "not_installed"
                 if not cfg.base_url:
@@ -82,21 +82,35 @@ class ParserRegistry:
                     return "consent_required"
                 return None
 
-            def make() -> Parser:
-                cfg = remote_of(engine)
+            def make(cfg: "RemoteParser | None") -> Parser:
                 return local() if cfg is None else api_parser(engine, cfg)
 
-            return EngineSpec(
+            def snapshot() -> EngineSpec:
+                # 同一次解析用同一份配置判断运行位置、上传同意和服务地址。
+                cfg = remote_of(engine)
+                unavailable = reason(cfg)
+                return replace(
+                    spec,
+                    make_parser=lambda: make(cfg),
+                    available=lambda: unavailable is None,
+                    location=lambda: "local" if cfg is None else "api",
+                    unavailable_reason=lambda: unavailable,
+                    snapshot=None,
+                )
+
+            spec = EngineSpec(
                 engine,
                 label,
                 rank,
-                make,
+                lambda: make(remote_of(engine)),
                 normalizer,
-                lambda: reason() is None,
+                lambda: reason(remote_of(engine)) is None,
                 heavy=True,
                 location=lambda: "local" if remote_of(engine) is None else "api",
-                unavailable_reason=reason,
+                unavailable_reason=lambda: reason(remote_of(engine)),
+                snapshot=snapshot,
             )
+            return spec
 
         self.engines: dict[str, EngineSpec] = {
             "pymupdf": EngineSpec(

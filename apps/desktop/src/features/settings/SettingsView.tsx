@@ -394,7 +394,7 @@ export function SettingsView() {
               />
             );
           })}
-          <More defaultOpen={settings.parse_device !== "auto"}>
+          <More defaultOpen={settings.parse_device !== "auto" || settings.local_parse_concurrency !== 1}>
             <Row title="解析设备" desc="只影响在本机运行的 MinerU 和 Docling。GPU 需要 NVIDIA 显卡；改动从下一次解析开始生效">
               <OptionToggle
                 label="解析设备"
@@ -405,6 +405,15 @@ export function SettingsView() {
                   { value: "cpu", label: "CPU" },
                 ]}
                 onValue={(parse_device) => update({ parse_device })}
+              />
+            </Row>
+            <Row title="本机解析并发" desc="本机 MinerU 和 Docling 共享的并发上限，默认 1。调高会增加内存或显存占用。API 模式的并发为 8">
+              <OptionSelect
+                label="本机解析并发"
+                hideLabel
+                value={String(settings.local_parse_concurrency)}
+                options={Array.from({ length: 32 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                onValue={(value) => update({ local_parse_concurrency: Number(value) })}
               />
             </Row>
           </More>

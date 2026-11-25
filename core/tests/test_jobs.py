@@ -5,6 +5,7 @@ import pytest
 from freeread.infra.db.models import JobRow
 from freeread.infra.jobs.queue import JobStatus
 from freeread.infra.jobs.worker import JobContext, JobWorker
+from freeread.services.parse import ParseOutcome
 
 
 async def wait_status(ctx, job_id, *statuses, timeout=5.0):
@@ -106,6 +107,67 @@ async def test_per_kind_concurrency_limit(ctx, worker):
     for job in jobs:
         await wait_status(ctx, job.id, JobStatus.DONE)
     assert peak == 1
+
+
+async def test_parse_partitions_have_independent_limits_and_reload_settings(ctx, monkeypatch):
+    settings = ctx.settings.get()
+    settings.parsers.docling.mode = "api"
+    ctx.settings.put(settings)
+    release = {
+        doc: asyncio.Event() for doc in ["quick", "l0", "l1", "l2", *(f"a{i}" for i in range(9))]
+    }
+
+    async def parse(doc_id, engine, progress, force=False, *, partition=None):
+        assert partition == {"mineru": "local", "docling": "api", "pymupdf": None}[engine]
+        await release[doc_id].wait()
+        return ParseOutcome("cached")
+
+    monkeypatch.setattr(ctx.parse, "run", parse)
+    local = [
+        ctx.jobs.enqueue("parse_hq", {"engine": "mineru", "doc_id": f"l{i}"}) for i in range(3)
+    ]
+    api = [ctx.jobs.enqueue("parse_hq", {"engine": "docling", "doc_id": f"a{i}"}) for i in range(9)]
+    quick = ctx.jobs.enqueue("parse", {"engine": "pymupdf", "doc_id": "quick"})
+    ctx.bus.bind_loop(asyncio.get_running_loop())
+    await ctx.worker.start()
+    try:
+        for job in [local[0], *api[:8], quick]:
+            await wait_status(ctx, job.id, JobStatus.RUNNING)
+        assert ctx.jobs.get(local[1].id).status == JobStatus.QUEUED
+        assert ctx.jobs.get(api[8].id).status == JobStatus.QUEUED
+
+        settings.local_parse_concurrency = 2
+        ctx.settings.put(settings)
+        ctx.worker.wake()
+        await wait_status(ctx, local[1].id, JobStatus.RUNNING)
+        settings.local_parse_concurrency = 1
+        ctx.settings.put(settings)
+        release["l0"].set()
+        release["a0"].set()
+        await wait_status(ctx, api[8].id, JobStatus.RUNNING)
+        assert ctx.jobs.get(local[2].id).status == JobStatus.QUEUED
+        release["l1"].set()
+        await wait_status(ctx, local[2].id, JobStatus.RUNNING)
+
+        for event in release.values():
+            event.set()
+        for job in [*local, *api, quick]:
+            await wait_status(ctx, job.id, JobStatus.DONE)
+    finally:
+        await ctx.worker.stop()
+
+
+async def test_parse_job_requeues_if_its_mode_changed_after_claim(ctx):
+    job = ctx.jobs.enqueue("parse_hq", {"engine": "mineru", "doc_id": "queued-document"})
+    claimed = ctx.jobs.claim_next({"parse_hq"})
+    assert claimed is not None
+    settings = ctx.settings.get()
+    settings.parsers.mineru.mode = "api"
+    ctx.settings.put(settings)
+
+    await ctx.parse.run_parse_hq_job(JobContext(claimed, ctx.jobs, "local"))
+
+    assert ctx.jobs.get(job.id).status == JobStatus.QUEUED
 
 
 async def test_cancel_running_and_queued(ctx, worker):
