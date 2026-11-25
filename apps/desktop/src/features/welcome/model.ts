@@ -78,7 +78,7 @@ export function applyWelcomeProvider(
     let n = settings.providers.length + 1;
     while (settings.providers.some((p) => p.id === `provider${n}`)) n++;
     id = `provider${n}`;
-    providers = [...settings.providers, { id, max_concurrency: 4, ...fields }];
+    providers = [...settings.providers, { id, max_concurrency: 8, ...fields }];
   }
   const route = settings.routes.translate;
   const routes =

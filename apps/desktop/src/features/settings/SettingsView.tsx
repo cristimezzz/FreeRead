@@ -120,7 +120,7 @@ export function SettingsView() {
       kind: "openai_compatible",
       name: "OpenAI 兼容服务",
       base_url: "https://api.openai.com/v1",
-      max_concurrency: 4,
+      max_concurrency: 8,
     };
     const routes = settings.routes.translate
       ? settings.routes

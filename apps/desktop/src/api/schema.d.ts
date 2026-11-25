@@ -1565,7 +1565,7 @@ export interface components {
             base_url: string;
             /**
              * Max Concurrency
-             * @default 4
+             * @default 8
              */
             max_concurrency: number;
         };
