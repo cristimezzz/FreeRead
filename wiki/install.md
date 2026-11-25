@@ -90,6 +90,8 @@ FreeRead 目前没有代码签名，SmartScreen 会拦截首次运行。点 **�
 
 ## 卸载
 
+卸载前可以在 **设置 › 数据 › 删除应用数据** 按项清除本机数据。应用会在删除成功后重启。各系统的手动清除路径见 [隐私与数据](/privacy#删除应用数据)。
+
 **Windows**：在“设置 › 应用”里卸载 FreeRead。卸载程序里可以勾选 **删除应用数据**：勾选后会一起删除 `%APPDATA%\FreeRead`（文献库、解析结果、译文等）和凭据管理器里保存的 API Key；不勾选则全部保留，重装后可继续使用。
 
 **Linux**：用包管理器卸载，软件包名是 `free-read`：
@@ -101,8 +103,8 @@ sudo dnf remove free-read      # Fedora
 
 AppImage 直接删掉文件即可。
 
-卸载不会删除数据。要彻底清除，再删掉 `~/.local/share/FreeRead`，并在“密码和密钥”（Seahorse）或 KWallet 里删除名为 FreeRead 的条目。
+Linux 卸载后会保留本机数据和 API Key。
 
-**macOS**：退出 FreeRead 后把“应用程序”里的 FreeRead 移到废纸篓。数据不会一起删除；要彻底清除，再删掉 `~/Library/Application Support/FreeRead`，并在“钥匙串访问”里删除名为 FreeRead 的条目。
+**macOS**：退出 FreeRead 后把“应用程序”里的 FreeRead 移到废纸篓。本机数据和 API Key 会保留。
 
 下一步：[快速上手](/quick-start)

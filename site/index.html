@@ -435,8 +435,8 @@
             <h2>读论文要用的，都在这里</h2>
           </div>
           <div class="features rv">
-            <div class="feature"><svg class="ico"><use href="#i-library" /></svg><h3>文献库</h3><p>从 Zotero 7 导入分类和条目，增量同步；Zotero 没开时读数据库快照，也能直接导入 PDF。</p></div>
-            <div class="feature"><svg class="ico"><use href="#i-book" /></svg><h3>阅读器</h3><p>原版、并排、重排三种视图，双向定位；公式、表格、图片照原样渲染。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-library" /></svg><h3>文献库</h3><p>从 Zotero 7 增量同步分类和条目，也能直接导入 PDF。缺少本地 PDF 的 Zotero 条目会保留题录并跳过解析。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-book" /></svg><h3>阅读器</h3><p>原版、并排、重排三种视图，双向定位。重排保留子图布局，宽表可横向滚动。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-search" /></svg><h3>文内检索</h3><p>关键词加语义的混合检索，结果直接跳到原文段落。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-layers" /></svg><h3>解析引擎</h3><p>内置 PyMuPDF；一键安装 MinerU / Docling，或连接远程服务，单篇可换引擎重解析。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-translate" /></svg><h3>翻译</h3><p>块级翻译，可视区域优先；四种显示方式；整篇后台翻译后离线可读；术语表可编辑。</p></div>
@@ -444,7 +444,7 @@
             <div class="feature"><svg class="ico"><use href="#i-qa" /></svg><h3>问答树</h3><p>每一问一答是一张卡片，可以追问、重答、另起，选中回答里的文字就此追问；引用都经过校验。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-graph" /></svg><h3>知识图谱</h3><p>抽取一篇论文的方法、数据集、指标和它们的关系，每条关系都带出处；3D 云图浏览，点一下回到原文。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-edit" /></svg><h3>批注与导出</h3><p>在重排视图里高亮、写批注；连同总结、正文和译文导出为 Markdown。</p></div>
-            <div class="feature"><svg class="ico"><use href="#i-checks" /></svg><h3>批量整理</h3><p>复选框、Shift 连选、Ctrl 点选，批量复制引用或移除；任务条点开看全部进度。</p></div>
+            <div class="feature"><svg class="ico"><use href="#i-checks" /></svg><h3>批量整理</h3><p>复选框、Shift 连选、Ctrl 点选，批量复制引用或移除；点开任务条可查看正在处理和排队的文献标题。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-wand" /></svg><h3>欢迎向导</h3><p>第一次打开时一步步配好大模型、解析服务，并决定是否从 Zotero 导入。</p></div>
             <div class="feature"><svg class="ico"><use href="#i-sync" /></svg><h3>应用内更新</h3><p>在设置 › 关于里检查新版本，下载后校验 sha256；安装版装完自动重新打开。</p></div>
           </div>
@@ -608,7 +608,7 @@
           <div class="sec-head rv">
             <div class="eyebrow">下载 · <span data-rel="version">最新版</span></div>
             <h2>现在就开始读</h2>
-            <p>支持 Windows 10 / 11 x64、Linux x86_64<span data-needs-asset="dmg" hidden> 和 macOS 14 以上（Apple 芯片）</span>。免费、开源，以 AGPL-3.0-or-later 发布。</p>
+            <p>支持 Windows 10 / 11 x64、Linux x86_64<span data-needs-asset="dmg"> 和 macOS 14 以上（Apple 芯片）</span>。免费、开源，以 AGPL-3.0-or-later 发布。</p>
           </div>
           <!-- 按访客系统推荐（app.js 的 recommend）：对应系统的卡片排到前面，目标卡显示“推荐”并换成主按钮；无 JS 时推荐 Windows 安装包 -->
           <p class="dl-os" data-os-hint hidden></p>
@@ -640,8 +640,7 @@
                 <a class="btn" data-asset="rpm" href="https://github.com/cristimezzz/FreeRead/releases/latest"><svg class="ico"><use href="#i-download" /></svg>rpm</a>
               </div>
             </div>
-            <!-- 最新 Release 里有 dmg 时才显示（app.js 的 applyRelease） -->
-            <div class="card rv wide" style="--i: 4" data-needs-asset="dmg" data-os="macos" data-pick hidden>
+            <div class="card rv wide" style="--i: 4" data-needs-asset="dmg" data-os="macos" data-pick>
               <h3>macOS <span class="rec" hidden>推荐</span></h3>
               <div class="file" data-asset="dmg">FreeRead_*_aarch64.dmg</div>
               <p>Apple 芯片（M1 及更新），macOS 14 以上。打开 dmg 把 FreeRead 拖进“应用程序”；暂未公证，首次打开时在 Finder 里右键 › 打开。</p>
