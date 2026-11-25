@@ -1,10 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { act, createElement } from "react";
+import { createRoot } from "react-dom/client";
+import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../api/ir";
 import { createSseParser, type SseEvent } from "../api/sse";
 import { buildTree } from "../features/library/CollectionTree";
 import { formatAuthors } from "../features/library/ItemList";
 import { blockAt, buildPageIndex } from "../features/reader/locate";
 import { renderTableHtml, splitPlaceholders } from "../features/reader/render";
+import { TableScroll } from "../features/reader/TableScroll";
 import { themeVars } from "../app/theme";
 
 const block = (id: string, page: number, bbox: [number, number, number, number], extra: Partial<Block> = {}): Block => ({
@@ -70,6 +73,58 @@ describe("render", () => {
     expect(html).not.toMatch(/<script|alert|onclick|onerror|color:red|<img/);
     expect(html).toContain('colspan="2"');
     expect(html).toContain("katex");
+  });
+});
+
+describe("table scrolling", () => {
+  it("drags only overflowing tables and preserves click-to-locate on ordinary clicks", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const locate = vi.fn();
+    try {
+      await act(() => root.render(createElement("div", { onClick: locate },
+        createElement(TableScroll, { label: "Table 1", html: "<table><tbody><tr><td>Cell</td></tr></tbody></table>" }),
+      )));
+      const region = host.querySelector<HTMLElement>("[role=region]")!;
+      expect(region.tabIndex).toBe(0);
+      expect(region.getAttribute("aria-label")).toBe("Table 1");
+      expect(region.querySelector("td")?.textContent).toBe("Cell");
+      Object.defineProperties(region, {
+        clientWidth: { value: 200 },
+        clientHeight: { value: 100 },
+        scrollWidth: { value: 400, configurable: true },
+        setPointerCapture: { value: vi.fn() },
+      });
+      const pointer = (type: string, x: number, y = 20) => region.dispatchEvent(new PointerEvent(type, {
+        bubbles: true, cancelable: true, pointerType: "mouse", pointerId: 1, clientX: x, clientY: y,
+      }));
+
+      pointer("pointerdown", 100);
+      pointer("pointermove", 98); // movement below the drag threshold
+      pointer("pointerup", 98);
+      region.click();
+      expect(locate).toHaveBeenCalledTimes(1);
+
+      pointer("pointerdown", 100);
+      pointer("pointermove", 55);
+      pointer("pointerup", 55);
+      pointer("lostpointercapture", 55);
+      region.click();
+      expect(region.scrollLeft).toBe(45);
+      expect(locate).toHaveBeenCalledTimes(1);
+
+      Object.defineProperty(region, "scrollWidth", { value: 200 });
+      pointer("pointerdown", 100);
+      pointer("pointermove", 40);
+      pointer("pointerup", 40);
+      region.click();
+      expect(region.scrollLeft).toBe(45);
+      expect(locate).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(() => root.unmount());
+      vi.unstubAllGlobals();
+    }
   });
 });
 

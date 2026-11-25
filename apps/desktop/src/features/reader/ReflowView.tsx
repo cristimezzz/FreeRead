@@ -2,7 +2,7 @@
 // 点击 → 原版定位；可视区域上报给翻译；译文按 对照 / 交替 / 仅译文 显示。
 // 原文选中文字后浮出高亮工具条；已有高亮画成 <mark>（features/annotations）。
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Block, Document } from "../../api/ir";
 import { TRANSLATABLE } from "../../api/ir";
 import { pulse } from "../../components/motion";
@@ -10,6 +10,9 @@ import { type Mark, placeSegments, selectionRange, splitByMarks } from "../annot
 import { COLORS, type AnnotationColor } from "../annotations/useAnnotations";
 import { Shimmer } from "../../components/ai-elements/shimmer";
 import type { TranslationState } from "../translate/useTranslations";
+import { FigureGroupView } from "./FigureGroupView";
+import { groupFigures } from "./figureLayout";
+import { TableScroll } from "./TableScroll";
 import { useAssetUrl } from "./useAssetUrl";
 import { renderMath, renderTableHtml } from "./render";
 
@@ -83,7 +86,16 @@ export function ReflowView(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.scrollKey]);
 
-  const assets = useMemo(() => new Map(p.doc.assets.map((a) => [a.id, a])), [p.doc]);
+  const assetPaths = useMemo(() => new Map(p.doc.assets.map((a) => [a.id, a.path])), [p.doc]);
+  const { engine, engine_version, created_at } = p.doc.parser;
+  const figureVersion = `${engine}:${engine_version}:${created_at}`;
+  const { figures, grouped } = useMemo(() => {
+    const groups = groupFigures(p.doc.blocks);
+    return {
+      figures: new Map(groups.map((group) => [group.caption.id, group])),
+      grouped: new Set(groups.flatMap(({ panels, labels }) => [...panels, ...labels].map(({ block }) => block.id))),
+    };
+  }, [p.doc]);
 
   // 选中原文 → 浮出高亮工具条（fixed 定位在选区上方）
   const [toolbar, setToolbar] = useState<Toolbar | null>(null);
@@ -153,22 +165,44 @@ export function ReflowView(p: Props) {
         onMouseUp={onMouseUp}
         onMouseDown={() => toolbar && setToolbar(null)}
       >
-        {p.doc.blocks.map((b) => (
-          <BlockView
-            key={b.id}
-            block={b}
-            docId={p.doc.doc_id}
-            assetPath={b.asset_id ? assets.get(b.asset_id)?.path : undefined}
-            assetVersion={p.doc.parser.created_at}
-            mode={TRANSLATABLE.has(b.type) ? p.mode : "off"}
-            translation={p.translations[b.id]}
-            located={p.located === b.id}
-            onLocate={p.onLocate}
-            marks={p.marks?.[b.id] ?? NO_MARKS}
-            wholeMark={p.wholeMarks?.[b.id]}
-            onMarkClick={p.onMarkClick}
-          />
-        ))}
+        {p.doc.blocks.map((b) => {
+          if (grouped.has(b.id)) return null;
+          const block = (
+            <BlockView
+              key={b.id}
+              block={b}
+              docId={p.doc.doc_id}
+              assetPath={b.asset_id ? assetPaths.get(b.asset_id) : undefined}
+              assetVersion={created_at}
+              mode={TRANSLATABLE.has(b.type) ? p.mode : "off"}
+              translation={p.translations[b.id]}
+              located={p.located === b.id}
+              onLocate={p.onLocate}
+              marks={p.marks?.[b.id] ?? NO_MARKS}
+              wholeMark={p.wholeMarks?.[b.id]}
+              onMarkClick={p.onMarkClick}
+            />
+          );
+          const group = figures.get(b.id);
+          if (!group) return block;
+          const figure = (
+            <FigureGroupView
+              key={`${p.doc.doc_id}:${figureVersion}:${b.id}:${group.page}:${group.bbox.join(",")}`}
+              group={group}
+              docId={p.doc.doc_id}
+              version={figureVersion}
+              assetPaths={assetPaths}
+              located={p.located}
+              wholeMarks={p.wholeMarks}
+              onLocate={p.onLocate}
+            />
+          );
+          return (
+            <Fragment key={b.id}>
+              {group.captionAbove ? [block, figure] : [figure, block]}
+            </Fragment>
+          );
+        })}
       </article>
     </div>
   );
@@ -337,11 +371,11 @@ function BlockBody({
       );
     case "table":
       return block.html ? (
-        <div className="rf-table" dangerouslySetInnerHTML={{ __html: renderTableHtml(block.html) }} />
+        <TableScroll label={block.label ?? "表格"} html={renderTableHtml(block.html)} />
       ) : (
-        <figure>
+        <TableScroll label={block.label ?? "表格"}>
           <AssetImage docId={docId} path={assetPath} version={assetVersion} alt={block.label ?? "表"} />
-        </figure>
+        </TableScroll>
       );
     case "caption":
       return <p className="rf-caption">{inline}</p>;
