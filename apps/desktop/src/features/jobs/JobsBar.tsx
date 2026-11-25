@@ -17,7 +17,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
 import { Progress } from "../../components/ui/progress";
 import { cn } from "../../lib/utils";
-import { jobRows, KIND_LABEL } from "./jobList";
+import { jobLabel, jobRows } from "./jobList";
 
 export function JobsBar() {
   const jobs = useApp((s) => s.jobs);
@@ -40,21 +40,21 @@ export function JobsBar() {
   if (!active.length) return null;
   const running = active.filter((j) => j.status === "running");
   const current = running[0] ?? active[0];
-  const label = KIND_LABEL[current.kind] ?? current.kind;
+  const label = jobLabel(current);
   const rows = jobRows(active);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="text-foreground/80 hover:bg-accent aria-expanded:bg-accent focus-visible:outline-ring flex min-h-11 w-full flex-none flex-wrap items-center gap-3.5 border-t px-12 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 max-[900px]:px-6 [&>[data-slot=progress]]:w-28"
+          className="text-foreground/80 hover:bg-accent aria-expanded:bg-accent focus-visible:outline-ring flex min-h-11 w-full flex-none items-center gap-3.5 border-t px-12 text-left text-[13px] transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 max-[900px]:px-6 [&>[data-slot=progress]]:w-28"
         >
           <Progress value={current.status === "queued" || current.progress === 0 ? undefined : current.progress * 100} />
-          <span className="min-w-0 truncate" role="status" aria-live="polite">
+          <span className="min-w-0 truncate" title={label} role="status" aria-live="polite">
             {label}
             {current.message ? `：${current.message}` : ""}
           </span>
-          <span className="text-muted-foreground ml-auto">
+          <span className="text-muted-foreground ml-auto shrink-0">
             {running.length} 个进行中，{active.length - running.length} 个排队
           </span>
         </button>
@@ -90,7 +90,7 @@ export function JobsBar() {
                       <QueueItem key={r.job.id}>
                         <div className="flex items-baseline gap-2">
                           <QueueItemIndicator />
-                          <QueueItemContent className="min-w-0 flex-1 truncate">{r.label}</QueueItemContent>
+                          <QueueItemContent title={r.label} className="min-w-0 flex-1 truncate">{r.label}</QueueItemContent>
                           <span
                             className={cn(
                               "flex-none tabular-nums",

@@ -16,8 +16,9 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    select,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, column_property, mapped_column
 
 from freeread.infra.db.base import Base, new_ulid, utcnow
 
@@ -387,6 +388,15 @@ class JobRow(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_ulid)
     kind: Mapped[str] = mapped_column(String)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    document_title = column_property(
+        select(ItemRow.title)
+        .join(AttachmentRow, AttachmentRow.item_id == ItemRow.id)
+        .where(AttachmentRow.doc_id == payload["doc_id"].as_string())
+        .order_by(AttachmentRow.id)
+        .limit(1)
+        .scalar_subquery(),
+        expire_on_flush=False,
+    )
     # queued | running | done | failed | cancelled
     status: Mapped[str] = mapped_column(String, default="queued")
     progress: Mapped[float] = mapped_column(Float, default=0.0)

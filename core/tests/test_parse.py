@@ -61,6 +61,10 @@ async def test_fast_parse_stores_ir_blocks_and_backfills_title(ctx, tmp_path):
     item_id, doc_id = import_synthetic(ctx, tmp_path, "scan_0001.pdf", strip_metadata=True)
     assert ctx.library.get_item(item_id).title == "scan_0001"
 
+    job = ctx.jobs.enqueue("parse", {"doc_id": doc_id})
+    assert job.document_title == "scan_0001"
+    assert ctx.jobs.list(kind="parse")[0].document_title == "scan_0001"
+
     reports = []
     outcome = await ctx.parse.run(doc_id, "pymupdf", lambda p, m=None: noop(reports.append(p)))
     assert outcome.status == "parsed" and outcome.blocks == 23 and outcome.problems == 0

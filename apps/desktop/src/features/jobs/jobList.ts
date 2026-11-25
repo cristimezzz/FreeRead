@@ -13,6 +13,11 @@ export const KIND_LABEL: Record<string, string> = {
   kg_extract: "抽取图谱",
 };
 
+export function jobLabel(job: Job): string {
+  const kind = KIND_LABEL[job.kind] ?? job.kind;
+  return job.document_title ? `${kind} · ${job.document_title}` : kind;
+}
+
 export interface JobRow {
   job: Job;
   label: string;
@@ -35,13 +40,13 @@ export function jobRows(active: Job[]): JobRow[] {
   return [
     ...running.map((job) => ({
       job,
-      label: KIND_LABEL[job.kind] ?? job.kind,
+      label: jobLabel(job),
       progress: job.progress > 0 ? job.progress : undefined,
       status: job.progress > 0 ? `${Math.round(job.progress * 100)}%` : "进行中",
     })),
     ...queued.map((job, i) => ({
       job,
-      label: KIND_LABEL[job.kind] ?? job.kind,
+      label: jobLabel(job),
       progress: null,
       status: job.depends_on && pending.has(job.depends_on) ? "等待前置任务" : `排队第 ${i + 1} 位`,
     })),
