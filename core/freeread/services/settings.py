@@ -48,6 +48,7 @@ class Appearance(_Strict):
 
 PARSER_KEY_PREFIX = "parser-"
 DEFAULT_PROVIDER_CONCURRENCY = 8
+API_PARSE_CONCURRENCY = 8
 
 
 class ProviderConfig(_Strict):
@@ -129,6 +130,7 @@ class AppSettings(_Strict):
     parsers: ParserServices = ParserServices()
     # 本机 MinerU / Docling 的运行设备；auto 由引擎自行检测（有 CUDA 用 GPU），API 模式不受影响
     parse_device: Literal["auto", "gpu", "cpu"] = "auto"
+    local_parse_concurrency: int = Field(default=1, strict=True, ge=1, le=32)
     # 安装本机 MinerU / Docling 时的 PyPI 镜像（simple 索引地址）；空为官方 PyPI。PyTorch 不受影响
     pypi_mirror: str = Field(default="", pattern=r"^(https?://\S+)?$")
     providers: list[ProviderConfig] = []

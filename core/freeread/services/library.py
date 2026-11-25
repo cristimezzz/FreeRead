@@ -487,18 +487,10 @@ class LibraryService:
         return doc_id
 
     def _enqueue_parse(self, doc_ids: list[str]) -> list[str]:
-        """为待解析（pending / failed）且没有排队中解析任务的文档建 parse 任务。"""
+        """为有本地 PDF 且没有进行中任务的待解析文档建 parse 任务。"""
         if not doc_ids:
             return []
         with self._sessions() as s:
-            needs = set(
-                s.scalars(
-                    select(DocumentRow.doc_id).where(
-                        DocumentRow.doc_id.in_(doc_ids),
-                        DocumentRow.parse_status.in_(["pending", "failed"]),
-                    )
-                )
-            )
             active = set(
                 s.scalars(
                     select(JobRow.payload["doc_id"].as_string()).where(
@@ -507,9 +499,18 @@ class LibraryService:
                     )
                 )
             )
-        return [
-            self._jobs.enqueue("parse", {"doc_id": d}).id for d in doc_ids if d in needs - active
-        ]
+            candidates = s.execute(
+                select(AttachmentRow.doc_id, AttachmentRow.path)
+                .join(DocumentRow, DocumentRow.doc_id == AttachmentRow.doc_id)
+                .where(
+                    DocumentRow.doc_id.in_(doc_ids),
+                    DocumentRow.parse_status.in_(["pending", "failed"]),
+                )
+            ).all()
+        needs = {
+            doc_id for doc_id, path in candidates if doc_id not in active and Path(path).is_file()
+        }
+        return [self._jobs.enqueue("parse", {"doc_id": d}).id for d in doc_ids if d in needs]
 
     # ------------------------------------------------------------ 手动导入
 

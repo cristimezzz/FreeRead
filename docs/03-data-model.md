@@ -304,7 +304,7 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 改为问答树（迁�
 | 列 | 说明 |
 |---|---|
 | id PK | |
-| kind | M1：`sync`、`parse`（快速模式，并发 2）、`parse_hq`（MinerU / Docling，全局并发 1）；另有 `embed`、`model_download`、`glossary_extract`、`translate_doc`、`kg_extract`（M3，嵌入完成后按设置 `kg.auto` 自动排队）。块级翻译不走任务队列，由 `POST /translate/blocks` 以 SSE 流式完成 |
+| kind | M1：`sync`、`parse`（快速模式，并发 2）、`parse_hq`（MinerU / Docling，本机并发默认 1、可配置，API 并发 8）；另有 `embed`、`model_download`、`glossary_extract`、`translate_doc`、`kg_extract`（M3，嵌入完成后按设置 `kg.auto` 自动排队）。块级翻译不走任务队列，由 `POST /translate/blocks` 以 SSE 流式完成 |
 | payload | JSON |
 | status | `queued` / `running` / `done` / `failed` / `cancelled` |
 | progress | REAL 0–1 |

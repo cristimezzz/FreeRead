@@ -1037,6 +1037,11 @@ export interface components {
              */
             parse_device: "auto" | "gpu" | "cpu";
             /**
+             * Local Parse Concurrency
+             * @default 1
+             */
+            local_parse_concurrency: number;
+            /**
              * Pypi Mirror
              * @default
              */

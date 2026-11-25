@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, update
+from sqlalchemy import ColumnElement, select, update
 from sqlalchemy.orm import aliased
 
 from freeread.infra.db.base import utcnow
@@ -106,12 +106,17 @@ class JobQueue:
             )
             return result.rowcount
 
-    def claim_next(self, kinds: set[str], exclude_kinds: set[str] = frozenset()) -> JobOut | None:
+    def claim_next(
+        self,
+        kinds: set[str],
+        *,
+        where: ColumnElement[bool] | None = None,
+        exclude_ids: tuple[str, ...] = (),
+    ) -> JobOut | None:
         """取出最早的可运行任务并置为 running。
 
         前置任务失败或取消的任务直接标记为 cancelled，不会运行。
         """
-        kinds = kinds - exclude_kinds
         if not kinds:
             return None
         dep = aliased(JobRow)
@@ -131,7 +136,7 @@ class JobQueue:
                 s.flush()
                 self._emit(row)
 
-            row = s.scalars(
+            query = (
                 select(JobRow)
                 .outerjoin(dep, JobRow.depends_on == dep.id)
                 .where(
@@ -141,7 +146,12 @@ class JobQueue:
                 )
                 .order_by(JobRow.created_at, JobRow.id)
                 .limit(1)
-            ).first()
+            )
+            if where is not None:
+                query = query.where(where)
+            if exclude_ids:
+                query = query.where(JobRow.id.not_in(exclude_ids))
+            row = s.scalars(query).first()
             if row is None:
                 return None
             row.status = JobStatus.RUNNING

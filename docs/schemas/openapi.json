@@ -3989,6 +3989,13 @@
             "title": "Parse Device",
             "default": "auto"
           },
+          "local_parse_concurrency": {
+            "type": "integer",
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Local Parse Concurrency",
+            "default": 1
+          },
           "pypi_mirror": {
             "type": "string",
             "pattern": "^(https?://\\S+)?$",

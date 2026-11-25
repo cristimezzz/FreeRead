@@ -1,10 +1,11 @@
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../api/ir";
 import { createSseParser, type SseEvent } from "../api/sse";
 import { buildTree } from "../features/library/CollectionTree";
-import { formatAuthors } from "../features/library/ItemList";
+import { formatAuthors, ItemList } from "../features/library/ItemList";
 import { blockAt, buildPageIndex } from "../features/reader/locate";
 import { renderTableHtml, splitPlaceholders } from "../features/reader/render";
 import { TableScroll } from "../features/reader/TableScroll";
@@ -129,6 +130,26 @@ describe("table scrolling", () => {
 });
 
 describe("library helpers", () => {
+  it("marks a Zotero entry without a PDF", () => {
+    const html = renderToStaticMarkup(createElement(ItemList, {
+      onOpen: vi.fn(),
+      items: [{
+        id: "item",
+        zotero_key: "ZOTERO",
+        item_type: "journalArticle",
+        title: "Metadata only",
+        authors: [],
+        year: null,
+        venue: null,
+        doi: null,
+        status: "active",
+        created_at: "2026-11-25T00:00:00Z",
+        documents: [],
+      }],
+    }));
+    expect(html).toContain("无 PDF");
+  });
+
   it("builds a sorted collection tree from the flat list", () => {
     const tree = buildTree([
       { id: "c", zotero_key: null, name: "翻译", parent_id: "a", item_count: 1 },

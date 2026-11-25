@@ -3,11 +3,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, func
 
 from freeread.config import DataPaths
 from freeread.infra.db import migrate
 from freeread.infra.db.engine import SessionFactory, make_engine, make_session_factory
+from freeread.infra.db.models import JobRow
 from freeread.infra.jobs.events import EventBus
 from freeread.infra.jobs.queue import JobQueue
 from freeread.infra.jobs.worker import JobWorker
@@ -28,7 +29,7 @@ from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
 from freeread.services.search import SearchService
-from freeread.services.settings import PARSER_KEY_PREFIX, SettingsService
+from freeread.services.settings import API_PARSE_CONCURRENCY, PARSER_KEY_PREFIX, SettingsService
 from freeread.services.summary import SummaryService
 from freeread.services.translate import TranslateService
 
@@ -100,8 +101,18 @@ class AppContext:
         )
         parse = ParseService(sessions, paths, jobs, bus, settings, registry)
         parse.has_key = lambda engine: secrets.has(PARSER_KEY_PREFIX + engine)
+
+        def parse_partitions():
+            cfg = settings.get()
+            api_engines = [name for name, parser in cfg.parsers if parser.mode == "api"]
+            api = func.coalesce(JobRow.payload["engine"].as_string(), "").in_(api_engines)
+            return {
+                "local": (cfg.local_parse_concurrency, ~api),
+                "api": (API_PARSE_CONCURRENCY, api),
+            }
+
         worker.register("parse", parse.run_parse_job, concurrency=2)
-        worker.register("parse_hq", parse.run_parse_hq_job, concurrency=1)
+        worker.register("parse_hq", parse.run_parse_hq_job, partitions=parse_partitions)
         worker.register("engine_install", parse.run_engine_install_job, concurrency=1)
         prompts = PromptRegistry()
         llm = DefaultGateway(settings, sessions, secrets)

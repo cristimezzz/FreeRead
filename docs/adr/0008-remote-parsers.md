@@ -50,8 +50,7 @@ MinerU 4.x 的 v1 REST 协议对本机 `mineru-api` 和云端 `https://mineru.ne
 - 负面：
   - 选了公网服务后，PDF 原文会离开本机（需要用户明确同意）。
   - 远程服务的版本不受 FreeRead 控制，Normalizer 可能遇到没测过的输出。
-  - `parse_hq` 仍是全局并发 1，远程解析不占本机 GPU，但也不能并行。
 - 跟进：
   - `standard` / `advanced` 档位的输出需要用评测集回归（`scripts/m0_report.py`）。
-  - 远程引擎允许更高的并发。
+  - API 解析现已支持 8 篇并发，与本机解析各用独立额度。
   - docling-serve 没有取消接口，任务取消后服务端仍会跑完。

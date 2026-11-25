@@ -62,6 +62,10 @@ class ResidentEngineParser:
     def running(self) -> bool:
         return self._proc is not None and self._proc.returncode is None
 
+    @property
+    def busy(self) -> bool:
+        return self._lock.locked()
+
     async def parse(self, pdf: Path, out_dir: Path, progress: ProgressCb) -> RawLayout:
         async with self._lock:
             if self._idle_task:
@@ -151,12 +155,13 @@ class ResidentEngineParser:
             self._log_file = None
 
     async def close(self) -> None:
-        if self._idle_task:
-            self._idle_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._idle_task
-            self._idle_task = None
-        await self._stop()
+        async with self._lock:
+            if self._idle_task:
+                self._idle_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._idle_task
+                self._idle_task = None
+            await self._stop()
 
 
 def mineru_resident(
@@ -172,3 +177,30 @@ def mineru_resident(
         log_path=log_dir / "mineru-worker.log" if log_dir else None,
         options={"effort": "medium"},
     )
+
+
+class ResidentParserPool:
+    """每个进程一次处理一篇，进程数随实际并发按需增长。"""
+
+    def __init__(self, make_worker: Callable[[], ResidentEngineParser]) -> None:
+        self._make_worker = make_worker
+        first = make_worker()
+        self._workers = [first]
+        self.name = first.name
+        self.version = first.version
+        self._closing = asyncio.Lock()
+
+    def capabilities(self) -> ParserCaps:
+        return self._workers[0].capabilities()
+
+    async def parse(self, pdf: Path, out_dir: Path, progress: ProgressCb) -> RawLayout:
+        async with self._closing:
+            worker = next((w for w in self._workers if not w.busy), None)
+            if worker is None:
+                worker = self._make_worker()
+                self._workers.append(worker)
+        return await worker.parse(pdf, out_dir, progress)
+
+    async def close(self) -> None:
+        async with self._closing:
+            await asyncio.gather(*(worker.close() for worker in self._workers))
