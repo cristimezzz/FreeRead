@@ -46,8 +46,9 @@ npm run gen:api                   # Core API 变化后重新生成类型
 ## CI 与发布
 
 - `ci.yml`：Core（Ruff、pytest、IR / OpenAPI schema 一致性）、前端（tsc、vite build、Vitest、API 类型一致性）、Rust（fmt、clippy）。
-- `desktop-build.yml`：打包 sidecar + NSIS 安装包 + 便携版 zip，在干净的 runner 上安装 / 解压后复测启动时间与退出残留（`scripts/verify_installed.ps1`）。
-- 发布：更新 `apps/desktop/package.json`、`src-tauri/tauri.conf.json`、`src-tauri/Cargo.toml`、`core/pyproject.toml`、`core/freeread/__init__.py` 的版本号，写好 `docs/releases/<版本>.md`，合并后推送 `v<版本>` tag。工作流用完整 release 设置构建、复测，并创建草稿 Release，检查后再手动发布。
+- `desktop-build.yml` 打包 Windows 安装包和便携版、Linux AppImage／deb／rpm、macOS arm64 dmg，并在各平台运行安装和启动冒烟测试。
+- 发布时同步更新桌面应用的 npm、Tauri 和 Cargo 版本（含 `package-lock.json` 和 `Cargo.lock`），以及 `core/pyproject.toml` 和 `core/freeread/__init__.py`。从仓库根目录运行 `python scripts/export_openapi.py > docs/schemas/openapi.json`，再在 `apps/desktop` 运行 `npm run gen:api` 检查生成的类型。
+- 将发布说明写入 `docs/releases/<版本>.md`。发布 PR 通过 CI 并合并后，给 `main` 上包含发布提交的版本打 `v<版本>` tag 并推送。三平台构建和冒烟测试通过后，工作流会用该文件创建草稿 Release。检查正文和六个安装包后再手动发布。
 
 ## 许可证
 

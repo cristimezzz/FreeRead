@@ -4,14 +4,19 @@ FreeRead 是本地优先的：文献库、解析结果、译文、总结、问�
 
 ## 数据存在哪里
 
-| 内容 | 位置 |
-|---|---|
-| 文献库、设置、译文、总结、批注等 | `%APPDATA%\FreeRead`（SQLite 数据库 `freeread.db` 及相关文件） |
-| 解析引擎的独立环境、嵌入模型 | 同一数据目录下 |
-| API Key | Windows 凭据管理器（系统钥匙串），不写入设置文件 |
-| Zotero | 只读；快照模式下先复制 `zotero.sqlite` 到数据目录再读，不会写原库 |
+| 系统 | 数据目录 | API Key |
+|---|---|---|
+| Windows | `%APPDATA%\FreeRead` | 凭据管理器 › Windows 凭据 |
+| macOS | `~/Library/Application Support/FreeRead` | 钥匙串访问 |
+| Linux | `~/.local/share/FreeRead`，设置了 `XDG_DATA_HOME` 时为 `$XDG_DATA_HOME/FreeRead` | Secret Service（如 GNOME Keyring 或 KWallet） |
 
-备份时复制整个 `%APPDATA%\FreeRead` 即可（API Key 需要另外重新输入）。
+数据目录保存文献库、设置、译文、笔记、SQLite 数据库 `freeread.db`、解析引擎和嵌入模型。快照模式会复制 Zotero 的 `zotero.sqlite` 后读取副本。备份时复制整个数据目录，恢复后重新输入保存在系统凭据库里的 API Key。
+
+## 删除应用数据
+
+在桌面版打开 **设置 › 数据 › 删除应用数据**，勾选要清除的项目。可分别清除文献、笔记与设置，API Key，以及本机解析引擎与模型。删除无法恢复，成功后 FreeRead 会自动重启。Zotero 原库和原始附件仍保存在原处。
+
+如果已经卸载，按上表删除数据目录，并从系统凭据库移除 FreeRead 的相关条目。
 
 ## 什么时候会把内容发出去
 

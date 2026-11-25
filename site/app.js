@@ -538,7 +538,7 @@
 
   /* ---------------------------------------------------------------- 最新版本 */
 
-  // 下载段默认写着发布时的版本；打开页面时向 GitHub 取最新 Release，替换版本号和下载链接。
+  // 打开页面时向 GitHub 取最新 Release，替换下载区的版本号和下载链接。
   // 请求失败、被限流或不认识的数据都保留页面上的静态内容。
   const REPO = "cristimezzz/FreeRead";
   const DL_PREFIX = `https://github.com/${REPO}/releases/download/`;
@@ -601,7 +601,7 @@
         else el.textContent = a ? a.name : "见 Release 页面";
       }
     }
-    // 只在部分版本提供的包（如 macOS dmg）：最新 Release 里有才显示对应的卡片和平台说明
+    // 获取到实际附件列表后，隐藏当前 Release 未提供的平台卡片和说明。
     for (const el of $$("[data-needs-asset]")) {
       const re = ASSETS[el.dataset.needsAsset];
       el.hidden = !(re && assets.some((x) => re.test(x.name)));
@@ -676,7 +676,7 @@
   recommend();
   latestRelease().then((rel) => {
     applyRelease(rel);
-    // dmg 卡片可能这时才显示出来
+    // 附件列表可能改变可推荐的下载卡片。
     recommend();
   });
 
