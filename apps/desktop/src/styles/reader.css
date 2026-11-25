@@ -359,6 +359,42 @@ body.resizing .reader-pane {
   height: auto;
 }
 
+.rf-figure-group {
+  position: relative;
+  width: 100%;
+  isolation: isolate;
+}
+
+.reflow .rf-figure-group img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.rf-figure-crop {
+  position: absolute;
+  inset: 0;
+}
+
+.rf-block.rf-figure-part {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  border-radius: 2px;
+  content-visibility: visible;
+  background: transparent;
+  text-align: center;
+}
+
+.rf-figure-part:hover,
+.rf-figure-part:focus-visible,
+.rf-block.rf-figure-part.located {
+  z-index: 1;
+  outline: 2px solid var(--brand);
+  background: transparent;
+}
+
 .reflow .rf-caption {
   color: var(--text-2);
   font-size: 0.88em;
@@ -372,16 +408,36 @@ body.resizing .reader-pane {
 
 .reflow .rf-table {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   font-size: 0.85em;
 }
 
+.reflow .rf-table:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.reflow .rf-table[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.reflow .rf-table img {
+  display: block;
+  max-width: none;
+  height: auto;
+  margin: 1em auto;
+}
+
 .reflow .rf-table table {
+  width: max-content;
   margin: 0 auto;
   border-collapse: collapse;
 }
 
 .reflow .rf-table td,
 .reflow .rf-table th {
+  max-inline-size: 28ch;
   padding: 4px 8px;
   border: 1px solid var(--border);
 }

@@ -1012,6 +1012,106 @@
         }
       }
     },
+    "/documents/{doc_id}/figure-crop": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Figure Crop",
+        "description": "Clip a figure from the original PDF for reflow, using zero-based pages and PDF points.",
+        "operationId": "get_figure_crop_documents__doc_id__figure_crop_get",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Page"
+            }
+          },
+          {
+            "name": "x0",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "X0"
+            }
+          },
+          {
+            "name": "y0",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Y0"
+            }
+          },
+          {
+            "name": "x1",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "X1"
+            }
+          },
+          {
+            "name": "y1",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Y1"
+            }
+          },
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{doc_id}/assets/{name}": {
       "get": {
         "tags": [

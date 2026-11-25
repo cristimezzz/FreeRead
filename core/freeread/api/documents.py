@@ -1,14 +1,15 @@
 """文档：解析状态、IR、原始 PDF、图表图片、（重新）解析。"""
 
+import math
 import re
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from freeread.api.deps import Ctx
 from freeread.infra.jobs.queue import JobOut
-from freeread.services.parse import DocumentOut, EngineOut, EngineUnavailableError
+from freeread.services.parse import ASSET_DPI, DocumentOut, EngineOut, EngineUnavailableError
 
 router = APIRouter(tags=["documents"])
 
@@ -66,6 +67,41 @@ def get_pdf(ctx: Ctx, doc_id: str):
     if path is None:
         raise HTTPException(404, "pdf file missing")
     return FileResponse(path, media_type="application/pdf")
+
+
+@router.get(
+    "/documents/{doc_id}/figure-crop",
+    response_class=Response,
+    responses={200: {"content": {"image/png": {}}}},
+)
+def get_figure_crop(ctx: Ctx, doc_id: str, page: int, x0: float, y0: float, x1: float, y1: float):
+    """Clip a figure from the original PDF for reflow, using zero-based pages and PDF points."""
+    import pymupdf
+
+    _doc_or_404(ctx, doc_id)
+    if not all(map(math.isfinite, (x0, y0, x1, y1))) or x0 >= x1 or y0 >= y1:
+        raise HTTPException(422, "invalid crop bounds")
+    path = ctx.parse.pdf_path(doc_id)
+    if path is None:
+        raise HTTPException(404, "pdf file missing")
+    try:
+        with pymupdf.open(path) as pdf:
+            if not 0 <= page < pdf.page_count:
+                raise HTTPException(404, "pdf page not found")
+            pdf_page = pdf[page]
+            bounds = pdf_page.rect
+            left, top = max(x0, bounds.x0), max(y0, bounds.y0)
+            right, bottom = min(x1, bounds.x1), min(y1, bounds.y1)
+            if left >= right or top >= bottom:
+                raise HTTPException(422, "crop outside page")
+            rect = pymupdf.Rect(left, top, right, bottom)
+            pixels = (rect * pymupdf.Matrix(ASSET_DPI / 72, ASSET_DPI / 72)).irect
+            if pixels.width * pixels.height > 16_000_000:
+                raise HTTPException(422, "crop too large")
+            png = pdf_page.get_pixmap(clip=rect, dpi=ASSET_DPI).tobytes("png")
+    except (OSError, RuntimeError, ValueError) as exc:
+        raise HTTPException(422, "pdf crop unavailable") from exc
+    return Response(png, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 @router.get(

@@ -35,6 +35,42 @@ def import_synthetic(ctx, tmp_path, name="synthetic.pdf", strip_metadata=False):
     return item_id, ctx.library.get_item(item_id).documents[0].doc_id
 
 
+def test_figure_crop_reads_original_pdf_without_changing_ir(client, tmp_path):
+    import pymupdf
+
+    ctx = client.app.state.ctx
+    _, doc_id = import_synthetic(ctx, tmp_path)
+    ir = ctx.parse.ir_path(doc_id)
+    assert not ir.exists()
+    url = f"/documents/{doc_id}/figure-crop"
+    params = {"page": 0, "x0": -50, "y0": 100, "x1": 144, "y1": 244}
+
+    response = client.get(url, params=params)
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.headers["cache-control"] == "no-store"
+    crop = pymupdf.Pixmap(response.content)
+    with pymupdf.open(SYNTHETIC) as pdf:
+        expected = pdf[0].get_pixmap(clip=(0, 100, 144, 244), dpi=150)
+    assert (crop.width, crop.height, crop.samples) == (
+        expected.width,
+        expected.height,
+        expected.samples,
+    )
+    assert not ir.exists()
+
+    assert (
+        client.get(url, params=params, headers={"X-FreeRead-Token": "invalid"}).status_code == 401
+    )
+    assert client.get(url, params=params | {"page": 99}).status_code == 404
+    for invalid in ({"x0": "-inf"}, {"x1": 0, "x0": 10}, {"x0": -100, "x1": -50}):
+        assert client.get(url, params=params | invalid).status_code == 422
+    pdf_path = ctx.parse.pdf_path(doc_id)
+    assert pdf_path is not None
+    pdf_path.unlink()
+    assert client.get(url, params=params).status_code == 404
+
+
 class FakeHQParser(PyMuPDFFastParser):
     """假装是高质量引擎：输出与 PyMuPDF 相同，引擎名不同。"""
 
