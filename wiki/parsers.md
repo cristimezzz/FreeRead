@@ -26,7 +26,7 @@ MinerU、Docling 不随安装包分发，按需安装或连接远程服务，并
 
 在卡片上选 **API 服务**，填写 Base URL（和可选的 API Key），点 **测试连接**：
 
-- MinerU：云端 `https://mineru.net/api`，或自部署的 `mineru-api`（如 `http://127.0.0.1:8000`），需要 MinerU 4.0 以上。可选质量档位：standard（VLM，推荐）、advanced（最准，最慢）。旧版本里选的 flash / basic 会自动改成 standard。
+- MinerU：云端 `https://mineru.net/api`，或自部署的 `mineru-api`（如 `http://127.0.0.1:8000`），需要 MinerU 4.0 以上。FreeRead 每 60 秒最多提交 10 个文件，超出的任务等待额度后自动提交。可选质量档位：standard（VLM，推荐）、advanced（最准，最慢）。旧版本里选的 flash / basic 会自动改成 standard。
 - Docling：自部署的 `docling-serve`（如 `http://127.0.0.1:5001`）。
 
 指向本机或局域网地址时，PDF 不离开本地网络。指向公网地址时，必须先点 **允许上传** 才会使用；修改 Base URL 后需要重新允许。没允许之前，后台自动升级会跳过这个引擎。

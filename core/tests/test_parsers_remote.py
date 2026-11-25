@@ -2,11 +2,14 @@
 
 import asyncio
 import json
+from collections import deque
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
 
+from freeread.infra.parsers import mineru_api
 from freeread.infra.parsers.base import RawLayout
 from freeread.infra.parsers.docling import DoclingNormalizer
 from freeread.infra.parsers.docling_api import DoclingServeParser
@@ -21,6 +24,11 @@ SYNTHETIC = RAW / "synthetic.pdf"
 KEY = "sk-parser-abcdefghijkl"
 MIDDLE = json.loads((RAW / "mineru" / "middle.json").read_text(encoding="utf-8"))
 DOCLING = json.loads((RAW / "docling" / "docling.json").read_text(encoding="utf-8"))
+
+
+@pytest.fixture(autouse=True)
+def reset_mineru_submissions(monkeypatch):
+    monkeypatch.setattr(mineru_api, "_SUBMISSIONS", deque(maxlen=mineru_api._SUBMISSIONS.maxlen))
 
 
 def progress_log():
@@ -152,6 +160,29 @@ async def test_mineru_loopback_local_source_skips_upload(tmp_path):
     )
     assert body["files"][0]["source"] == {"type": "local", "path": str(SYNTHETIC.resolve())}
     assert all("authorization" not in r.headers for r in server.requests)
+
+
+async def test_mineru_limits_submissions_across_parser_instances(tmp_path, monkeypatch):
+    now = 30.0
+    submitted_at = []
+    server = FakeMinerU()
+
+    def record(request):
+        if request.method == "POST" and request.url.path == "/api/v1/parse/jobs":
+            submitted_at.append(now)
+        return server(request)
+
+    async def sleep(delay):
+        nonlocal now
+        now += delay
+
+    monkeypatch.setattr(mineru_api, "monotonic", lambda: now)
+    monkeypatch.setattr(mineru_api, "asyncio", SimpleNamespace(sleep=sleep))
+    for i in range(12):
+        await mineru(record).parse(SYNTHETIC, tmp_path / str(i), lambda *a: None)
+        now += 1
+
+    assert submitted_at == [*range(30, 40), 90, 91]
 
 
 async def test_mineru_job_failure(tmp_path):
