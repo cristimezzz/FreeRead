@@ -21,7 +21,12 @@ on:
       - scripts/measure_sidecar.ps1
       - scripts/measure_sidecar.sh
       - scripts/verify_installed.ps1
-      - apps/desktop/src-tauri/**
+      - apps/desktop/**
+      - '!apps/desktop/**/*.md'
+      - core/freeread/**
+      - core/prompts/**
+      - core/pyproject.toml
+      - scripts/engines/**
       - scripts/ci/**
       - .github/workflows/desktop-build.yml
   push:
@@ -33,7 +38,12 @@ on:
       - scripts/measure_sidecar.ps1
       - scripts/measure_sidecar.sh
       - scripts/verify_installed.ps1
-      - apps/desktop/src-tauri/**
+      - apps/desktop/**
+      - '!apps/desktop/**/*.md'
+      - core/freeread/**
+      - core/prompts/**
+      - core/pyproject.toml
+      - scripts/engines/**
       - scripts/ci/**
       - .github/workflows/desktop-build.yml
 
@@ -85,6 +95,7 @@ jobs:
       # 便携版：壳从 resource_dir()（Windows 上即 exe 所在目录）找 freeread-core/，
       # tauri-build 已把 bundle.resources 复制到 target/release/，和安装后的目录结构一致。
       - name: Package portable zip
+        id: packages
         shell: pwsh
         run: |
           $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json | ConvertFrom-Json).version
@@ -108,6 +119,7 @@ jobs:
           ./scripts/verify_installed.ps1 -Installer $installer.FullName -Out verify-installed.md
           Get-Content verify-installed.md >> $env:GITHUB_STEP_SUMMARY
       - name: Unpack portable and measure
+        if: ${{ !cancelled() && steps.packages.outcome == 'success' }}
         shell: pwsh
         run: |
           $zip = Get-ChildItem dist/*-portable.zip | Select-Object -First 1
