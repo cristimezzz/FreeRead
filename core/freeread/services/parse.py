@@ -2,7 +2,7 @@
 
 任务：
 - parse（快速模式，并发 2）：PyMuPDF 秒级出可读 IR；完成后按设置追加 parse_hq；
-- parse_hq（高质量引擎，本机并发可设、API 并发 8）：MinerU / Docling 升级 IR。
+- parse_hq（高质量引擎，按本机和各 API 引擎分组调度）：MinerU / Docling 升级 IR。
 重新解析时按 IR §8 迁移块 ID，译文跟着新块走，无法映射的标记 stale。
 原生输出保存在 documents/<doc_id>/raw/<engine>/，已有完整输出（engine.json）时只重新规范化。
 """
@@ -16,6 +16,7 @@ from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from threading import Lock
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
@@ -87,6 +88,12 @@ class EngineOut(BaseModel):
     unavailable_reason: str | None = None
     # API 模式下是否已保存 API Key（不含密钥本身）
     has_key: bool = False
+
+
+class ReparseAllOut(BaseModel):
+    queued: int
+    already_active: int
+    missing_pdf: int
 
 
 class EngineUnavailableError(RuntimeError):
@@ -167,6 +174,8 @@ class ParseService:
         # parse 与 parse_hq 是两种任务、可以同时运行；同一文档的解析必须串行，
         # 否则会同时写 raw/、assets/、ir.json 和 blocks 表
         self._doc_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+        # 单篇和批量入口都在检查重复任务后写入队列。
+        self._reparse_lock = Lock()
         # 块替换后调用（同步，在线程里）：由 AppContext 接到 EmbedService.enqueue_embed
         self.on_blocks_replaced: Callable[[str], object] | None = None
         # 引擎的 API Key 是否已保存：由 AppContext 接到 SecretStore（parser-<engine>）
@@ -216,17 +225,52 @@ class ParseService:
         kind = "parse_hq" if spec.heavy else "parse"
         payload = {"doc_id": doc_id, "engine": engine, "force": True}
         # 连点或重复请求：同一引擎已在排队就复用，不重复解析（运行中的不算，用户可能要重来）
-        with self._sessions() as s:
-            job_id = s.scalar(
-                select(JobRow.id).where(
-                    JobRow.kind == kind,
-                    JobRow.status == JobStatus.QUEUED,
-                    JobRow.payload["doc_id"].as_string() == doc_id,
-                    JobRow.payload["engine"].as_string() == engine,
-                )
+        with self._reparse_lock:
+            existing = self._jobs.find_active(
+                kind, (JobStatus.QUEUED,), doc_id=doc_id, engine=engine
             )
-        existing = self._jobs.get(job_id) if job_id else None
-        return existing or self._jobs.enqueue(kind, payload)
+            return existing or self._jobs.enqueue(kind, payload)
+
+    def request_reparse_all(self, engine: str) -> ReparseAllOut:
+        """给文献库里每份仍可读取的 PDF 排一个强制解析任务。"""
+        with self._reparse_lock:
+            spec = self.registry.get(engine)
+            _ensure_available(spec)
+            kind = "parse_hq" if spec.heavy else "parse"
+            with self._sessions() as s:
+                candidates = s.execute(
+                    select(AttachmentRow.doc_id, AttachmentRow.path)
+                    .join(ItemRow, ItemRow.id == AttachmentRow.item_id)
+                    .where(
+                        ItemRow.status == "active",
+                        AttachmentRow.content_type == "application/pdf",
+                        AttachmentRow.doc_id.is_not(None),
+                    )
+                ).all()
+                active = set(
+                    s.scalars(
+                        select(JobRow.payload["doc_id"].as_string()).where(
+                            JobRow.kind == kind,
+                            JobRow.status.in_([JobStatus.QUEUED, JobStatus.RUNNING]),
+                            JobRow.payload["engine"].as_string() == engine,
+                            JobRow.payload["force"].as_boolean().is_(True),
+                        )
+                    )
+                )
+            pdfs: set[str] = set()
+            for doc_id, path in candidates:
+                if doc_id not in pdfs and Path(path).is_file():
+                    pdfs.add(doc_id)
+            payloads = [
+                {"doc_id": doc_id, "engine": engine, "force": True}
+                for doc_id in sorted(pdfs - active)
+            ]
+            queued = self._jobs.enqueue_many(kind, payloads)
+            return ReparseAllOut(
+                queued=len(queued),
+                already_active=len(pdfs & active),
+                missing_pdf=len({doc_id for doc_id, _ in candidates}) - len(pdfs),
+            )
 
     def request_install(self, engine: str) -> JobOut:
         """在本机安装重型引擎（已有安装任务时返回它）。见 infra/parsers/installer.py。"""
@@ -355,7 +399,8 @@ class ParseService:
         spec = self.registry.get(engine)
         if spec.snapshot is not None:
             spec = spec.snapshot()
-        if partition is not None and partition != spec.location():
+        expected_partition = f"api:{engine}" if spec.location() == "api" else "local"
+        if partition is not None and partition != expected_partition:
             raise _ParseLocationChanged
         info = await asyncio.to_thread(self._load, doc_id)
         _ensure_available(spec)

@@ -137,7 +137,7 @@ class Parser(Protocol):
 
 M1 实现（`services/parse.py`）：
 
-- 两类任务：`parse`（PyMuPDF 快速模式，并发 2，秒级出可读 IR）和 `parse_hq`（MinerU / Docling）。高质量解析分本机和 API 两组：本机并发由设置控制，默认 1；API 并发为 8。`parse` 完成后按设置 `parse_engine` 追加 `parse_hq`；`auto` 表示 MinerU 可用时升级。
+- 两类任务：`parse`（PyMuPDF 快速模式，并发 2，秒级出可读 IR）和 `parse_hq`（MinerU / Docling）。高质量解析分三个调度组，本机默认并发 1，MinerU API 默认并发 8，两者均可配置，Docling API 并发固定为 8。MinerU API 请求按进程共享上传、提交和结果请求的滚动限额，见 [ADR-0013](adr/0013-mineru-api-limits.md)。`parse` 完成后按设置 `parse_engine` 追加 `parse_hq`；`auto` 表示 MinerU 可用时升级。
 - 自动流程不会用低质量引擎的结果覆盖高质量结果；用户手动重新解析（`POST /documents/{id}/parse`）不受此限。
 - `raw/<engine>/engine.json` 存在即视为原生输出完整：只升级 Normalizer 时直接从 `raw/` 重新规范化，不重新跑引擎。
 - 图 / 表图片按 bbox 从 PDF 页面截取（150 dpi），与引擎无关。

@@ -52,5 +52,5 @@ MinerU 4.x 的 v1 REST 协议对本机 `mineru-api` 和云端 `https://mineru.ne
   - 远程服务的版本不受 FreeRead 控制，Normalizer 可能遇到没测过的输出。
 - 跟进：
   - `standard` / `advanced` 档位的输出需要用评测集回归（`scripts/m0_report.py`）。
-  - API 解析现已支持 8 篇并发，与本机解析各用独立额度。
+  - API 并发分组和 MinerU 请求限流已更新，见 [ADR-0013](0013-mineru-api-limits.md)。
   - docling-serve 没有取消接口，任务取消后服务端仍会跑完。

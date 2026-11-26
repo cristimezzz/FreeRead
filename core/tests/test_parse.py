@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from freeread.domain.ir.models import Document, validate_document
-from freeread.infra.db.models import BlockRow, DocumentRow, ItemRow, TranslationRow
+from freeread.infra.db.models import AttachmentRow, BlockRow, DocumentRow, ItemRow, TranslationRow
 from freeread.infra.jobs.queue import JobStatus
 from freeread.infra.parsers.pymupdf_fast import PyMuPDFFastNormalizer, PyMuPDFFastParser
 from freeread.infra.parsers.registry import EngineSpec
@@ -376,6 +376,79 @@ def test_documents_api(client, tmp_path):
     again = client.post(f"/documents/{doc_id}/parse", json={"engine": "pymupdf"})
     assert again.status_code == 202 and again.json()["payload"]["force"] is True
     assert wait_job(client, again.json()["id"])["status"] == "done"
+
+    batch = client.post("/documents/reparse-all", json={"engine": "pymupdf"})
+    assert batch.status_code == 202 and batch.json()["queued"] == 1
+    jobs = client.get("/jobs", params={"kind": "parse"}).json()
+    batch_job = next(j for j in jobs if j["payload"].get("force") and j["id"] != again.json()["id"])
+    assert wait_job(client, batch_job["id"])["status"] == "done"
+
+
+def test_reparse_all_queue_filters_and_deduplicates_documents(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from freeread.main import create_app
+
+    app = create_app(data_dir=tmp_path / "batch")
+    ctx = app.state.ctx
+    client = TestClient(app)  # 不启动 worker，便于检查实际排队的任务
+    endpoint = "/documents/reparse-all"
+    pdf = {"engine": "pymupdf"}
+    try:
+        assert client.post(endpoint, json=pdf).json() == {
+            "queued": 0,
+            "already_active": 0,
+            "missing_pdf": 0,
+        }
+        with ctx.sessions.begin() as s:
+            s.add_all(
+                DocumentRow(doc_id=doc, pdf_sha256=doc) for doc in ("ready", "missing", "old")
+            )
+            s.add_all(
+                ItemRow(id=item, item_type="document", title=item, status=status)
+                for item, status in (("one", "active"), ("two", "active"), ("old", "archived"))
+            )
+            s.flush()
+            s.add_all(
+                AttachmentRow(item_id=item, doc_id=doc, path=str(path))
+                for item, doc, path in (
+                    ("one", "ready", SYNTHETIC),
+                    ("two", "ready", SYNTHETIC),
+                    ("two", "missing", tmp_path / "missing.pdf"),
+                    ("old", "old", SYNTHETIC),
+                )
+            )
+
+        cfg = ctx.settings.get()
+        cfg.parsers.mineru.mode = "api"
+        cfg.parsers.mineru.base_url = "https://mineru.example.com/api"
+        ctx.settings.put(cfg)
+        assert client.post(endpoint, json={"engine": "mineru"}).status_code == 409
+        assert client.post(endpoint, json={"engine": "unknown"}).status_code == 422
+        assert ctx.jobs.list() == []
+
+        response = client.post(endpoint, json=pdf)
+        assert response.status_code == 202
+        assert response.json() == {"queued": 1, "already_active": 0, "missing_pdf": 1}
+        [job] = ctx.jobs.list(kind="parse")
+        assert job.payload == {"doc_id": "ready", "engine": "pymupdf", "force": True}
+        assert client.post(endpoint, json=pdf).json() == {
+            "queued": 0,
+            "already_active": 1,
+            "missing_pdf": 1,
+        }
+        running = ctx.jobs.claim_next({"parse"})
+        assert running is not None and running.id == job.id
+        assert client.post(endpoint, json=pdf).json()["already_active"] == 1
+
+        cfg.parsers.mineru.consented_url = cfg.parsers.mineru.base_url
+        ctx.settings.put(cfg)
+        assert client.post(endpoint, json={"engine": "mineru"}).json()["queued"] == 1
+        [hq_job] = ctx.jobs.list(kind="parse_hq")
+        assert hq_job.payload == {"doc_id": "ready", "engine": "mineru", "force": True}
+    finally:
+        client.close()
+        ctx.close()
 
 
 def test_ir_is_409_before_parse(ctx, tmp_path):

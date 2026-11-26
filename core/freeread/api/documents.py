@@ -9,7 +9,13 @@ from pydantic import BaseModel
 
 from freeread.api.deps import Ctx
 from freeread.infra.jobs.queue import JobOut
-from freeread.services.parse import ASSET_DPI, DocumentOut, EngineOut, EngineUnavailableError
+from freeread.services.parse import (
+    ASSET_DPI,
+    DocumentOut,
+    EngineOut,
+    EngineUnavailableError,
+    ReparseAllOut,
+)
 
 router = APIRouter(tags=["documents"])
 
@@ -23,6 +29,10 @@ REVALIDATE = {"Cache-Control": "no-cache"}
 class ParseRequest(BaseModel):
     # 为空时走默认链：快速模式，再按设置用高质量引擎升级
     engine: str | None = None
+
+
+class ReparseAllRequest(BaseModel):
+    engine: str
 
 
 def _doc_or_404(ctx, doc_id: str) -> DocumentOut:
@@ -124,6 +134,16 @@ def parse_document(ctx: Ctx, doc_id: str, body: ParseRequest | None = None) -> J
     _doc_or_404(ctx, doc_id)
     try:
         return ctx.parse.request_parse(doc_id, body.engine if body else None)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    except EngineUnavailableError as e:
+        raise HTTPException(409, str(e)) from e
+
+
+@router.post("/documents/reparse-all", response_model=ReparseAllOut, status_code=202)
+def reparse_all_documents(ctx: Ctx, body: ReparseAllRequest) -> ReparseAllOut:
+    try:
+        return ctx.parse.request_reparse_all(body.engine)
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     except EngineUnavailableError as e:

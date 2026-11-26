@@ -13,8 +13,11 @@ import asyncio
 import hashlib
 import json
 import math
+from asyncio import sleep
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
+from threading import Lock
 from time import monotonic
 from typing import Any
 
@@ -30,8 +33,33 @@ from freeread.infra.parsers.remote_common import RemoteClient, RemoteParseError,
 
 TERMINAL = {"completed", "partial", "failed", "canceled"}
 POLL_TIMEOUT = 3600.0
-# 解析任务会创建新的 parser 实例，提交额度由进程内的所有实例共享。
-_SUBMISSIONS: deque[float] = deque(maxlen=10)
+
+
+class _RequestLimit:
+    def __init__(self, limit: int) -> None:
+        self._starts: deque[float] = deque(maxlen=limit)
+        self._lock = Lock()
+
+    async def acquire(self, on_wait: Callable[[], None] | None = None) -> None:
+        while True:
+            with self._lock:
+                now = monotonic()
+                delay = (
+                    self._starts[0] + 60 - now if len(self._starts) == self._starts.maxlen else 0
+                )
+                if delay <= 0:
+                    self._starts.append(now)
+                    return
+            if on_wait is not None:
+                on_wait()
+                on_wait = None
+            await sleep(delay)
+
+
+# 任务会创建新的 parser 实例，额度由进程内的所有实例共享。
+_UPLOADS = _RequestLimit(50)
+_SUBMISSIONS = _RequestLimit(50)
+_RESULTS = _RequestLimit(1000)
 
 
 def _strip_images(o: Any) -> None:
@@ -104,23 +132,26 @@ class MinerUApiParser:
                 source: dict[str, Any] = {"type": "local", "path": str(pdf.resolve())}
             else:
                 progress(0.02, "上传 PDF")
-                source = {"type": "file_id", "file_id": await self._upload(cli, pdf)}
+                source = {"type": "file_id", "file_id": await self._upload(cli, pdf, progress)}
 
             body = {
                 "files": [{"source": source}],
                 "output_formats": ["middle_json"],
                 "tier": self._tier,
             }
-            while len(_SUBMISSIONS) == _SUBMISSIONS.maxlen:
-                delay = _SUBMISSIONS[0] + 60 - monotonic()
-                if delay <= 0:
-                    break
-                progress(0.05, "MinerU：等待提交额度")
-                await asyncio.sleep(delay)
-            _SUBMISSIONS.append(monotonic())
-            job = await cli.json("POST", "/v1/parse/jobs", json=body)
+            job = await cli.json(
+                "POST",
+                "/v1/parse/jobs",
+                json=body,
+                before_send=lambda: _SUBMISSIONS.acquire(
+                    lambda: progress(0.05, "MinerU：等待提交额度")
+                ),
+            )
             try:
-                job = await self._wait(cli, job, progress)
+                async with asyncio.timeout(POLL_TIMEOUT):
+                    job = await self._wait(cli, job, progress)
+            except TimeoutError:
+                raise RemoteParseError("timeout", "MinerU：任务一小时内未完成") from None
             except asyncio.CancelledError:
                 await self._cancel(cli, job.get("job_id"))
                 raise
@@ -130,7 +161,9 @@ class MinerUApiParser:
             if not ref.get("file_id"):
                 raise RemoteParseError("bad_output", "MinerU：任务结果里没有 middle_json")
             progress(0.95, "下载解析结果")
-            raw = await cli.request("GET", f"/v1/files/{ref['file_id']}/content")
+            raw = await cli.request(
+                "GET", f"/v1/files/{ref['file_id']}/content", before_send=_RESULTS.acquire
+            )
             try:
                 middle = json.loads(raw.content)
             except ValueError:
@@ -176,7 +209,7 @@ class MinerUApiParser:
         progress(1.0, "MinerU：完成")
         return RawLayout("mineru", engine_version, out_dir, None)
 
-    async def _upload(self, cli: RemoteClient, pdf: Path) -> str:
+    async def _upload(self, cli: RemoteClient, pdf: Path, progress: ProgressCb) -> str:
         data = pdf.read_bytes()
         created = await cli.json(
             "POST",
@@ -195,7 +228,12 @@ class MinerUApiParser:
         headers = created.get("upload_headers") or {}
         # 预签名地址（如对象存储）不能带 API Key
         await cli.request(
-            "PUT", url, auth=_same_origin(url, cli.base_url), headers=headers, content=data
+            "PUT",
+            url,
+            auth=_same_origin(url, cli.base_url),
+            headers=headers,
+            content=data,
+            before_send=lambda: _UPLOADS.acquire(lambda: progress(0.02, "MinerU：等待上传额度")),
         )
         done = await cli.json("POST", f"/v1/uploads/{created['id']}/complete")
         return done["file"]["id"]
@@ -206,15 +244,15 @@ class MinerUApiParser:
         started = monotonic()
         while job.get("status") not in TERMINAL:
             elapsed = monotonic() - started
-            if elapsed > POLL_TIMEOUT:
-                raise RemoteParseError("timeout", "MinerU：任务一小时内未完成")
             if job.get("status") == "running":
                 # 服务端只报文件级进度；按耗时渐近逼近 0.9
                 progress(0.1 + 0.8 * (1 - math.exp(-elapsed / 90)), "MinerU：解析中")
             else:
                 progress(0.05, "MinerU：排队中")
-            await asyncio.sleep(self._poll)
-            job = await cli.json("GET", f"/v1/parse/jobs/{job['job_id']}")
+            await sleep(self._poll)
+            job = await cli.json(
+                "GET", f"/v1/parse/jobs/{job['job_id']}", before_send=_RESULTS.acquire
+            )
         return job
 
     @staticmethod
