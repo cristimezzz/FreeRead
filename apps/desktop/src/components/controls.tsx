@@ -219,6 +219,7 @@ interface DialogAction {
   label: string;
   primary?: boolean;
   danger?: boolean;
+  disabled?: boolean;
 }
 
 interface ActionDialogProps {
@@ -247,6 +248,7 @@ export function ActionDialog(p: ActionDialogProps) {
             <Button
               key={a.value}
               variant={a.danger ? "destructive" : a.primary ? "default" : "outline"}
+              disabled={a.disabled}
               onClick={() => p.onClose(a.value)}
             >
               {a.label}

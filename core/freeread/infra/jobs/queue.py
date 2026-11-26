@@ -59,12 +59,18 @@ class JobQueue:
     def enqueue(
         self, kind: str, payload: dict[str, Any] | None = None, depends_on: str | None = None
     ) -> JobOut:
+        return self.enqueue_many(kind, [payload or {}], depends_on)[0]
+
+    def enqueue_many(
+        self, kind: str, payloads: list[dict[str, Any]], depends_on: str | None = None
+    ) -> list[JobOut]:
+        rows = [JobRow(kind=kind, payload=payload, depends_on=depends_on) for payload in payloads]
         with self._sessions.begin() as s:
-            row = JobRow(kind=kind, payload=payload or {}, depends_on=depends_on)
-            s.add(row)
+            s.add_all(rows)
             s.flush()
-            s.refresh(row)
-            return self._emit(row)
+            for row in rows:
+                s.refresh(row)
+            return [self._emit(row) for row in rows]
 
     def get(self, job_id: str) -> JobOut | None:
         with self._sessions() as s:

@@ -1,7 +1,7 @@
 # 数据模型
 
-- 版本：0.2（M1 已实现部分与代码同步）
-- 更新日期：2026-10-21
+- 版本：0.3
+- 更新日期：2026-11-26
 - 决策依据：[ADR-0002](adr/0002-local-first-sqlite.md)
 - 实现：SQLAlchemy 2.x 模型 + Alembic 迁移（`core/freeread/infra/db/`）
 
@@ -304,7 +304,7 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 改为问答树（迁�
 | 列 | 说明 |
 |---|---|
 | id PK | |
-| kind | M1：`sync`、`parse`（快速模式，并发 2）、`parse_hq`（MinerU / Docling，本机并发默认 1、可配置，API 并发 8）；另有 `embed`、`model_download`、`glossary_extract`、`translate_doc`、`kg_extract`（M3，嵌入完成后按设置 `kg.auto` 自动排队）。块级翻译不走任务队列，由 `POST /translate/blocks` 以 SSE 流式完成 |
+| kind | M1：`sync`、`parse`（快速模式，并发 2）、`parse_hq`（MinerU / Docling，按本机和各 API 引擎分组调度）；另有 `embed`、`model_download`、`glossary_extract`、`translate_doc`、`kg_extract`（M3，嵌入完成后按设置 `kg.auto` 自动排队）。块级翻译不走任务队列，由 `POST /translate/blocks` 以 SSE 流式完成 |
 | payload | JSON |
 | status | `queued` / `running` / `done` / `failed` / `cancelled` |
 | progress | REAL 0–1 |
@@ -329,6 +329,8 @@ M2 实现了单篇线性对话（迁移 `0004_qa`）。M3 改为问答树（迁�
 
 ### settings
 `key PK, value JSON`。每个顶层设置项一行，键即 `AppSettings` 的字段名：`appearance`、`target_lang`、`parse_engine`、`providers`、`routes`、`consented_providers`、`embedding`、`glossary`、`kg`（`services/settings.py`）。以 `_` 开头的键是内部状态（如 `_vector_index`），不属于设置。读取时不认识的键忽略，单个字段不合法时回退默认值。**API Key 不存这里**，存在系统钥匙串（由壳以 `FREEREAD_SECRETS` 注入 sidecar）。
+
+`mineru_api_concurrency` 保存 MinerU API 解析的并发上限，取值为 1–32 的整数，旧库缺少该键时默认 8。运行时的请求额度保存在进程内存中。
 
 ## 9. 迁移策略
 

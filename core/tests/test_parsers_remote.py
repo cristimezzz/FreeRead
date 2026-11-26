@@ -2,14 +2,13 @@
 
 import asyncio
 import json
-from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from freeread.infra.parsers import mineru_api
+from freeread.infra.parsers import mineru_api, remote_common
 from freeread.infra.parsers.base import RawLayout
 from freeread.infra.parsers.docling import DoclingNormalizer
 from freeread.infra.parsers.docling_api import DoclingServeParser
@@ -27,8 +26,22 @@ DOCLING = json.loads((RAW / "docling" / "docling.json").read_text(encoding="utf-
 
 
 @pytest.fixture(autouse=True)
-def reset_mineru_submissions(monkeypatch):
-    monkeypatch.setattr(mineru_api, "_SUBMISSIONS", deque(maxlen=mineru_api._SUBMISSIONS.maxlen))
+def reset_mineru_limits():
+    yield
+    for limit in (mineru_api._UPLOADS, mineru_api._SUBMISSIONS, mineru_api._RESULTS):
+        limit._starts.clear()
+
+
+@pytest.fixture
+def mineru_clock(monkeypatch):
+    clock = SimpleNamespace(now=30.0)
+
+    async def sleep(delay):
+        clock.now += delay
+
+    monkeypatch.setattr(mineru_api, "monotonic", lambda: clock.now)
+    monkeypatch.setattr(mineru_api, "sleep", sleep)
+    return clock
 
 
 def progress_log():
@@ -162,27 +175,149 @@ async def test_mineru_loopback_local_source_skips_upload(tmp_path):
     assert all("authorization" not in r.headers for r in server.requests)
 
 
-async def test_mineru_limits_submissions_across_parser_instances(tmp_path, monkeypatch):
-    now = 30.0
-    submitted_at = []
+@pytest.mark.parametrize("local_source", [False, True])
+async def test_mineru_limits_uploads_and_submissions_across_instances(
+    tmp_path, mineru_clock, local_source
+):
+    uploads, submissions = [], []
+    server = FakeMinerU(sources=["local"] if local_source else ["file_id"])
+
+    def record(request):
+        if request.method == "PUT":
+            uploads.append(mineru_clock.now)
+        elif request.method == "POST" and request.url.path == "/api/v1/parse/jobs":
+            submissions.append(mineru_clock.now)
+        return server(request)
+
+    for i in range(52):
+        url = "http://localhost/api" if local_source else "https://mineru.example.com/api"
+        await mineru(record, url=url).parse(SYNTHETIC, tmp_path / str(i), lambda *a: None)
+        mineru_clock.now += 1
+
+    assert submissions == [*range(30, 80), 90, 91]
+    assert uploads == ([] if local_source else submissions)
+
+
+async def test_mineru_results_share_limit_across_polls_and_download(tmp_path, mineru_clock):
+    for _ in range(998):
+        await mineru_api._RESULTS.acquire()
+    mineru_clock.now = 40
+    results = []
     server = FakeMinerU()
 
     def record(request):
-        if request.method == "POST" and request.url.path == "/api/v1/parse/jobs":
-            submitted_at.append(now)
+        if request.method == "GET" and request.url.path != "/api/v1/health":
+            results.append(mineru_clock.now)
         return server(request)
 
+    await mineru(record).parse(SYNTHETIC, tmp_path, lambda *a: None)
+    assert results == [40, 40, 90]
+
+
+async def test_mineru_concurrent_uploads_share_last_slot(tmp_path, monkeypatch):
+    now = 30.0
+    resume = asyncio.Event()
+    waiting = asyncio.Event()
+
     async def sleep(delay):
-        nonlocal now
-        now += delay
+        if delay > 0:
+            waiting.set()
+            await resume.wait()
 
     monkeypatch.setattr(mineru_api, "monotonic", lambda: now)
-    monkeypatch.setattr(mineru_api, "asyncio", SimpleNamespace(sleep=sleep))
-    for i in range(12):
-        await mineru(record).parse(SYNTHETIC, tmp_path / str(i), lambda *a: None)
-        now += 1
+    monkeypatch.setattr(mineru_api, "sleep", sleep)
+    for _ in range(49):
+        await mineru_api._UPLOADS.acquire()
+    server = FakeMinerU()
 
-    assert submitted_at == [*range(30, 40), 90, 91]
+    async with asyncio.timeout(1):
+        async with asyncio.TaskGroup() as group:
+            for i in range(2):
+                group.create_task(
+                    mineru(server).parse(SYNTHETIC, tmp_path / str(i), lambda *a: None)
+                )
+            await waiting.wait()
+            assert sum(request.method == "PUT" for request in server.requests) == 1
+            now += 60
+            resume.set()
+    assert sum(request.method == "PUT" for request in server.requests) == 2
+
+
+async def test_mineru_retries_and_redirects_consume_upload_quota(
+    tmp_path, mineru_clock, monkeypatch
+):
+    for _ in range(48):
+        await mineru_api._UPLOADS.acquire()
+    mineru_clock.now = 40
+    uploads = []
+    server = FakeMinerU()
+
+    async def skip_backoff(delay):
+        pass
+
+    monkeypatch.setattr(remote_common, "asyncio", SimpleNamespace(sleep=skip_backoff))
+
+    def record(request):
+        if request.method == "PUT":
+            uploads.append((request.url.path, mineru_clock.now))
+            if len(uploads) == 1:
+                raise httpx.ConnectError("retry", request=request)
+            if len(uploads) == 2:
+                return httpx.Response(307, headers={"Location": "/redirected"})
+            assert request.content == SYNTHETIC.read_bytes()
+        return server(request)
+
+    await mineru(record).parse(SYNTHETIC, tmp_path, lambda *a: None)
+    assert uploads == [("/put", 40), ("/put", 40), ("/redirected", 90)]
+
+
+async def test_mineru_reuses_cached_file_when_upload_quota_is_full(tmp_path):
+    for _ in range(50):
+        await mineru_api._UPLOADS.acquire()
+    server = FakeMinerU()
+
+    def cached(request):
+        if request.url.path == "/api/v1/uploads":
+            return httpx.Response(200, json={"status": "completed", "file": {"id": "cached"}})
+        return server(request)
+
+    async with asyncio.timeout(1):
+        await mineru(cached).parse(SYNTHETIC, tmp_path, lambda *a: None)
+    assert all(request.method != "PUT" for request in server.requests)
+
+
+@pytest.mark.parametrize("user_cancel", [False, True])
+async def test_mineru_result_limit_wait_can_be_interrupted(tmp_path, monkeypatch, user_cancel):
+    for _ in range(1000):
+        await mineru_api._RESULTS.acquire()
+    waiting = asyncio.Event()
+
+    async def sleep(delay):
+        if delay > 0:
+            waiting.set()
+            await asyncio.Future()
+
+    monkeypatch.setattr(mineru_api, "sleep", sleep)
+    server = FakeMinerU()
+    parser = mineru(server)
+    if user_cancel:
+        task = asyncio.create_task(parser.parse(SYNTHETIC, tmp_path, lambda *a: None))
+        try:
+            await asyncio.wait_for(waiting.wait(), 1)
+        finally:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert any(request.method == "DELETE" for request in server.requests)
+    else:
+        monkeypatch.setattr(mineru_api, "POLL_TIMEOUT", 0.05)
+        with pytest.raises(RemoteParseError) as error:
+            await parser.parse(SYNTHETIC, tmp_path, lambda *a: None)
+        assert error.value.code == "timeout" and waiting.is_set()
+    assert not any(
+        request.method == "GET" and request.url.path == "/api/v1/parse/jobs/j1"
+        for request in server.requests
+    )
 
 
 async def test_mineru_job_failure(tmp_path):

@@ -29,7 +29,7 @@ from freeread.services.library import LibraryService
 from freeread.services.parse import ParseService
 from freeread.services.qa import QAService
 from freeread.services.search import SearchService
-from freeread.services.settings import API_PARSE_CONCURRENCY, PARSER_KEY_PREFIX, SettingsService
+from freeread.services.settings import PARSER_KEY_PREFIX, SettingsService
 from freeread.services.summary import SummaryService
 from freeread.services.translate import TranslateService
 
@@ -104,11 +104,16 @@ class AppContext:
 
         def parse_partitions():
             cfg = settings.get()
-            api_engines = [name for name, parser in cfg.parsers if parser.mode == "api"]
-            api = func.coalesce(JobRow.payload["engine"].as_string(), "").in_(api_engines)
+            engine = func.coalesce(JobRow.payload["engine"].as_string(), "")
+            api_limits = {"mineru": cfg.mineru_api_concurrency, "docling": 8}
+            api = {
+                name: limit
+                for name, limit in api_limits.items()
+                if getattr(cfg.parsers, name).mode == "api"
+            }
             return {
-                "local": (cfg.local_parse_concurrency, ~api),
-                "api": (API_PARSE_CONCURRENCY, api),
+                "local": (cfg.local_parse_concurrency, ~engine.in_(list(api))),
+                **{f"api:{name}": (limit, engine == name) for name, limit in api.items()},
             }
 
         worker.register("parse", parse.run_parse_job, concurrency=2)

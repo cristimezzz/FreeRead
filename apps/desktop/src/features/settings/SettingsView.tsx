@@ -6,6 +6,7 @@ import { IconButton, LabeledSwitch, OptionSelect, OptionToggle, TextInput } from
 import { Icon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
+import { ReparseDialog } from "../reader/ReparseDialog";
 import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
 import { AboutSection } from "./AboutSection";
@@ -38,6 +39,7 @@ const LANGS = [
   { value: "ja", label: "日文" },
   { value: "ko", label: "韩文" },
 ];
+const PARSE_CONCURRENCY_OPTIONS = Array.from({ length: 32 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 
 const sectionTitle = (id: (typeof SETTINGS_SECTIONS)[number]["id"]) => SETTINGS_SECTIONS.find((s) => s.id === id)!.label;
 
@@ -48,6 +50,7 @@ export function SettingsView() {
   const { engines, installJobs, refresh: refreshEngines } = useEngines();
   const [keys, setKeys] = useState<Record<string, boolean>>({});
   const [sysAccent, setSysAccent] = useState(systemAccent);
+  const [reparseAllOpen, setReparseAllOpen] = useState(false);
   const page = useRef<HTMLDivElement>(null);
 
   // "跟随系统"色块显示当前系统强调色：进设置页时重读一次（启动后用户可能改过）
@@ -395,7 +398,12 @@ export function SettingsView() {
               />
             );
           })}
-          <More defaultOpen={settings.parse_device !== "auto" || settings.local_parse_concurrency !== 1}>
+          <More
+            defaultOpen={
+              settings.parse_device !== "auto" || settings.local_parse_concurrency !== 1 ||
+              (settings.parsers.mineru.mode === "api" && settings.mineru_api_concurrency !== 8)
+            }
+          >
             <Row title="解析设备" desc="只影响在本机运行的 MinerU 和 Docling。GPU 需要 NVIDIA 显卡；改动从下一次解析开始生效">
               <OptionToggle
                 label="解析设备"
@@ -408,16 +416,33 @@ export function SettingsView() {
                 onValue={(parse_device) => update({ parse_device })}
               />
             </Row>
-            <Row title="本机解析并发" desc="本机 MinerU 和 Docling 共享的并发上限，默认 1。调高会增加内存或显存占用。API 模式的并发为 8">
+            <Row title="本机解析并发" desc="本机 MinerU 和 Docling 共享的并发上限，默认 1。调高会增加内存或显存占用">
               <OptionSelect
                 label="本机解析并发"
                 hideLabel
                 value={String(settings.local_parse_concurrency)}
-                options={Array.from({ length: 32 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))}
+                options={PARSE_CONCURRENCY_OPTIONS}
                 onValue={(value) => update({ local_parse_concurrency: Number(value) })}
               />
             </Row>
+            {settings.parsers.mineru.mode === "api" && (
+              <Row title="MinerU API 并发" desc="同时运行的 MinerU API 解析任务上限，默认 8。保存后，后续调度会使用新上限">
+                <OptionSelect
+                  label="MinerU API 并发"
+                  hideLabel
+                  value={String(settings.mineru_api_concurrency)}
+                  options={PARSE_CONCURRENCY_OPTIONS}
+                  onValue={(value) => update({ mineru_api_concurrency: Number(value) })}
+                />
+              </Row>
+            )}
           </More>
+          <Row title="文献库解析" desc="选择引擎，在后台重新解析文献库中有可用 PDF 的文献">
+            <Button variant="outline" size="sm" onClick={() => setReparseAllOpen(true)}>
+              全部重新解析
+            </Button>
+          </Row>
+          <ReparseDialog open={reparseAllOpen} onClose={() => setReparseAllOpen(false)} />
         </Group>
 
         <ZoteroSection settings={settings} update={update} Group={Group} Row={Row} title={sectionTitle("zotero")} />

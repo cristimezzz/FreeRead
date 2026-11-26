@@ -9,6 +9,7 @@ import asyncio
 import ipaddress
 import json
 import random
+from collections.abc import Awaitable, Callable
 from typing import Any, Self
 from urllib.parse import urlparse
 
@@ -56,6 +57,13 @@ def is_loopback_url(url: str) -> bool:
         return False
 
 
+async def _before_send(request: httpx.Request) -> None:
+    # HTTPX carries extensions to redirected requests and runs this hook for each send.
+    before_send = request.extensions.get("freeread_before_send")
+    if before_send is not None:
+        await before_send()
+
+
 class RemoteClient:
     """对一个服务地址的薄封装：拼 URL、加鉴权头、重试网络错误、检查状态码、脱敏。"""
 
@@ -77,6 +85,7 @@ class RemoteClient:
             follow_redirects=True,
             trust_env=not is_local_url(self.base_url),
             transport=transport,
+            event_hooks={"request": [_before_send]},
         )
 
     async def __aenter__(self) -> Self:
@@ -92,10 +101,20 @@ class RemoteClient:
         return path if "://" in path else f"{self.base_url}{path}"
 
     async def request(
-        self, method: str, path: str, *, auth: bool = True, **kwargs: Any
+        self,
+        method: str,
+        path: str,
+        *,
+        auth: bool = True,
+        before_send: Callable[[], Awaitable[None]] | None = None,
+        **kwargs: Any,
     ) -> httpx.Response:
         """发请求并检查状态码；auth=False 用于预签名上传地址等第三方 URL（不能带密钥）。"""
         headers = {**(self._auth if auth else {}), **kwargs.pop("headers", {})}
+        if before_send is not None:
+            kwargs["extensions"] = (kwargs.get("extensions") or {}) | {
+                "freeread_before_send": before_send
+            }
         for attempt in range(1, TRANSPORT_ATTEMPTS + 1):
             try:
                 response = await self._http.request(

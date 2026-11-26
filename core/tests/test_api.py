@@ -16,6 +16,7 @@ def test_settings_defaults(client):
     assert s["parse_engine"] == "auto"
     assert s["parse_device"] == "auto"
     assert s["local_parse_concurrency"] == 1
+    assert s["mineru_api_concurrency"] == 8
     assert s["appearance"]["theme_mode"] == "system"
     assert s["appearance"]["seed_color"] == "#D97757"
     assert s["appearance"]["style"] == "native"
@@ -27,6 +28,7 @@ def test_settings_roundtrip_persists(client, tmp_path):
     s = client.get("/settings").json()
     s["appearance"]["seed_color"] = "#00639b"
     s["local_parse_concurrency"] = 3
+    s["mineru_api_concurrency"] = 16
     s["providers"] = [PROVIDER]
     s["routes"] = {"translate": {"provider_id": "deepseek", "model": "deepseek-chat"}}
     resp = client.put("/settings", json=s)
@@ -39,6 +41,7 @@ def test_settings_roundtrip_persists(client, tmp_path):
     assert s2["providers"][0]["kind"] == "openai_compatible"
     assert s2["routes"]["translate"]["model"] == "deepseek-chat"
     assert s2["local_parse_concurrency"] == 3
+    assert s2["mineru_api_concurrency"] == 16
 
 
 def test_settings_validation(client):
@@ -57,10 +60,9 @@ def test_settings_validation(client):
     assert client.put("/settings", json=bad_style).status_code == 422
     assert client.put("/settings", json=s | {"parse_device": "tpu"}).status_code == 422
     assert client.put("/settings", json=s | {"parse_device": "gpu"}).json()["parse_device"] == "gpu"
-    for value in (0, 33, 1.5, True):
-        assert (
-            client.put("/settings", json=s | {"local_parse_concurrency": value}).status_code == 422
-        )
+    for field in ("local_parse_concurrency", "mineru_api_concurrency"):
+        for value in (0, 33, 1.5, True, "8"):
+            assert client.put("/settings", json=s | {field: value}).status_code == 422
 
 
 def test_settings_invalid_stored_value_falls_back_to_default(client):

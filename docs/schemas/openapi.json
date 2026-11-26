@@ -1250,6 +1250,65 @@
         }
       }
     },
+    "/documents/reparse-all": {
+      "post": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Reparse All Documents",
+        "operationId": "reparse_all_documents_documents_reparse_all_post",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReparseAllRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReparseAllOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/settings": {
       "get": {
         "tags": [
@@ -4065,6 +4124,13 @@
             "title": "Local Parse Concurrency",
             "default": 1
           },
+          "mineru_api_concurrency": {
+            "type": "integer",
+            "maximum": 32.0,
+            "minimum": 1.0,
+            "title": "Mineru Api Concurrency",
+            "default": 8
+          },
           "pypi_mirror": {
             "type": "string",
             "pattern": "^(https?://\\S+)?$",
@@ -5822,6 +5888,42 @@
         "type": "object",
         "title": "RemoteParser",
         "description": "高质量引擎的运行位置（ADR-0008）。api：调用自部署或云端服务，而不是本机 .engines/。"
+      },
+      "ReparseAllOut": {
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "title": "Queued"
+          },
+          "already_active": {
+            "type": "integer",
+            "title": "Already Active"
+          },
+          "missing_pdf": {
+            "type": "integer",
+            "title": "Missing Pdf"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queued",
+          "already_active",
+          "missing_pdf"
+        ],
+        "title": "ReparseAllOut"
+      },
+      "ReparseAllRequest": {
+        "properties": {
+          "engine": {
+            "type": "string",
+            "title": "Engine"
+          }
+        },
+        "type": "object",
+        "required": [
+          "engine"
+        ],
+        "title": "ReparseAllRequest"
       },
       "SearchHit": {
         "properties": {
