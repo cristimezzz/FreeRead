@@ -2,11 +2,11 @@
 // 点击 → 原版定位；可视区域上报给翻译；译文按 对照 / 交替 / 仅译文 显示。
 // 原文选中文字后浮出高亮工具条；已有高亮画成 <mark>（features/annotations）。
 
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Block, Document } from "../../api/ir";
 import { TRANSLATABLE } from "../../api/ir";
 import { pulse } from "../../components/motion";
-import { type Mark, placeSegments, selectionRange, splitByMarks } from "../annotations/offsets";
+import { type Mark, type PlacedSegment, placeSegments, selectionRange, splitByMarks } from "../annotations/offsets";
 import { COLORS, type AnnotationColor } from "../annotations/useAnnotations";
 import { Shimmer } from "../../components/ai-elements/shimmer";
 import type { TranslationState } from "../translate/useTranslations";
@@ -14,7 +14,7 @@ import { FigureGroupView } from "./FigureGroupView";
 import { groupFigures } from "./figureLayout";
 import { TableScroll } from "./TableScroll";
 import { useAssetUrl } from "./useAssetUrl";
-import { renderMath, renderTableHtml } from "./render";
+import { inlineFormats, renderMath, renderTableHtml } from "./render";
 
 export type TranslationMode = "off" | "side" | "alternate" | "only";
 
@@ -289,42 +289,70 @@ interface Source {
 }
 
 function Inline({ text, block, source }: { text: string; block: Block; source?: Source }) {
-  const segments = useMemo(() => placeSegments(text, block.inlines), [text, block.inlines]);
-  return (
-    <>
-      {segments.map((s, i) => {
-        const off = source ? { "data-off": s.start, "data-len": s.end - s.start, "data-kind": s.kind } : {};
-        if (s.kind === "math") return <span key={i} {...off} dangerouslySetInnerHTML={{ __html: renderMath(s.latex) }} />;
-        if (s.kind === "raw") return <span key={i} {...off}>{`⟦${s.key}⟧`}</span>;
-        if (!source?.marks.length) return <span key={i} {...off}>{s.text}</span>;
-        return splitByMarks(s.text, s.start, source.marks).map((piece, j) => {
-          const attrs = { "data-off": piece.start, "data-len": piece.text.length, "data-kind": "text" };
-          const m = piece.mark;
-          return m ? (
-            <mark
-              key={`${i}.${j}`}
-              {...attrs}
-              className="rf-mark"
-              data-color={m.color}
-              data-note={m.hasNote ? "" : undefined}
-              onClick={(e) => {
-                // 有选区时是在选文字，不是点高亮
-                if (window.getSelection()?.isCollapsed === false) return;
-                e.stopPropagation();
-                source.onMarkClick?.(m.id);
-              }}
-            >
-              {piece.text}
-            </mark>
-          ) : (
-            <span key={`${i}.${j}`} {...attrs}>
-              {piece.text}
-            </span>
-          );
-        });
-      })}
-    </>
-  );
+  const parts = useMemo(() => {
+    const formats = inlineFormats(text);
+    const parts: (PlacedSegment | (typeof formats)[number])[] = [];
+    let start = 0;
+    const addText = (end: number) => {
+      if (start === end) return;
+      for (const segment of placeSegments(text.slice(start, end), block.inlines)) {
+        parts.push({ ...segment, start: start + segment.start, end: start + segment.end });
+      }
+    };
+    for (const format of formats) {
+      addText(format.start);
+      parts.push(format);
+      start = format.end;
+    }
+    addText(text.length);
+    return parts;
+  }, [text, block.inlines]);
+
+  const stack: ReactNode[][] = [[]];
+  for (const part of parts) {
+    if (part.kind !== "format") {
+      stack[stack.length - 1].push(renderInlineSegment(part, source));
+    } else if (part.closing) {
+      const children = stack.pop()!;
+      const Tag = part.tag;
+      stack[stack.length - 1].push(<Tag key={part.start}>{children}</Tag>);
+    } else {
+      stack.push([]);
+    }
+  }
+  return <>{stack[0]}</>;
+}
+
+function renderInlineSegment(s: PlacedSegment, source?: Source) {
+  const off = source ? { "data-off": s.start, "data-len": s.end - s.start, "data-kind": s.kind } : {};
+  if (s.kind === "math") return <span key={s.start} {...off} dangerouslySetInnerHTML={{ __html: renderMath(s.latex) }} />;
+  if (s.kind === "raw") return <span key={s.start} {...off}>{`⟦${s.key}⟧`}</span>;
+  if (!source?.marks.length) return <span key={s.start} {...off}>{s.text}</span>;
+  return splitByMarks(s.text, s.start, source.marks).map((piece) => {
+    const attrs = { "data-off": piece.start, "data-len": piece.text.length, "data-kind": "text" };
+    const m = piece.mark;
+    return m ? (
+      <mark
+        key={piece.start}
+        {...attrs}
+        className="rf-mark"
+        data-color={m.color}
+        data-note={m.hasNote ? "" : undefined}
+        onClick={(e) => {
+          // 有选区时是在选文字，不是点高亮
+          if (window.getSelection()?.isCollapsed === false) return;
+          e.stopPropagation();
+          source.onMarkClick?.(m.id);
+        }}
+      >
+        {piece.text}
+      </mark>
+    ) : (
+      <span key={piece.start} {...attrs}>
+        {piece.text}
+      </span>
+    );
+  });
 }
 
 function BlockBody({
