@@ -18,7 +18,8 @@ FreeRead 是本地优先的学术文献阅读工具。它从 Zotero 7 或本地 
 
 所有新建 Git 分支都必须符合 [Conventional Branch](https://conventionalbranch.org/) 规范，包括人工、代理和自动化创建的分支。
 
-- 工作分支使用 `<type>/<description>`。允许的类型为 `feature`、`feat`、`bugfix`、`fix`、`hotfix`、`release`、`chore`、`ai`、`claude`、`codex`、`copilot`、`cursor`。
+- 工作分支使用 `<type>/<description>`，并按改动用途选择前缀。仅允许 `feature/`、`feat/`、`bugfix/`、`fix/`、`hotfix/`、`release/` 和 `chore/`。
+- 禁止使用任何标识 AI 代理的分支前缀，包括 `ai/`、`claude/`、`codex/`、`copilot/` 和 `cursor/`。
 - 描述使用小写 ASCII 字母和数字，以单个连字符分词。点可分隔字母数字片段，例如版本号。分隔符须位于字母数字之间。
 - 主干分支 `main`、`master` 和 `develop` 使用无前缀名称。
 
