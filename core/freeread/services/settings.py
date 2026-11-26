@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from freeread.infra.db.engine import SessionFactory
 from freeread.infra.db.models import SettingRow
+from freeread.infra.embedding.registry import DEFAULT_MODEL
 from freeread.infra.llm.gateway import TaskKind
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -98,7 +99,7 @@ class ModelRoute(_Strict):
 class EmbeddingSettings(_Strict):
     # local：内置本地模型（首次使用前要下载）；provider：走 routes["embed"] 指定的大模型服务
     source: Literal["local", "provider"] = "local"
-    local_model: str = "multilingual-e5-small"
+    local_model: str = DEFAULT_MODEL
     # 解析完成后自动嵌入
     auto: bool = True
     # 模型下载源：Hugging Face 或兼容镜像（如 https://hf-mirror.com）

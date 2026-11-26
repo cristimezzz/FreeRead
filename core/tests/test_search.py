@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import shutil
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ from types import SimpleNamespace
 import httpx
 import numpy as np
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select, text
 
 from freeread.infra.db.models import DocumentRow, EmbeddingChunkRow
@@ -24,6 +26,7 @@ from freeread.infra.search.chunker import MAX_TOKENS, approx_tokens, build_chunk
 from freeread.infra.search.hybrid import rrf_merge
 from freeread.infra.search.text import block_plain_text, expand_placeholders, table_text
 from freeread.infra.search.vector_index import IndexMismatch, SqliteVecIndex
+from freeread.main import create_app
 from freeread.services.settings import EmbeddingSettings, ModelRoute, ProviderConfig
 
 SYNTHETIC = Path(__file__).parent / "fixtures" / "raw" / "synthetic.pdf"
@@ -219,6 +222,34 @@ async def test_download_resumes_and_verifies_sha256(tmp_path):
 # ---------------------------------------------------------------- 嵌入任务
 
 
+def test_model_catalog_and_download_target(tmp_path):
+    app = create_app(data_dir=tmp_path / "data")
+    client = TestClient(app)  # 不启动 worker，稳定地检查排队中的任务。
+    try:
+        catalog = client.get("/embedding/models").json()
+        assert {model["id"] for model in catalog} == set(MODELS)
+        assert [model["id"] for model in catalog if model["recommended"]] == [
+            "multilingual-e5-small"
+        ]
+        assert all(model["description"] and not model["downloaded"] for model in catalog)
+        assert all(model["size_bytes"] == MODELS[model["id"]].size for model in catalog)
+
+        default = client.post("/embedding/download")
+        english = client.post("/embedding/download", params={"model_id": "e5-small-v2"})
+        assert default.status_code == english.status_code == 202
+        assert default.json()["payload"]["model"] == "multilingual-e5-small"
+        assert english.json()["payload"]["model"] == "e5-small-v2"
+        assert (
+            client.post("/embedding/download", params={"model_id": "e5-small-v2"}).json()["id"]
+            == english.json()["id"]
+        )
+        assert client.get("/embedding/status").json()["download_job"]["id"] == default.json()["id"]
+        assert client.post("/embedding/download", params={"model_id": "missing"}).status_code == 422
+    finally:
+        client.close()
+        app.state.ctx.close()
+
+
 async def test_embed_requires_downloaded_model(ctx, tmp_path):
     doc_id = await import_doc(ctx, tmp_path)
     await ctx.parse.run(doc_id, "pymupdf", noop)
@@ -256,6 +287,50 @@ async def test_embed_job_writes_chunks_and_reuses_vectors(ctx, tmp_path):
     await ctx.embed.run_embed_job(job_ctx({"doc_id": doc_id}))
     assert fake.calls == []
     assert ctx.embed.status().docs_embedded == 1
+
+
+async def test_switch_model_discards_in_flight_vectors(ctx, tmp_path, monkeypatch):
+    use_fake_local(ctx)
+    doc_id = await import_doc(ctx, tmp_path)
+    await ctx.parse.run(doc_id, "pymupdf", noop)
+    job = job_ctx({"doc_id": doc_id})
+    await ctx.embed.run_embed_job(job)
+
+    store = ctx.embed._store
+    writing = threading.Event()
+    resume = threading.Event()
+
+    def delayed_store(*args):
+        writing.set()
+        assert resume.wait(10)
+        return store(*args)
+
+    monkeypatch.setattr(ctx.embed, "_store", delayed_store)
+    old_job = asyncio.create_task(ctx.embed.run_embed_job(job))
+    try:
+        assert await asyncio.to_thread(writing.wait, 10)
+        model = MODELS["multilingual-e5-base"]
+        settings = ctx.settings.get()
+        settings.embedding.local_model = model.id
+        ctx.settings.put(settings)
+        assert ctx.embed.enqueue_missing() == []
+        search = await ctx.search.search_document(doc_id, "Precision")
+        assert search.modes == ["fts"] and search.hits
+
+        ctx.embed._embedders[model.id] = FakeEmbedder(model, ctx.paths.models)
+        assert len(ctx.embed.enqueue_missing()) == 1
+    finally:
+        resume.set()
+        await old_job
+
+    with ctx.sessions() as s:
+        assert ctx.embed.index.state(s) is None
+        assert s.get(DocumentRow, doc_id).embed_status == "pending"
+    await ctx.embed.run_embed_job(job)
+    with ctx.sessions() as s:
+        assert ctx.embed.index.state(s).model == model.key
+        assert set(s.scalars(select(EmbeddingChunkRow.model))) == {model.key}
+    assert (await ctx.search.search_document(doc_id, "Precision")).modes == ["fts", "vector"]
 
 
 async def test_parse_job_chains_embed(ctx, tmp_path):
@@ -365,16 +440,27 @@ def test_search_and_embedding_api(client, tmp_path):
 
 
 @pytest.mark.slow
-async def test_real_local_model_ranks_semantically(tmp_path):
-    """需要网络：下载真实模型（约 135 MB）。pytest -m slow 运行。"""
-    embedder = LocalEmbedder(MODELS["multilingual-e5-small"], tmp_path)
+@pytest.mark.parametrize(
+    ("model", "query", "dim"),
+    [
+        ("multilingual-e5-small", "用了什么数据集", 384),
+        ("e5-small-v2", "What dataset was used?", 384),
+        ("multilingual-e5-base", "用了什么数据集", 768),
+    ],
+)
+async def test_real_local_model_ranks_semantically(tmp_path, model, query, dim):
+    """需要网络下载真实模型。pytest -m slow 运行。"""
+    embedder = LocalEmbedder(MODELS[model], tmp_path)
     async with httpx.AsyncClient(timeout=120) as client:
         await embedder.download(client, "https://huggingface.co")
-    q = np.array(embedder.embed(["用了什么数据集"], "query"))
+    q = np.array(embedder.embed([query], "query"))
     p = np.array(
         embedder.embed(
             ["We evaluate classification accuracy on the ImageNet dataset.", "The sky is blue."]
         )
     )
+    assert q.shape == (1, dim) and p.shape == (2, dim)
+    assert np.allclose(np.linalg.norm(q, axis=1), 1)
+    assert np.allclose(np.linalg.norm(p, axis=1), 1)
     sims = q @ p.T
     assert sims[0, 0] > sims[0, 1]

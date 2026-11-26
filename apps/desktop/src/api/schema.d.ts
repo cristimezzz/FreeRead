@@ -663,6 +663,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/embedding/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Embedding Models */
+        get: operations["embedding_models_embedding_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/embedding/status": {
         parameters: {
             query?: never;
@@ -691,7 +708,7 @@ export interface paths {
         put?: never;
         /**
          * Download Model
-         * @description 下载当前设置的内置嵌入模型（已有下载任务时返回它）。
+         * @description 下载指定或当前设置的内置模型（同一模型已有下载任务时返回它）。
          */
         post: operations["download_model_embedding_download_post"];
         delete?: never;
@@ -1208,6 +1225,21 @@ export interface components {
             language: string | null;
             /** Updated At */
             updated_at: string;
+        };
+        /** EmbeddingModel */
+        EmbeddingModel: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /** Recommended */
+            recommended: boolean;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Downloaded */
+            downloaded: boolean;
         };
         /** EmbeddingSettings */
         EmbeddingSettings: {
@@ -3361,6 +3393,37 @@ export interface operations {
             };
         };
     };
+    embedding_models_embedding_models_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-freeread-token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingModel"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     embedding_status_embedding_status_get: {
         parameters: {
             query?: never;
@@ -3394,7 +3457,9 @@ export interface operations {
     };
     download_model_embedding_download_post: {
         parameters: {
-            query?: never;
+            query?: {
+                model_id?: string | null;
+            };
             header?: {
                 "x-freeread-token"?: string | null;
             };

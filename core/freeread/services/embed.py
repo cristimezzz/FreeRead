@@ -23,9 +23,9 @@ from sqlalchemy import Engine, delete, select, update
 
 from freeread.config import DataPaths
 from freeread.infra.db.engine import SessionFactory
-from freeread.infra.db.models import BlockRow, DocumentRow, EmbeddingChunkRow, JobRow
+from freeread.infra.db.models import BlockRow, DocumentRow, EmbeddingChunkRow
 from freeread.infra.embedding.local import LocalEmbedder
-from freeread.infra.embedding.registry import MODELS, LocalModelSpec
+from freeread.infra.embedding.registry import DEFAULT_MODEL, MODELS, LocalModelSpec
 from freeread.infra.jobs.events import EventBus
 from freeread.infra.jobs.queue import JobOut, JobQueue, JobStatus
 from freeread.infra.jobs.worker import JobContext
@@ -83,6 +83,15 @@ class EmbeddingStatus(BaseModel):
     docs_embedded: int = 0
 
 
+class EmbeddingModel(BaseModel):
+    id: str
+    label: str
+    description: str
+    recommended: bool
+    size_bytes: int
+    downloaded: bool
+
+
 class EmbedService:
     def __init__(
         self,
@@ -111,7 +120,8 @@ class EmbedService:
     # ------------------------------------------------------------ 来源
 
     def local_embedder(self, model_id: str | None = None) -> LocalEmbedder:
-        model_id = model_id or self._settings.get().embedding.local_model
+        if model_id is None:
+            model_id = self._settings.get().embedding.local_model
         spec: LocalModelSpec | None = MODELS.get(model_id)
         if spec is None:
             raise EmbedNotReady("unknown_model", f"未知的内置嵌入模型 {model_id!r}")
@@ -167,6 +177,19 @@ class EmbedService:
 
     # ------------------------------------------------------------ 状态
 
+    def models(self) -> list[EmbeddingModel]:
+        return [
+            EmbeddingModel(
+                id=spec.id,
+                label=spec.label,
+                description=spec.description,
+                recommended=spec.id == DEFAULT_MODEL,
+                size_bytes=spec.size,
+                downloaded=self.local_embedder(spec.id).is_downloaded(),
+            )
+            for spec in MODELS.values()
+        ]
+
     def status(self) -> EmbeddingStatus:
         settings = self._settings.get().embedding
         out = EmbeddingStatus(source=settings.source, model_key=None, ready=False)
@@ -183,7 +206,7 @@ class EmbedService:
             out.downloaded = embedder.is_downloaded()
             out.size_bytes = embedder.spec.size
             out.downloaded_bytes = embedder.downloaded_bytes()
-        out.download_job = self._active_job("model_download")
+            out.download_job = self._jobs.find_active("model_download", model=embedder.spec.id)
         with self._sessions() as s:
             state = self.index.state(s)
             if state:
@@ -200,15 +223,6 @@ class EmbedService:
             )
         return out
 
-    def _active_job(self, kind: str, doc_id: str | None = None, statuses=None) -> JobOut | None:
-        statuses = statuses or [JobStatus.QUEUED, JobStatus.RUNNING]
-        with self._sessions() as s:
-            q = select(JobRow.id).where(JobRow.kind == kind, JobRow.status.in_(statuses))
-            if doc_id is not None:
-                q = q.where(JobRow.payload["doc_id"].as_string() == doc_id)
-            job_id = s.scalar(q.order_by(JobRow.created_at.desc()))
-        return self._jobs.get(job_id) if job_id else None
-
     # ------------------------------------------------------------ 排队
 
     def enqueue_embed(self, doc_id: str, *, force: bool = False) -> JobOut | None:
@@ -220,17 +234,17 @@ class EmbedService:
             return None
         if self.try_backend() is None:
             return None
-        existing = self._active_job("embed", doc_id, [JobStatus.QUEUED])
+        existing = self._jobs.find_active("embed", (JobStatus.QUEUED,), doc_id=doc_id)
         if existing:
             return existing
         return self._jobs.enqueue("embed", {"doc_id": doc_id})
 
     def enqueue_missing(self) -> list[str]:
         """启动、设置变更、模型下载完成后调用：来源 / 模型变了就清空索引，然后给未嵌入的文档排队。"""
-        backend = self.try_backend()
-        if backend is None:
-            return []
         with self._lock, self._sessions.begin() as s:
+            backend = self.try_backend()
+            if backend is None:
+                return []
             state = self.index.state(s)
             if state is not None and state.model != backend.key:
                 log.info(
@@ -260,12 +274,11 @@ class EmbedService:
         s.execute(delete(EmbeddingChunkRow))
         s.execute(update(DocumentRow).values(embed_status="pending"))
 
-    def request_download(self) -> JobOut:
-        existing = self._active_job("model_download")
-        if existing:
-            return existing
-        embedder = self.local_embedder()
-        return self._jobs.enqueue("model_download", {"model": embedder.spec.id})
+    def request_download(self, model_id: str | None = None) -> JobOut:
+        model = self.local_embedder(model_id).spec.id
+        with self._lock:
+            existing = self._jobs.find_active("model_download", model=model)
+            return existing or self._jobs.enqueue("model_download", {"model": model})
 
     # ------------------------------------------------------------ 任务
 
@@ -289,10 +302,15 @@ class EmbedService:
         backend = self.backend()
         await asyncio.to_thread(self._set_status, doc_id, "embedding")
         try:
-            n_chunks, n_new = await self._embed(doc_id, backend, ctx)
+            counts = await self._embed(doc_id, backend, ctx)
         except BaseException:
             await asyncio.to_thread(self._set_status, doc_id, "failed")
             raise
+        if counts is None:
+            await asyncio.to_thread(self._set_status, doc_id, "pending")
+            await ctx.report(1.0, "索引模型已切换")
+            return
+        n_chunks, n_new = counts
         await ctx.report(1.0, f"{n_chunks} 个片段，新计算 {n_new}")
         if self.on_embedded:
             try:
@@ -300,7 +318,9 @@ class EmbedService:
             except Exception:  # 后续任务排队失败不影响嵌入本身
                 log.warning("on_embedded hook failed for %s", doc_id, exc_info=True)
 
-    async def _embed(self, doc_id: str, backend: Backend, ctx: JobContext) -> tuple[int, int]:
+    async def _embed(
+        self, doc_id: str, backend: Backend, ctx: JobContext
+    ) -> tuple[int, int] | None:
         blocks, titles = await asyncio.to_thread(self._load_blocks, doc_id)
         chunks = await asyncio.to_thread(build_chunks, blocks, titles, backend.token_len)
         reuse = await asyncio.to_thread(self._reusable, doc_id, backend.key, chunks)
@@ -313,7 +333,8 @@ class EmbedService:
             vectors = await backend.embed([c.text for c in part], "passage")
             fresh.update((c.text_hash, v) for c, v in zip(part, vectors, strict=True))
             await ctx.report(0.05 + 0.9 * (start + len(part)) / len(todo), "计算嵌入")
-        await asyncio.to_thread(self._store, doc_id, backend.key, chunks, reuse | fresh)
+        if not await asyncio.to_thread(self._store, doc_id, backend.key, chunks, reuse | fresh):
+            return None
         return len(chunks), len(todo)
 
     def _load_blocks(self, doc_id: str) -> tuple[list[BlockRow], dict[str, str]]:
@@ -337,8 +358,11 @@ class EmbedService:
 
     def _store(
         self, doc_id: str, model: str, chunks: list[Chunk], vectors: dict[str, list[float]]
-    ) -> None:
+    ) -> bool:
         with self._lock, self._sessions.begin() as s:
+            backend = self.try_backend()
+            if backend is None or backend.key != model:
+                return False
             if vectors:
                 self.index.ensure(s, model, len(next(iter(vectors.values()))))
             self.index.delete_doc(s, doc_id)
@@ -361,6 +385,7 @@ class EmbedService:
                 update(DocumentRow).where(DocumentRow.doc_id == doc_id).values(embed_status="ready")
             )
         self._publish(doc_id)
+        return True
 
     def _set_status(self, doc_id: str, status: str) -> None:
         with self._sessions.begin() as s:

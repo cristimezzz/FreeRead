@@ -2605,6 +2605,59 @@
         }
       }
     },
+    "/embedding/models": {
+      "get": {
+        "tags": [
+          "embedding"
+        ],
+        "summary": "Embedding Models",
+        "operationId": "embedding_models_embedding_models_get",
+        "parameters": [
+          {
+            "name": "x-freeread-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Freeread-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/EmbeddingModel"
+                  },
+                  "title": "Response Embedding Models Embedding Models Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/embedding/status": {
       "get": {
         "tags": [
@@ -2660,9 +2713,25 @@
           "embedding"
         ],
         "summary": "Download Model",
-        "description": "下载当前设置的内置嵌入模型（已有下载任务时返回它）。",
+        "description": "下载指定或当前设置的内置模型（同一模型已有下载任务时返回它）。",
         "operationId": "download_model_embedding_download_post",
         "parameters": [
+          {
+            "name": "model_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Id"
+            }
+          },
           {
             "name": "x-freeread-token",
             "in": "header",
@@ -4400,6 +4469,44 @@
           "updated_at"
         ],
         "title": "DocumentOut"
+      },
+      "EmbeddingModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "recommended": {
+            "type": "boolean",
+            "title": "Recommended"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "downloaded": {
+            "type": "boolean",
+            "title": "Downloaded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "description",
+          "recommended",
+          "size_bytes",
+          "downloaded"
+        ],
+        "title": "EmbeddingModel"
       },
       "EmbeddingSettings": {
         "properties": {
