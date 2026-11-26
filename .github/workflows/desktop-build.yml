@@ -3,8 +3,8 @@ name: Desktop build
 # 打包 sidecar（PyInstaller onedir，经 bundle.resources 安装）+ Tauri 安装包，作为 artifact 上传：
 # - Windows：NSIS 安装包和便携版 zip，在干净的 runner 上静默安装 / 解压，复测体积、启动时间和退出残留
 #   （scripts/verify_installed.ps1）；
-# - Linux x86_64：AppImage、deb 和 rpm（ubuntu-22.04 构建，glibc 2.35 起可用），装 deb 后冒烟 sidecar、
-#   在 Xvfb 里启动壳并检查退出残留，AppImage 同样在 Xvfb 里启动一遍，rpm 在 Fedora 容器里装一遍。
+# - Linux x86_64：在 Ubuntu 22.04 容器构建 AppImage、deb 和 rpm，以 glibc 2.35 验证 sidecar；
+#   在宿主机上用 Xvfb 启动 deb 和 AppImage 并检查退出残留，rpm 在 Fedora 容器里验证。
 # - macOS arm64：dmg 和 .app 的 zip（ad-hoc 签名，未公证），挂载 dmg 后冒烟 sidecar、启动壳并检查退出残留；
 #   Release 只附 dmg，.app 的 zip 只作为 artifact。
 # Linux / macOS 用 bash 脚本（scripts/*.sh），PowerShell 脚本只在 Windows 上用。
@@ -133,8 +133,9 @@ jobs:
           if-no-files-found: ignore
 
   build-linux:
-    # 22.04 的 glibc（2.35）是安装包的最低要求：PyInstaller 打的 sidecar 和壳都链接构建机的 glibc
-    runs-on: ubuntu-22.04
+    # 壳和 sidecar 都链接构建环境的 glibc，保留 22.04 的 2.35 基线。
+    runs-on: ubuntu-24.04
+    container: ubuntu:22.04
     # 显式写 bash：GitHub 才会加 -o pipefail，`measure_sidecar.sh | tee` 失败时步骤跟着失败
     defaults:
       run:
@@ -144,16 +145,17 @@ jobs:
       CARGO_PROFILE_RELEASE_CODEGEN_UNITS: ${{ startsWith(github.ref, 'refs/tags/') && '1' || '16' }}
       CORE_DIR: /usr/lib/FreeRead/freeread-core
     steps:
+      - name: System packages
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential ca-certificates curl file git jq patchelf perl pkg-config procps unzip wget xz-utils \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev libxdo-dev libayatana-appindicator3-dev
       - uses: actions/checkout@v7
       - name: Tag matches app version
         if: startsWith(github.ref, 'refs/tags/')
         run: |
           version=$(jq -r .version apps/desktop/src-tauri/tauri.conf.json)
           [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME 与 tauri.conf.json 的版本 $version 不一致"; exit 1; }
-      - name: System packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libssl-dev patchelf xvfb gnome-keyring gdb libfuse2
       - uses: astral-sh/setup-uv@v10.3.0
       - uses: actions/setup-node@v7
         with:
@@ -171,6 +173,8 @@ jobs:
       # tauri.conf.json 的 targets 只写了 nsis，Linux 的包类型在这里指定
       - name: Build AppImage, deb and rpm
         working-directory: apps/desktop
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
         run: |
           npm ci
           npm run tauri build -- --bundles deb,rpm,appimage
@@ -186,36 +190,59 @@ jobs:
           if-no-files-found: error
       - name: Install deb and smoke sidecar
         run: |
-          sudo apt-get install -y ./dist/*.deb
+          apt-get install -y ./dist/*.deb
           test -x "$CORE_DIR/freeread-core" || { echo "$CORE_DIR/freeread-core 不存在或不可执行"; exit 1; }
-          bin=$(dpkg -L "$(dpkg-deb -f dist/*.deb Package)" | grep '^/usr/bin/' | head -n1)
-          echo "SHELL_BIN=$bin" >> "$GITHUB_ENV"
           { echo "### Linux（deb）"; echo; echo "- 安装大小：$(du -sh /usr/lib/FreeRead | cut -f1)"; } >> "$GITHUB_STEP_SUMMARY"
           scripts/measure_sidecar.sh --dir "$CORE_DIR" --runs 3 | tee smoke.txt
           echo "- sidecar 热启动：$(tail -n1 smoke.txt)" >> "$GITHUB_STEP_SUMMARY"
-      - name: Launch shell under Xvfb
-        run: |
-          dbus-run-session -- scripts/ci/linux_launch_smoke.sh "$SHELL_BIN" "$CORE_DIR"
-          echo "- Xvfb 启动壳、sidecar 随壳退出：通过" >> "$GITHUB_STEP_SUMMARY"
-      # 先解包检查 sidecar 在 AppImage 里且能运行（linuxdeploy 会处理 AppDir 里的 ELF），
-      # 再经 FUSE 挂载直接运行 AppImage，和用户双击一样
-      - name: Run AppImage under Xvfb
+      - name: Extract AppImage and smoke sidecar
         run: |
           appimage=$(realpath dist/*.AppImage)
           chmod +x "$appimage"
           (cd "$RUNNER_TEMP" && "$appimage" --appimage-extract > /dev/null)
-          core=$(find "$RUNNER_TEMP/squashfs-root" -path '*/freeread-core/freeread-core' -type f | head -n1)
+          core=$(find "$RUNNER_TEMP/squashfs-root" -path '*/freeread-core/freeread-core' -type f -print -quit)
           [ -n "$core" ] || { echo "AppImage 里没有 freeread-core"; exit 1; }
           echo "sidecar：${core#"$RUNNER_TEMP/squashfs-root"}"
-          "$core" --help > /dev/null
+          scripts/measure_sidecar.sh --dir "$(dirname "$core")" --runs 1
+
+  smoke-linux:
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      CORE_DIR: /usr/lib/FreeRead/freeread-core
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: freeread-linux
+          path: dist
+      - name: Install deb and desktop smoke dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ./dist/*.deb dbus-daemon xvfb xauth gnome-keyring gdb libfuse2t64
+      - name: Launch shell under Xvfb
+        run: |
+          bin=$(dpkg -L "$(dpkg-deb -f dist/*.deb Package)" | awk '/^\/usr\/bin\/[^/]+$/ && !found { print; found = 1 }')
+          test -x "$bin"
+          dbus-run-session -- scripts/ci/linux_launch_smoke.sh "$bin" "$CORE_DIR"
+          echo "- Xvfb 启动壳、sidecar 随壳退出：通过" >> "$GITHUB_STEP_SUMMARY"
+      - name: Run AppImage under Xvfb
+        run: |
+          appimage=$(realpath dist/*.AppImage)
+          chmod +x "$appimage"
           dbus-run-session -- scripts/ci/linux_launch_smoke.sh "$appimage" '/tmp/\.mount_[^/]*/usr/lib/[^/]*/freeread-core'
           { echo "- AppImage 大小：$(du -h "$appimage" | cut -f1)"; echo "- AppImage 在 Xvfb 里启动壳、sidecar 随壳退出：通过"; } >> "$GITHUB_STEP_SUMMARY"
       - name: Install rpm on Fedora
         run: |
-          docker run --rm -v "$PWD/dist:/dist:ro" -e CORE_DIR fedora:42 bash -euc '
-            dnf install -y /dist/*.rpm
-            "$CORE_DIR/freeread-core" --help > /dev/null'
-          echo "- rpm 在 Fedora 42 上安装、sidecar 可运行：通过" >> "$GITHUB_STEP_SUMMARY"
+          # 只对本次构建的本地 RPM 关闭签名检查，Fedora 软件源的检查照常执行。
+          docker run --rm -v "$PWD/dist:/dist:ro" -v "$PWD/scripts/measure_sidecar.sh:/measure_sidecar.sh:ro" \
+            -e CORE_DIR fedora:45 bash -euc '
+              dnf install -y --setopt=localpkg_gpgcheck=0 /dist/*.rpm /usr/bin/curl jq perl-IO perl-Time-HiRes procps-ng
+              bash /measure_sidecar.sh --dir "$CORE_DIR" --runs 1'
+          echo "- rpm 在 Fedora 45 上安装、sidecar 冒烟：通过" >> "$GITHUB_STEP_SUMMARY"
 
   build-macos:
     # Apple Silicon；PyInstaller 打的 sidecar 不能交叉编译，Intel 版要另开 x86_64 runner
@@ -290,7 +317,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
-    needs: [build-windows, build-linux, build-macos]
+    needs: [build-windows, build-linux, smoke-linux, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
