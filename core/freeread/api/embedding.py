@@ -4,9 +4,14 @@ from fastapi import APIRouter, HTTPException
 
 from freeread.api.deps import Ctx
 from freeread.infra.jobs.queue import JobOut
-from freeread.services.embed import EmbeddingStatus, EmbedNotReady
+from freeread.services.embed import EmbeddingModel, EmbeddingStatus, EmbedNotReady
 
 router = APIRouter(prefix="/embedding", tags=["embedding"])
+
+
+@router.get("/models", response_model=list[EmbeddingModel])
+def embedding_models(ctx: Ctx) -> list[EmbeddingModel]:
+    return ctx.embed.models()
 
 
 @router.get("/status", response_model=EmbeddingStatus)
@@ -15,10 +20,10 @@ def embedding_status(ctx: Ctx) -> EmbeddingStatus:
 
 
 @router.post("/download", response_model=JobOut, status_code=202)
-def download_model(ctx: Ctx) -> JobOut:
-    """下载当前设置的内置嵌入模型（已有下载任务时返回它）。"""
+def download_model(ctx: Ctx, model_id: str | None = None) -> JobOut:
+    """下载指定或当前设置的内置模型（同一模型已有下载任务时返回它）。"""
     try:
-        return ctx.embed.request_download()
+        return ctx.embed.request_download(model_id)
     except EmbedNotReady as e:
         raise HTTPException(422, str(e)) from e
 

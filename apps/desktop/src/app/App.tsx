@@ -105,12 +105,15 @@ export default function App() {
     );
   }
 
-  // 新安装：先走欢迎向导（配置大模型、解析服务，询问是否从 Zotero 导入）
+  // 新安装：先走欢迎向导（配置大模型、解析服务、语义索引，再询问是否从 Zotero 导入）
   if (settings && !settings.onboarding_done) {
     return (
       <TooltipProvider delayDuration={400}>
         <Titlebar />
-        <WelcomeView />
+        <div className="flex h-full min-h-0 flex-col">
+          <WelcomeView />
+          <JobsBar />
+        </div>
         <Snackbar />
         <ContextMenu />
       </TooltipProvider>

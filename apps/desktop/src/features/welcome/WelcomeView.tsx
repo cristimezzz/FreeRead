@@ -1,4 +1,4 @@
-// 首次启动的欢迎向导：大模型服务 → 解析服务 → 从 Zotero 导入。每一步都能跳过，
+// 首次启动的欢迎向导：大模型服务 → 解析服务 → 语义索引 → 从 Zotero 导入。每一步都能跳过，
 // 走完或跳过后写入 settings.onboarding_done，之后直接进入文献库（设置页可以重新打开）。
 
 import { type ReactNode, useEffect, useState } from "react";
@@ -11,6 +11,7 @@ import { OptionToggle, TextInput } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
+import { LocalEmbeddingControls } from "../settings/LocalEmbeddingControls";
 import {
   REMOTE_ENGINES,
   type RemoteEngine,
@@ -25,12 +26,13 @@ import { RemoteParserCard } from "../settings/parsers";
 import { ConnState, FieldGrid, Hint, Panel, Row } from "../settings/Row";
 import { applyWelcomeProvider, draftFromSettings, PROVIDER_PRESETS, type ProviderKind, providerPreset } from "./model";
 
-const STEPS = ["大模型服务", "解析服务", "导入文献"] as const;
+const STEPS = ["大模型服务", "解析服务", "语义索引", "导入文献"] as const;
 
 export function WelcomeView() {
   const settings = useApp((s) => s.settings);
   const [step, setStep] = useState(0);
   const [finishing, setFinishing] = useState(false);
+  const [savingIndex, setSavingIndex] = useState(false);
   // 用户要求减少动效时不播片头
   const [intro, setIntro] = useState(() => exitMs() > 0);
   if (!settings) return null;
@@ -56,7 +58,7 @@ export function WelcomeView() {
   const back = step > 0 ? () => setStep((s) => s - 1) : undefined;
 
   return (
-    <div className="animate-in fade-in-0 h-full overflow-auto px-6 pt-[calc(var(--titlebar-h)+28px)] pb-16 duration-300">
+    <div className="animate-in fade-in-0 min-h-0 flex-1 overflow-auto px-6 pt-[calc(var(--titlebar-h)+28px)] pb-16 duration-300">
       <div className="mx-auto max-w-3xl">
         <header className="flex items-start gap-4.5 max-[560px]:flex-wrap">
           <BrandMark size={40} />
@@ -64,18 +66,18 @@ export function WelcomeView() {
             <h1 className="font-serif text-4xl leading-tight font-medium tracking-tight">欢迎使用 FreeRead</h1>
             <p className="text-muted-foreground mt-1.5">静下心来，开启你的阅读之旅。</p>
           </div>
-          <Button variant="ghost" size="sm" className="flex-none" disabled={finishing} onClick={() => void finish(false)}>
+          <Button variant="ghost" size="sm" className="flex-none" disabled={finishing || savingIndex} onClick={() => void finish(false)}>
             跳过向导
           </Button>
         </header>
 
-        <ol className="mt-8 flex gap-6 border-b" aria-label="步骤">
+        <ol className="mt-8 grid grid-cols-4 gap-x-2 border-b sm:gap-x-6 max-[360px]:grid-cols-2" aria-label="步骤">
           {STEPS.map((label, i) => (
             <li
               key={label}
               aria-current={i === step ? "step" : undefined}
               className={cn(
-                "text-muted-foreground -mb-px flex items-center gap-2 border-b-2 border-transparent px-1 pb-3 text-[13px] transition-colors",
+                "text-muted-foreground -mb-px flex flex-wrap items-center gap-x-2 gap-y-1 border-b-2 border-transparent px-1 pb-3 text-[13px] transition-colors",
                 i < step && "text-foreground/80",
                 i === step && "border-brand text-foreground font-medium",
               )}
@@ -100,7 +102,8 @@ export function WelcomeView() {
         >
           {step === 0 && <ProviderStep settings={settings} onNext={next} />}
           {step === 1 && <ParseStep settings={settings} onBack={back} onNext={next} />}
-          {step === 2 && <ImportStep settings={settings} busy={finishing} onBack={back} onFinish={finish} />}
+          {step === 2 && <IndexStep settings={settings} onBack={back} onNext={next} onSavingChange={setSavingIndex} />}
+          {step === 3 && <ImportStep settings={settings} busy={finishing} onBack={back} onFinish={finish} />}
         </section>
       </div>
     </div>
@@ -165,13 +168,13 @@ function StepHead({ title, children }: { title: string; children: ReactNode }) {
 
 function StepActions({ onBack, children }: { onBack?: () => void; children: ReactNode }) {
   return (
-    <div className="mt-7 flex items-center gap-2">
+    <div className="mt-7 flex flex-wrap items-center gap-2">
       {onBack && (
         <Button variant="ghost" onClick={onBack}>
           上一步
         </Button>
       )}
-      <span className="ml-auto flex gap-2">{children}</span>
+      <span className="ml-auto flex flex-wrap justify-end gap-2">{children}</span>
     </div>
   );
 }
@@ -245,6 +248,7 @@ function ProviderStep({ settings, onNext }: { settings: Settings; onNext: () => 
         <div className="flex flex-wrap items-center gap-2.5">
           <OptionToggle
             label="服务类型"
+            className="max-[480px]:h-auto max-[480px]:flex-wrap"
             value={draft.kind}
             options={(Object.keys(PROVIDER_PRESETS) as ProviderKind[]).map((k) => ({ value: k, label: PROVIDER_PRESETS[k].label }))}
             onValue={(kind) => {
@@ -333,6 +337,7 @@ function ParseStep({ settings, onBack, onNext }: { settings: Settings; onBack?: 
       <Row title="解析引擎" desc={choice.desc}>
         <OptionToggle
           label="解析引擎"
+          className="max-[480px]:h-auto max-[480px]:flex-wrap"
           value={choice.value}
           options={ENGINE_CHOICES.map((c) => ({ value: c.value, label: c.label }))}
           onValue={(parse_engine) => update({ parse_engine })}
@@ -371,7 +376,36 @@ function ParseStep({ settings, onBack, onNext }: { settings: Settings; onBack?: 
   );
 }
 
-/* ------------------------------------------------------------ 3. 导入 */
+/* ------------------------------------------------------------ 3. 语义索引 */
+
+function IndexStep({ settings, onBack, onNext, onSavingChange }: {
+  settings: Settings;
+  onBack?: () => void;
+  onNext: () => void;
+  onSavingChange: (saving: boolean) => void;
+}) {
+  return (
+    <>
+      <StepHead title="建立论文的语义索引">
+        语义索引可以按意思找论文里的段落。模型可在后台下载，下载前仍可用关键词搜索。
+      </StepHead>
+      {settings.embedding.source === "provider" && (
+        <Hint>当前使用大模型服务建立索引。可以继续使用该服务，或选择下方的本地模型。</Hint>
+      )}
+      <LocalEmbeddingControls
+        embedding={settings.embedding}
+        onSavingChange={onSavingChange}
+        footer={(canContinue, saving) => (
+          <StepActions onBack={saving ? undefined : onBack}>
+            <Button disabled={saving} onClick={onNext}>{canContinue ? "继续" : "以后再说"}</Button>
+          </StepActions>
+        )}
+      />
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ 4. 导入 */
 
 function ImportStep({
   settings,

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, unwrap, type Schemas } from "../../api/client";
 import { type Settings, useApp } from "../../app/store";
 import { ACCENT_PRESETS, PLATFORM, refreshNativeLook, systemAccent } from "../../app/theme";
-import { IconButton, LabeledSwitch, OptionSelect, OptionToggle, ProgressBar, TextInput } from "../../components/controls";
+import { IconButton, LabeledSwitch, OptionSelect, OptionToggle, TextInput } from "../../components/controls";
 import { Icon } from "../../components/icons";
 import { Button } from "../../components/ui/button";
 import { cn } from "../../lib/utils";
@@ -10,6 +10,7 @@ import { GlossaryPanel } from "../translate/GlossaryPanel";
 import { useGlossary } from "../translate/useGlossary";
 import { AboutSection } from "./AboutSection";
 import { DataSection } from "./DataSection";
+import { LocalEmbeddingControls } from "./LocalEmbeddingControls";
 import {
   installEngine,
   REMOTE_ENGINES,
@@ -687,39 +688,22 @@ function EmbeddingSection({
   const toast = useApp((s) => s.toast);
   const jobs = useApp((s) => s.jobs);
   const [status, setStatus] = useState<Schemas["EmbeddingStatus"] | null>(null);
-  const embedding: Embedding = settings.embedding ?? {
-    source: "local",
-    local_model: "multilingual-e5-small",
-    auto: true,
-    mirror: "https://huggingface.co",
-  };
+  const embedding = settings.embedding;
   const route = settings.routes.embed;
 
-  const download = Object.values(jobs).find(
-    (j) => j.kind === "model_download" && (j.status === "queued" || j.status === "running"),
-  );
-  const embedJobs = Object.values(jobs).filter(
+  const allJobs = Object.values(jobs);
+  const completedDownloads = allJobs.filter((j) => j.kind === "model_download" && j.status === "done").map((j) => j.id).join(",");
+  const embedJobs = allJobs.filter(
     (j) => j.kind === "embed" && (j.status === "queued" || j.status === "running"),
   ).length;
-  // 下载 / 嵌入任务的进展会改变状态：任务数或下载进度变化时刷新
-  const jobKey = `${download?.status}:${Math.round((download?.progress ?? 0) * 20)}:${embedJobs}`;
-
   useEffect(() => {
     void api()
       .GET("/embedding/status")
       .then((r) => setStatus(unwrap(r)))
       .catch(() => {});
-  }, [settings, jobKey]);
+  }, [settings, completedDownloads, embedJobs]);
 
   const set = (patch: Partial<Embedding>) => update({ embedding: { ...embedding, ...patch } });
-
-  const startDownload = async () => {
-    try {
-      unwrap(await api().POST("/embedding/download"));
-    } catch (e) {
-      toast(`无法开始下载：${e}`);
-    }
-  };
 
   const rebuild = async () => {
     try {
@@ -730,7 +714,6 @@ function EmbeddingSection({
     }
   };
 
-  const mb = (n: number) => `${Math.round(n / (1 << 20))} MB`;
   const providerName = settings.providers.find((p) => p.id === route?.provider_id)?.name;
 
   return (
@@ -752,26 +735,7 @@ function EmbeddingSection({
       </Row>
 
       {embedding.source === "local" ? (
-        <Row
-          title={status?.local_label ?? embedding.local_model}
-          desc={
-            <>
-              {status && `约 ${mb(status.size_bytes)}，`}
-              {download
-                ? `下载中 ${Math.round(download.progress * 100)}%`
-                : status?.downloaded
-                  ? "已就绪"
-                  : "未下载"}
-              {download && <ProgressBar value={download.progress} className="mt-2 block w-55" />}
-            </>
-          }
-        >
-          {!status?.downloaded && (
-            <Button variant="outline" size="sm" disabled={Boolean(download)} onClick={startDownload}>
-              下载模型
-            </Button>
-          )}
-        </Row>
+        <LocalEmbeddingControls embedding={embedding} />
       ) : (
         <>
           <Row title="嵌入使用的服务">
@@ -830,22 +794,10 @@ function EmbeddingSection({
         </Row>
       )}
 
-      <More defaultOpen={!embedding.auto || embedding.mirror !== "https://huggingface.co"}>
+      <More defaultOpen={!embedding.auto}>
         <Row title="解析后自动建立索引" htmlFor="embed-auto">
           <LabeledSwitch id="embed-auto" label="解析后自动建立索引" checked={embedding.auto} onValue={(auto) => set({ auto })} />
         </Row>
-        {embedding.source === "local" && (
-          <Row title="下载源" desc="Hugging Face 访问慢时可改为镜像，如 https://hf-mirror.com">
-            <TextInput
-              label="下载源"
-              hideLabel
-              mono
-              value={embedding.mirror}
-              commitOnChange
-              onValue={(mirror) => set({ mirror })}
-            />
-          </Row>
-        )}
       </More>
     </Group>
   );
