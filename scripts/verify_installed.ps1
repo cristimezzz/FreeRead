@@ -59,7 +59,9 @@ $shell = Join-Path $InstallDir "freeread-desktop.exe"
 $coreDir = Join-Path $InstallDir "freeread-core"
 if (-not (Test-Path $shell) -or -not (Test-Path (Join-Path $coreDir "freeread-core.exe"))) {
     $code = $Portable ? "" : "（安装程序退出码 $($proc.ExitCode)）"
-    throw "${step}失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe$code"
+    $message = "${step}失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe$code"
+    Emit $message
+    throw $message
 }
 $files = Get-ChildItem -Recurse -File $InstallDir
 Emit ("- {0}耗时：{1:N1} s；之后目录：{2:N1} MB，{3} 个文件" -f $step, ($installMs / 1000), (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count)
