@@ -7,7 +7,7 @@
      传 -Portable 时改为把便携版 zip 解压到 -InstallDir，其余步骤相同；
   2. scripts/measure_sidecar.ps1 对已安装的 sidecar 测冷 / 热启动（每次新数据目录，含迁移）；
   3. 启动壳 freeread-desktop.exe：从 sidecar 命令行取端口和 token，计时到 /health 可用，
-     检查数据目录（%APPDATA%\FreeRead）里数据库已创建；
+    检查本次复测的独立数据目录里数据库已创建；
   4. 退出清理：正常关闭窗口（CloseMainWindow）和 taskkill /F 壳各 -Runs 次，
      每 50 ms 检查一次 freeread-core 进程，最多等 15 s。
   需要交互的检查（文件对话框、钥匙串、阅读器）不在这里，见 docs/m1/README.md。
@@ -27,9 +27,17 @@ param(
 
 $ErrorActionPreference = "Stop"
 Add-Type -AssemblyName System.Net.Http
-$lines = [Collections.Generic.List[string]]::new()
-function Emit([string]$s) { Write-Host $s; $lines.Add($s) }
-function Get-CoreProcs { @(Get-CimInstance Win32_Process -Filter "Name='freeread-core.exe'") }
+New-Item -ItemType File -Path $Out -Force | Out-Null
+function Emit([string]$s) { Write-Host $s; Add-Content -LiteralPath $Out -Encoding utf8 -Value $s }
+function Get-CoreProcs([int]$ParentId) {
+    Get-CimInstance Win32_Process -Filter "Name='freeread-core.exe' AND ParentProcessId=$ParentId"
+}
+function Emit-Output([string[]]$Lines) {
+    foreach ($line in $Lines) {
+        if ($line -match 'token|api[ _-]?key|authorization|FREEREAD_SECRETS') { continue }
+        Emit ($line -replace '\b[0-9a-f]{64}\b', '[已隐藏]')
+    }
+}
 
 $package = (Resolve-Path ($Portable ? $Portable : $Installer)).Path
 $kind = $Portable ? "便携版" : "安装包"
@@ -51,7 +59,9 @@ $shell = Join-Path $InstallDir "freeread-desktop.exe"
 $coreDir = Join-Path $InstallDir "freeread-core"
 if (-not (Test-Path $shell) -or -not (Test-Path (Join-Path $coreDir "freeread-core.exe"))) {
     $code = $Portable ? "" : "（安装程序退出码 $($proc.ExitCode)）"
-    throw "${step}失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe$code"
+    $message = "${step}失败：$InstallDir 下没有 freeread-desktop.exe / freeread-core\freeread-core.exe$code"
+    Emit $message
+    throw $message
 }
 $files = Get-ChildItem -Recurse -File $InstallDir
 Emit ("- {0}耗时：{1:N1} s；之后目录：{2:N1} MB，{3} 个文件" -f $step, ($installMs / 1000), (($files | Measure-Object Length -Sum).Sum / 1MB), $files.Count)
@@ -69,7 +79,7 @@ foreach ($mode in "cold", "warm") {
     $measured = @(& pwsh -NoProfile -File (Join-Path $PSScriptRoot "measure_sidecar.ps1") -Mode $mode -Runs $Runs -Dir $coreDir 2>&1)
     # 子进程里的异常不会传上来：看退出码，冒烟失败（导入 / 解析 / 检索）时打出全部输出（含 sidecar 日志）并失败
     if ($LASTEXITCODE) {
-        $measured | ForEach-Object { Write-Host $_ }
+        Emit-Output $measured
         throw "sidecar 复测失败（$mode），见上面的 freeread-core 日志"
     }
     Emit "- $($measured[-1])"
@@ -77,38 +87,36 @@ foreach ($mode in "cold", "warm") {
 Emit ""
 
 # 3. 壳启动
-function Start-Shell {
-    $before = Get-CoreProcs | ForEach-Object ProcessId
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    $p = Start-Process -PassThru $shell
+function Wait-CoreHealth($Process, $Stopwatch) {
     $core = $null
     while (-not $core) {
-        if ($sw.Elapsed.TotalSeconds -gt 30) { throw "30 s 内没有看到 freeread-core 进程" }
-        if ($p.HasExited) { throw "壳提前退出（$($p.ExitCode)）" }
-        $core = Get-CoreProcs | Where-Object { $_.ParentProcessId -eq $p.Id -and $before -notcontains $_.ProcessId } | Select-Object -First 1
+        if ($Process.HasExited) { throw "壳提前退出（$($Process.ExitCode)）" }
+        if ($Stopwatch.Elapsed.TotalSeconds -gt 30) { throw "30 s 内没有看到 freeread-core 进程" }
+        $core = Get-CoreProcs $Process.Id | Select-Object -First 1
         Start-Sleep -Milliseconds 20
     }
-    if ($core.CommandLine -notmatch "--port (\d+) --token (\w+)") { throw "无法从命令行解析端口：$($core.CommandLine)" }
+    if ($core.CommandLine -notmatch '--port (\d+) --token (\w+)') { throw "无法解析 sidecar 的健康检查参数（PID $($core.ProcessId)）" }
     $port = $Matches[1]
     $client = [Net.Http.HttpClient]::new()
     $client.Timeout = [TimeSpan]::FromSeconds(2)
     $client.DefaultRequestHeaders.Add("X-FreeRead-Token", $Matches[2])
     try {
         while ($true) {
-            if ($sw.Elapsed.TotalSeconds -gt 60) { throw "60 s 内 /health 不可用" }
+            if ($Process.HasExited) { throw "壳提前退出（$($Process.ExitCode)）" }
+            if ($Stopwatch.Elapsed.TotalSeconds -gt 60) { throw "60 s 内 /health 不可用" }
             try {
                 if ($client.GetAsync("http://127.0.0.1:$port/health").GetAwaiter().GetResult().IsSuccessStatusCode) { break }
             } catch { }
             Start-Sleep -Milliseconds 20
         }
     } finally { $client.Dispose() }
-    [pscustomobject]@{ Shell = $p; Ms = $sw.ElapsedMilliseconds }
+    $Stopwatch.ElapsedMilliseconds
 }
 
-function Wait-NoCore {
+function Wait-NoCore([int]$ParentId) {
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    while ((Get-CoreProcs).Count -gt 0) {
-        if ($sw.Elapsed.TotalSeconds -gt 15) { return $null }
+    while (Get-CoreProcs $ParentId) {
+        if ($sw.Elapsed.TotalSeconds -gt 15) { throw "壳退出 15 s 后仍有 freeread-core 进程（壳 PID $ParentId）" }
         Start-Sleep -Milliseconds 50
     }
     $sw.ElapsedMilliseconds
@@ -116,37 +124,66 @@ function Wait-NoCore {
 
 Emit "## 壳启动 → /health 可用 与 退出清理"
 Emit ""
-if ((Get-CoreProcs).Count -gt 0) { throw "开始前已有 freeread-core 进程在运行" }
-$dataDb = Join-Path $env:APPDATA "FreeRead\freeread.db"
+$work = New-Item -ItemType Directory -Path (Join-Path ([IO.Path]::GetTempPath()) "FreeRead-smoke-$([guid]::NewGuid())")
+$appData = Join-Path $work.FullName 'appdata'
+$dataDb = Join-Path $appData 'FreeRead\freeread.db'
+$stdout = Join-Path $work.FullName 'shell.stdout.log'
+$stderr = Join-Path $work.FullName 'shell.stderr.log'
 $startMs = @()
-foreach ($how in "close", "kill") {
-    $cleanup = @()
-    foreach ($i in 1..$Runs) {
-        $r = Start-Shell
-        $startMs += $r.Ms
-        Start-Sleep -Seconds 1
-        if ($how -eq "close") {
-            # 等同于点击关闭按钮；窗口句柄可能稍晚才出现
-            $deadline = (Get-Date).AddSeconds(10)
-            while (-not $r.Shell.CloseMainWindow()) {
-                if ((Get-Date) -gt $deadline) { throw "找不到主窗口" }
-                Start-Sleep -Milliseconds 200
-                $r.Shell.Refresh()
+try {
+    foreach ($how in "close", "kill") {
+        $cleanup = @()
+        foreach ($i in 1..$Runs) {
+            $p = $null
+            try {
+                $sw = [Diagnostics.Stopwatch]::StartNew()
+                $p = Start-Process -PassThru $shell -Environment @{ APPDATA = $appData } `
+                    -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+                $startMs += Wait-CoreHealth $p $sw
+                if (-not (Test-Path -LiteralPath $dataDb -PathType Leaf)) { throw 'sidecar 就绪后未创建数据库' }
+                Start-Sleep -Seconds 1
+                if ($how -eq "close") {
+                    # 等同于点击关闭按钮；窗口句柄可能稍晚才出现
+                    $deadline = (Get-Date).AddSeconds(10)
+                    while (-not $p.CloseMainWindow()) {
+                        if ((Get-Date) -gt $deadline) { throw "找不到主窗口" }
+                        Start-Sleep -Milliseconds 200
+                        $p.Refresh()
+                    }
+                } else {
+                    taskkill /F /PID $p.Id | Out-Null
+                    if ($LASTEXITCODE) { throw "taskkill 失败（退出码 $LASTEXITCODE）" }
+                }
+                $cleanup += Wait-NoCore $p.Id
+            } catch {
+                Emit "- 失败（$how，第 $i 次）：$($_.Exception.Message)"
+                if ($p) {
+                    $state = if ($p.HasExited) { "已退出（$($p.ExitCode)）" } else { '仍在运行' }
+                    Emit "- 壳 PID $($p.Id)：$state"
+                    Get-CoreProcs $p.Id | ForEach-Object { Emit "- sidecar PID $($_.ProcessId)，父进程 $($_.ParentProcessId)" }
+                }
+                foreach ($log in $stdout, $stderr) {
+                    Emit "## $(Split-Path -Leaf $log)"
+                    Emit-Output (Get-Content -LiteralPath $log -Tail 60 -ErrorAction SilentlyContinue)
+                }
+                throw
+            } finally {
+                if ($p) {
+                    if (-not $p.HasExited) { Stop-Process -InputObject $p -Force -ErrorAction SilentlyContinue }
+                    Get-CoreProcs $p.Id | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+                    $p.Dispose()
+                }
             }
-        } else {
-            taskkill /F /PID $r.Shell.Id | Out-Null
+            Start-Sleep -Milliseconds 500
         }
-        $ms = Wait-NoCore
-        $cleanup += if ($null -eq $ms) { "残留" } else { "$ms" }
-        Get-CoreProcs | ForEach-Object { Stop-Process -Force -Id $_.ProcessId -ErrorAction SilentlyContinue }
-        Start-Sleep -Milliseconds 500
+        $label = if ($how -eq "close") { "正常关闭窗口" } else { "taskkill /F 壳" }
+        Emit ("- {0}：freeread-core 清理耗时（ms）{1}" -f $label, ($cleanup -join " / "))
     }
-    $label = if ($how -eq "close") { "正常关闭窗口" } else { "taskkill /F 壳" }
-    Emit ("- {0}：freeread-core 清理耗时（ms）{1}" -f $label, ($cleanup -join " / "))
+} finally {
+    Remove-Item -LiteralPath $work.FullName -Recurse -Force -ErrorAction SilentlyContinue
 }
 $sorted = $startMs | Sort-Object
 Emit ("- 壳启动到 /health 可用（ms，{0} 次）：{1}；中位数 {2}" -f $startMs.Count, ($startMs -join " / "), $sorted[[int][Math]::Floor($sorted.Count / 2)])
-Emit ("- 数据库 {0}：{1}" -f $dataDb, $(if (Test-Path $dataDb) { "已创建（迁移已执行）" } else { "不存在" }))
+Emit "- 数据库已创建（迁移已执行）"
 
-Set-Content -Encoding utf8 $Out $lines
 Write-Host "结果写入 $Out"
