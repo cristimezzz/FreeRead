@@ -28,6 +28,7 @@ pub fn native_look() -> NativeLook {
     }
 }
 
+#[cfg(any(windows, target_os = "macos", test))]
 fn hex(r: u8, g: u8, b: u8) -> String {
     format!("#{r:02X}{g:02X}{b:02X}")
 }
