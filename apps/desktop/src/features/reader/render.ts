@@ -25,6 +25,33 @@ export function splitPlaceholders(text: string, inlines: Inline[] = []): Segment
   return out;
 }
 
+type InlineTag = "sup" | "sub" | "b" | "strong" | "i" | "em";
+
+interface InlineFormat {
+  kind: "format";
+  tag: InlineTag;
+  closing: boolean;
+  start: number;
+  end: number;
+}
+
+/** 只识别无属性的配对格式标签，保留其在原文中的偏移。 */
+export function inlineFormats(text: string): InlineFormat[] {
+  const open: InlineFormat[] = [];
+  const paired: InlineFormat[] = [];
+  // 跳过整段其他标签和注释，避免把属性值里的标签当作正文格式。
+  for (const token of text.matchAll(/<!--[\s\S]*?(?:-->|$)|<\/?[a-z][\w:-]*(?=[\s/>])(?:[^"'<>]|"[^"]*"|'[^']*')*>/gi)) {
+    const match = /^<(\/?)(sup|sub|b|strong|i|em)>$/i.exec(token[0]);
+    if (!match) continue;
+    const tag = match[2].toLowerCase() as InlineTag;
+    const start = token.index!;
+    const format: InlineFormat = { kind: "format", tag, closing: Boolean(match[1]), start, end: start + token[0].length };
+    if (!format.closing) open.push(format);
+    else if (open[open.length - 1]?.tag === tag) paired.push(open.pop()!, format);
+  }
+  return paired.sort((a, b) => a.start - b.start);
+}
+
 // katex.renderToString 是同步的，一篇论文有几百条公式；打开文档、翻译进度更新、批注变化都会重新渲染块，按公式缓存结果
 const MATH_CACHE_MAX = 2000;
 const mathCache = new Map<string, string>();

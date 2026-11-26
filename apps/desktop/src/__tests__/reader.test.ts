@@ -4,10 +4,12 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { Block } from "../api/ir";
 import { createSseParser, type SseEvent } from "../api/sse";
+import { selectionRange } from "../features/annotations/offsets";
 import { buildTree } from "../features/library/CollectionTree";
 import { formatAuthors, ItemList } from "../features/library/ItemList";
 import { blockAt, buildPageIndex } from "../features/reader/locate";
 import { renderTableHtml, splitPlaceholders } from "../features/reader/render";
+import { ReflowView } from "../features/reader/ReflowView";
 import { TableScroll } from "../features/reader/TableScroll";
 import { themeVars } from "../app/theme";
 
@@ -74,6 +76,54 @@ describe("render", () => {
     expect(html).not.toMatch(/<script|alert|onclick|onerror|color:red|<img/);
     expect(html).toContain('colspan="2"');
     expect(html).toContain("katex");
+  });
+
+  it("renders reflow formatting in both languages and preserves raw annotation offsets", () => {
+    const text = "10<SUP>23<strong>⟦EQ1⟧</strong></SUP> and H<sub>2</sub>O";
+    const literal = '<sup onclick="alert(1)">4</sup> <img src=x onerror="alert(1)"> <script>alert(1)</script> <em>';
+    const paragraph = block("b_0001", 0, [0, 0, 200, 20], {
+      text: `${text} ${literal}`,
+      inlines: [{ key: "EQ1", kind: "math", latex: "x^2" }],
+    });
+    const start = text.indexOf("23");
+    const end = text.indexOf(" and") + 2;
+    const root = document.createElement("div");
+    root.innerHTML = renderToStaticMarkup(createElement(ReflowView, {
+      doc: {
+        schema_version: "0.1.0", doc_id: "d_example", meta: {},
+        source: { pdf_sha256: "", page_count: 1, pages: [] },
+        parser: { engine: "mineru", engine_version: "1", created_at: "2026-11-25T00:00:00Z" },
+        blocks: [paragraph, block("b_0002", 0, [0, 20, 200, 40], { type: "code", text: "<sup>code</sup>" })],
+        assets: [],
+      },
+      mode: "side", fontSize: 17, located: null, scrollKey: 0,
+      onLocate: vi.fn(), onVisible: vi.fn(),
+      marks: { [paragraph.id]: [{ id: "a", start, end, color: "yellow", hasNote: false }] },
+      translations: { [paragraph.id]: { status: "ok", text: "浓度 10<sup>3</sup>，H<sub>2</sub>O" } },
+    }));
+
+    const superscript = root.querySelector("p sup")!;
+    const before = root.querySelector("p span")!;
+    const inside = superscript.querySelector("mark")!;
+    const after = root.querySelector("p > mark")!;
+    expect(before.textContent).toBe("10");
+    expect(inside.textContent).toBe("23");
+    expect(after.textContent).toBe(" a");
+    expect(superscript.querySelector("strong .katex")).not.toBeNull();
+    expect(root.querySelector("p sub")?.textContent).toBe("2");
+    expect(root.querySelector(".rf-translation sup")?.textContent).toBe("3");
+    expect(root.querySelector(".rf-translation sub")?.textContent).toBe("2");
+    expect(root.querySelector("p")?.textContent).toContain(literal);
+    expect(root.querySelector("img, script, [onclick], [onerror], em")).toBeNull();
+    expect(root.querySelector("pre")?.textContent).toBe("<sup>code</sup>");
+
+    const range = document.createRange();
+    range.setStart(inside.firstChild!, 1);
+    range.setEnd(inside.firstChild!, 2);
+    expect(selectionRange(root, range)).toEqual({ blockId: paragraph.id, start: start + 1, end: start + 2 });
+    range.setStart(before.firstChild!, 1);
+    range.setEnd(after.firstChild!, 2);
+    expect(selectionRange(root, range)).toEqual({ blockId: paragraph.id, start: 1, end });
   });
 });
 
